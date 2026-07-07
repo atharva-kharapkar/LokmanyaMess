@@ -1,0 +1,8 @@
+{
+  "step_index": 6001,
+  "source": "MODEL",
+  "type": "RUN_COMMAND",
+  "status": "DONE",
+  "created_at": "2026-06-27T09:45:32Z",
+  "content": "Created At: 2026-06-27T09:45:32Z\nCompleted At: 2026-06-27T09:45:48Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\t\tOutput:\n\t\t\t\tSuccess! Customers list: [\n  {\n    name: 'Test Customer',\n    phone: '+919876543210',\n    aadhar: '123456789012',\n    plan: 'Monthly',\n    amount: 1500,\n    deposited: 1200,\n    joinDate: '2026-06-27',\n    addr: 'Test Address',\n    photo: '',\n    id: 'cust_1782553548278'\n  }\n]\nTransactions list: [\n  {\n    id: 'txn_1782553548278_init',\n    custId: 'cust_1782553548278',\n    amount: 1200,\n    date: '2026-06-27',\n    paymentMode: 'Cash'\n  }\n]\n\n"
+}

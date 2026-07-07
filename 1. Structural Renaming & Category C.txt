@@ -1,0 +1,40 @@
+1. Structural Renaming & Category Classification
+The original "Customer Registry" will be renamed and split into a refined Three-Tier Customer Management System:
+
+Dine-in Members (Formerly "Customer Registry"):
+Renamed section for regular customers who consume meals in the mess hall.
+Tiffin Delivery Members:
+A dedicated section for home/office tiffin delivery, including delivery address fields, special instructions, and delivery executive logs.
+Short-Term / Days-Based Members:
+A separate section for ad-hoc customers subscribing for a specific duration (e.g. 5, 10, or 15 days).
+Billing Engine Logic: Fixed rate of ₹80 per meal/tiffin.
+Automatic Formula: Total Cost = Number of Days × Meals per Day (1 or 2) × ₹80.
+Example 1 (1 meal/day for 7 days): 7 × 1 × ₹80 = ₹560 total cost.
+Example 2 (2 meals/day for 7 days): 7 × 2 × ₹80 = ₹1,120 total cost.
+Dues Alert Logic: Automatically calculates total cost minus advance deposit. Any remaining unpaid balance goes to Pending Dues, flagging the customer profile in RED ("Dues Pending") immediately.
+2. Payment Grace Period & Red Alert Engine (Dine-in & Tiffin)
+This custom billing check monitors outstanding dues and automatically changes visual states based on elapsed cycle days:
+
+Billing Cycle Check: Tracks elapsed days since the start of the member's current billing cycle (Current Date - Cycle Start Date).
+Within Grace Period (Days 1 to 6):
+If the customer has outstanding dues, the card-bar shows a mild warning (orange/yellow badge).
+The customer's Name remains normal in color (black/white), giving them a 6-day grace period to pay.
+After Grace Period (Day 7 onwards):
+If there are still outstanding dues, the customer's Name text automatically turns BRIGHT RED.
+The card-bar changes to Bright Red (Urgent warning) to notify the operators.
+Fully Paid (Dues = 0):
+The name color normalizes instantly, and the card-bar turns Green (Fully Paid).
+3. Multi-Laptop Real-Time Sync & Offline Protection
+Parallel Terminal Operations: Enables two operators to work on two separate laptops simultaneously.
+Cloud Database Migration: Replaces local JSON files with Google Firebase Firestore secure cloud hosting.
+Offline Cache Capability: Allows data entry during network failures; data will auto-sync to the cloud once the connection is restored with zero data loss.
+4. Owner Mobile Dashboard (PWA)
+Real-Time Analytics: Responsive mobile-friendly dashboard for Android & iOS via a permanent secure free link (e.g., lokmanyamess.web.app).
+Read-Only Permission: The owner can monitor daily collections, monthly revenue metrics, active user counts, and graphs, but cannot edit or delete data on mobile.
+5. Transactional SMS Alerts & Smart UPI Billing
+Automated SMS Receipts: Triggers automatic SMS updates (via Fast2SMS/Msg91 API) for payment receipts or due reminders.
+Tap-to-Pay UPI Integration: Embeds a dynamic UPI payment link pre-filled with the owner’s UPI ID and the customer’s exact pending dues. Customers pay via GPay, PhonePe, or Paytm in 1 click.
+6. "Old Customers" Protected Archive (Soft Delete & Vault)
+Soft Delete Archiving: Deleting any customer from Dine-in, Tiffin, or Short-term sections moves them and their payment ledger to a hidden "Old Customers" archive.
+Password Gate: Access to this archive is blocked behind an Admin Password managed in settings.
+Developer Master Key: To set or change the Archive Password, the owner must enter a hardcoded Developer Master Key (Backend Password) that only you control, ensuring system maintenance lock-in.

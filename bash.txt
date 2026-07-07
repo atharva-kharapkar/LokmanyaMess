@@ -1,0 +1,734 @@
+bash
+
+cd /home/claude && cat > build_chapter4.js << 'JSEOF'
+const {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  ImageRun, AlignmentType, HeadingLevel, BorderStyle, WidthType,
+  ShadingType, VerticalAlign, PageBreak, LevelFormat, TabStopType,
+  TabStopPosition
+} = require('docx');
+const fs = require('fs');
+
+const imgData = fs.readFileSync('/home/claude/chart_447.png');
+
+// ─── colour palette ───────────────────────────────────────────────────────────
+const NAVY   = '1B4F8A';
+const BLUE   = '2E75B6';
+const LBLUE  = 'D6E4F0';
+const GREY   = 'F2F2F2';
+const DGREY  = '404040';
+const BLACK  = '000000';
+const WHITE  = 'FFFFFF';
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+const border1 = { style: BorderStyle.SINGLE, size: 6, color: NAVY };
+const thinBorder = { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' };
+const noBorder   = { style: BorderStyle.NONE,   size: 0, color: WHITE  };
+
+const allBorders   = (b) => ({ top: b, bottom: b, left: b, right: b });
+const noBorders    = allBorders(noBorder);
+const tableBorders = allBorders(thinBorder);
+
+function sp(pt) { return { before: pt * 20, after: pt * 20 }; }
+
+function bold(text, sz = 22, color = NAVY) {
+  return new TextRun({ text, bold: true, size: sz, color, font: 'Arial' });
+}
+function normal(text, sz = 22, color = BLACK) {
+  return new TextRun({ text, size: sz, color, font: 'Arial' });
+}
+function italic(text, sz = 22, color = DGREY) {
+  return new TextRun({ text, italics: true, size: sz, color, font: 'Arial' });
+}
+
+function h1(text) {
+  return new Paragraph({
+    children: [new TextRun({ text, bold: true, size: 32, color: WHITE, font: 'Arial' })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 240, after: 240 },
+    shading: { fill: NAVY, type: ShadingType.CLEAR },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: BLUE } },
+  });
+}
+
+function h2(text) {
+  return new Paragraph({
+    children: [new TextRun({ text, bold: true, size: 26, color: WHITE, font: 'Arial' })],
+    alignment: AlignmentType.LEFT,
+    spacing: { before: 280, after: 100 },
+    shading: { fill: BLUE, type: ShadingType.CLEAR },
+    indent: { left: 0 },
+  });
+}
+
+function h3(text) {
+  return new Paragraph({
+    children: [new TextRun({ text, bold: true, size: 24, color: NAVY, font: 'Arial' })],
+    spacing: { before: 220, after: 80 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: LBLUE } },
+  });
+}
+
+function para(runs, align = AlignmentType.JUSTIFIED) {
+  return new Paragraph({
+    children: Array.isArray(runs) ? runs : [runs],
+    alignment: align,
+    spacing: { before: 60, after: 80 },
+  });
+}
+
+function labeledPara(label, text) {
+  return para([bold(label + ': ', 22, BLUE), normal(text)]);
+}
+
+function tableTitle(text) {
+  return new Paragraph({
+    children: [new TextRun({ text, bold: true, size: 22, color: NAVY, font: 'Arial' })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 160, after: 60 },
+  });
+}
+
+function graphTitle(text) {
+  return new Paragraph({
+    children: [new TextRun({ text, bold: true, size: 22, color: BLUE, font: 'Arial' })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 140, after: 60 },
+  });
+}
+
+function divider() {
+  return new Paragraph({
+    children: [],
+    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: LBLUE } },
+    spacing: { before: 80, after: 80 },
+  });
+}
+
+function pageBreak() {
+  return new Paragraph({ children: [new PageBreak()] });
+}
+
+// ─── simple data table ────────────────────────────────────────────────────────
+function dataTable(headers, rows) {
+  const COL_WIDTHS = headers.length === 4 ? [800, 3000, 2200, 1400] :
+                     headers.length === 6 ? [600, 2600, 2000, 1800, 1600, 1100] :
+                     [800, 3800, 2200, 1400];
+  const totalW = COL_WIDTHS.reduce((a, b) => a + b, 0);
+
+  function makeCell(text, isHeader = false, align = AlignmentType.CENTER, isLeft = false) {
+    return new TableCell({
+      borders: tableBorders,
+      shading: isHeader ? { fill: NAVY, type: ShadingType.CLEAR } :
+               text === 'Total' || text === 'Grand Total' ? { fill: GREY, type: ShadingType.CLEAR } : undefined,
+      width: { size: COL_WIDTHS[0], type: WidthType.DXA }, // overridden per cell below
+      margins: { top: 80, bottom: 80, left: 120, right: 120 },
+      verticalAlign: VerticalAlign.CENTER,
+      children: [new Paragraph({
+        alignment: isLeft ? AlignmentType.LEFT : align,
+        children: [new TextRun({
+          text,
+          bold: isHeader || text === 'Total' || text === 'Grand Total',
+          size: isHeader ? 20 : 21,
+          color: isHeader ? WHITE : BLACK,
+          font: 'Arial',
+        })],
+      })],
+    });
+  }
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: headers.map((h, i) => {
+      const cell = makeCell(h, true, AlignmentType.CENTER, i === 1);
+      cell.options.width = { size: COL_WIDTHS[i], type: WidthType.DXA };
+      return cell;
+    }),
+  });
+
+  const dataRows = rows.map((row, ri) =>
+    new TableRow({
+      children: row.map((val, ci) => {
+        const cell = makeCell(String(val), false, ci === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, ci === 1);
+        cell.options.width = { size: COL_WIDTHS[ci], type: WidthType.DXA };
+        if (ri % 2 === 0 && val !== 'Total') {
+          cell.options.shading = { fill: 'F7FBFF', type: ShadingType.CLEAR };
+        }
+        return cell;
+      }),
+    })
+  );
+
+  return new Table({
+    width: { size: totalW, type: WidthType.DXA },
+    columnWidths: COL_WIDTHS,
+    rows: [headerRow, ...dataRows],
+  });
+}
+
+// ─── hypothesis summary table ─────────────────────────────────────────────────
+function hypothesisTable(rows) {
+  const COL = [600, 3400, 1600, 1600, 1200];
+  const total = COL.reduce((a, b) => a + b, 0);
+  const headers = ['Sr.', 'Hypothesis', 'Tool', 'Composite Mean', 'Result'];
+
+  function hCell(text) {
+    return new TableCell({
+      borders: tableBorders,
+      shading: { fill: NAVY, type: ShadingType.CLEAR },
+      margins: { top: 80, bottom: 80, left: 100, right: 100 },
+      children: [new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text, bold: true, size: 20, color: WHITE, font: 'Arial' })],
+      })],
+    });
+  }
+
+  function dCell(text, ci, ri) {
+    const fill = ri % 2 === 0 ? 'F7FBFF' : WHITE;
+    return new TableCell({
+      borders: tableBorders,
+      shading: { fill, type: ShadingType.CLEAR },
+      margins: { top: 80, bottom: 80, left: 100, right: 100 },
+      children: [new Paragraph({
+        alignment: ci === 0 || ci === 3 || ci === 4 ? AlignmentType.CENTER : AlignmentType.LEFT,
+        children: [new TextRun({ text: String(text), size: 20, font: 'Arial', color: BLACK })],
+      })],
+    });
+  }
+
+  return new Table({
+    width: { size: total, type: WidthType.DXA },
+    columnWidths: COL,
+    rows: [
+      new TableRow({ tableHeader: true, children: headers.map(h => hCell(h)) }),
+      ...rows.map((row, ri) => new TableRow({ children: row.map((v, ci) => dCell(v, ci, ri)) })),
+    ],
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DOCUMENT CONTENT
+// ═══════════════════════════════════════════════════════════════════════════════
+const children = [];
+
+// ── CHAPTER COVER ─────────────────────────────────────────────────────────────
+children.push(
+  new Paragraph({
+    children: [new TextRun({ text: 'CHAPTER 4', bold: true, size: 52, color: WHITE, font: 'Arial' })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 600, after: 120 },
+    shading: { fill: NAVY, type: ShadingType.CLEAR },
+  }),
+  new Paragraph({
+    children: [new TextRun({ text: 'DATA ANALYSIS AND INTERPRETATION', bold: true, size: 28, color: WHITE, font: 'Arial' })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 0, after: 600 },
+    shading: { fill: BLUE, type: ShadingType.CLEAR },
+  }),
+  divider(),
+);
+
+// ── 4.1 INTRODUCTION ──────────────────────────────────────────────────────────
+children.push(h2('4.1  Introduction'));
+children.push(para([normal(
+  'The present chapter deals with the analysis, interpretation, and presentation of data collected for the research study entitled "An Analytical Study of Blockchain Powered Digital Credentials – A Giant Step Towards Minimizing Human Resource Efforts in Maharashtra, India (2018–2023)." The chapter plays a vital role in the overall research process as it systematically transforms the collected data into meaningful information for drawing valid conclusions and research findings.'
+)]));
+children.push(para([normal(
+  'The primary objective of this chapter is to examine and interpret the perceptions, awareness, opinions, and experiences of respondents regarding the adoption and effectiveness of blockchain-powered digital credentials in Human Resource Management. The study specifically focuses on understanding the extent to which blockchain technology contributes toward minimizing human effort in HR activities such as employee verification, recruitment processes, credential authentication, record maintenance, and administrative documentation.'
+)]));
+children.push(para([normal(
+  'In the contemporary business environment, organizations are increasingly adopting innovative digital technologies to enhance operational efficiency, transparency, accuracy, and security within organizational processes. Among these emerging technologies, blockchain has gained considerable importance due to its decentralized, immutable, transparent, and highly secure framework for managing digital information. The application of blockchain-powered digital credentials has emerged as a transformative solution capable of improving traditional HR systems by reducing manual intervention, preventing document forgery, enhancing trust in employee records, and streamlining recruitment and verification procedures.'
+)]));
+children.push(para([normal(
+  'For the purpose of the present study, primary data was collected through a structured questionnaire administered using an online survey platform. The respondents included HR professionals, recruiters, academicians, organizational employees, administrative personnel, and management representatives associated with various sectors. The responses obtained were systematically classified, tabulated, analyzed, and interpreted with the help of percentage analysis and descriptive analytical techniques in order to derive meaningful and reliable conclusions.'
+)]));
+children.push(para([normal(
+  'For the purpose of systematic presentation and better understanding, the chapter has been divided into different sections including demographic analysis, awareness analysis, organizational adoption analysis, operational efficiency analysis, security and trust analysis, implementation barriers, hypothesis testing, major findings of the study, and chapter summary. The interpretations presented in this chapter form the foundation for the conclusions and recommendations discussed in the subsequent chapter.'
+)]));
+
+// ── 4.2 MAPPING TABLE ─────────────────────────────────────────────────────────
+children.push(divider(), h2('4.2  Mapping of Objectives, Hypotheses, Parameters and Questionnaire'));
+children.push(para([normal(
+  'In order to ensure a systematic and scientific approach toward data analysis, the objectives of the study, research hypotheses, research parameters, and questionnaire items were carefully mapped and aligned. The mapping framework establishes a clear relationship between the research objectives and the data collected through the structured questionnaire, ensuring consistency between the conceptual framework and the empirical analysis.'
+)]));
+
+children.push(tableTitle('Table 4.2 — Mapping of Hypotheses with Questionnaire Items and Statistical Technique'));
+children.push(new Table({
+  width: { size: 8400, type: WidthType.DXA },
+  columnWidths: [400, 1900, 1800, 1600, 1600, 1100],
+  rows: [
+    new TableRow({
+      tableHeader: true,
+      children: ['Sr.', 'Hypothesis', 'Parameters', 'Q. Nos.', 'Tables', 'Tool'].map(h =>
+        new TableCell({
+          borders: tableBorders,
+          shading: { fill: NAVY, type: ShadingType.CLEAR },
+          margins: { top: 70, bottom: 70, left: 100, right: 100 },
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: h, bold: true, size: 18, color: WHITE, font: 'Arial' })] })],
+        })
+      ),
+    }),
+    ...[
+      ['1','Administrative Efficiency & Cost Reduction','Verification time, paperwork, recruitment efficiency, cost, recruiter productivity','Q11–Q15','4.12–4.16','Composite Mean'],
+      ['2','Security, Transparency & Skills Validation','Tamper-proof credentials, fraud reduction, data accuracy, trust, system security','Q16–Q20','4.17–4.21','Composite Mean'],
+      ['3','Training Record Mgmt & Professional Development','Digital credential usage, training records, certification management','Q9, Q10','4.10–4.11','Composite Mean'],
+      ['4','Data Accuracy, Integrity & Fraud Reduction','Fraud prevention, accuracy improvement, trust and integrity','Q17–Q19','4.18–4.20','Composite Mean'],
+      ['5','Organizational Adoption & Utilization','Perceived benefits, actual usage, implementation level, adoption barriers','Q8, Q9, Q21, Q22','4.9, 4.10, 4.27, 4.28','Comparative Composite Mean'],
+    ].map((row, ri) =>
+      new TableRow({
+        children: row.map((val, ci) =>
+          new TableCell({
+            borders: tableBorders,
+            shading: { fill: ri % 2 === 0 ? 'F7FBFF' : WHITE, type: ShadingType.CLEAR },
+            margins: { top: 70, bottom: 70, left: 100, right: 100 },
+            children: [new Paragraph({ alignment: ci === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: val, size: 18, font: 'Arial' })] })],
+          })
+        ),
+      })
+    ),
+  ],
+}));
+
+children.push(para([italic('Source: Research Design — Primary Data')]));
+children.push(para([normal(
+  'Composite Mean Analysis was selected for all hypotheses because each hypothesis represents multiple questionnaire items measuring a common construct and the objective was to evaluate overall respondent perception rather than compare groups or establish causal relationships.'
+)]));
+
+// ── 4.3 DEMOGRAPHIC ANALYSIS ──────────────────────────────────────────────────
+children.push(divider(), h2('4.3  Demographic Analysis of Respondents'));
+
+// 4.3.1
+children.push(h3('4.3.1  Designation of Respondents'));
+children.push(para([normal('The designation of respondents plays a significant role in understanding the professional background and relevance of the collected responses in relation to Human Resource Management and blockchain-powered digital credential systems.')]));
+children.push(tableTitle('Table 4.3.1 — Designation-wise Classification of Respondents'));
+children.push(dataTable(
+  ['Sr. No.', 'Designation', 'Respondents', 'Percentage'],
+  [['1','HR Professionals','238','34%'],['2','Recruiters','343','49%'],['3','Administrative Officers','84','12%'],['4','Others','35','5%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Recruiters formed the largest group (49%), followed by HR Professionals (34%). Administrative Officers (12%) and other professionals (5%) provided additional perspectives across organizational functions.')]));
+
+// 4.3.2
+children.push(h3('4.3.2  Type of Organization of Respondents'));
+children.push(para([normal('The type of organization to which respondents belong plays an important role in understanding the applicability and acceptance of blockchain-powered digital credentials across different sectors.')]));
+children.push(tableTitle('Table 4.3.2 — Type of Organization of Respondents'));
+children.push(dataTable(
+  ['Sr. No.', 'Type of Organization', 'Respondents', 'Percentage'],
+  [['1','Private Sector Organizations','322','46%'],['2','Information Technology (IT) Companies','168','24%'],['3','Educational Institutions','77','11%'],['4','Government / Public Sector Organizations','84','12%'],['5','Consultancy / Recruitment Firms','49','7%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Private sector organizations accounted for the highest representation (46%), followed by IT companies (24%) and Government organizations (12%). The diversified organizational profile enhanced the reliability and analytical significance of the research findings.')]));
+
+// 4.3.3
+children.push(h3('4.3.3  Industry Sector of Respondents'));
+children.push(para([normal('The analysis of respondents based on industry sector is important for understanding the level of awareness, acceptance, and applicability of blockchain-powered digital credentials across different industrial domains.')]));
+children.push(tableTitle('Table 4.4.3 — Industry Sector of Respondents'));
+children.push(dataTable(
+  ['Sr. No.', 'Industry Sector', 'Respondents', 'Percentage'],
+  [['1','Information Technology (IT) Sector','224','32%'],['2','Banking and Financial Services','126','18%'],['3','Manufacturing Industry','119','17%'],['4','Educational Sector','77','11%'],['5','Healthcare Sector','63','9%'],['6','Consultancy and Recruitment Services','56','8%'],['7','Other Service Industries','35','5%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('The IT sector dominated with 32% of responses, reflecting greater technological awareness. Banking and Financial Services (18%) and Manufacturing (17%) also contributed substantially, while Healthcare, Education, and Consultancy sectors offered sector-specific perspectives.')]));
+
+// 4.3.4
+children.push(h3('4.3.4  Years of Professional Experience of Respondents'));
+children.push(tableTitle('Table 4.3.4 — Years of Professional Experience of Respondents'));
+children.push(dataTable(
+  ['Sr. No.', 'Years of Experience', 'Respondents', 'Percentage'],
+  [['1','Less than 2 Years','98','14%'],['2','2 – 5 Years','245','35%'],['3','5 – 10 Years','196','28%'],['4','10 – 15 Years','98','14%'],['5','Above 15 Years','63','9%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('The majority of respondents (35%) had 2–5 years of experience, followed by 5–10 year professionals (28%). The wide distribution across experience levels ensured analytical depth and practical relevance of responses.')]));
+
+// 4.3.5
+children.push(h3('4.3.5  Location of Organization'));
+children.push(tableTitle('Table 4.3.5 — Location of Organization'));
+children.push(dataTable(
+  ['Sr. No.', 'Location', 'Respondents', 'Percentage'],
+  [['1','Maharashtra','630','90%'],['2','Other States','70','10%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('90% of respondents were from Maharashtra-based organizations, maintaining alignment with the geographical scope of the research. Responses from other states offered broader comparative perspectives.')]));
+
+// ── 4.4 AWARENESS & USAGE ─────────────────────────────────────────────────────
+children.push(pageBreak(), h2('4.4  Awareness & Usage of Blockchain Technology'));
+
+// 4.4.1
+children.push(h3('4.4.1  Awareness Regarding Blockchain Technology'));
+children.push(tableTitle('Table 4.4.1 — Awareness Regarding Blockchain Technology'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Yes','609','87%'],['2','No','91','13%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('87% of respondents were aware of blockchain technology, indicating high familiarity within the professional community. The 13% unaware group highlights the ongoing need for awareness and educational initiatives.')]));
+
+// 4.4.2
+children.push(h3('4.4.2  Level of Awareness About Blockchain in HR'));
+children.push(tableTitle('Table 4.4.2 — Level of Awareness About Blockchain in HR Management'));
+children.push(dataTable(
+  ['Sr. No.', 'Level of Awareness', 'Respondents', 'Percentage'],
+  [['1','Very High','84','12%'],['2','High','217','31%'],['3','Moderate','280','40%'],['4','Low','91','13%'],['5','Very Low','28','4%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('40% of respondents reported moderate awareness, while 31% indicated high awareness. Combined, 83% of respondents fall under moderate-to-very-high awareness categories, demonstrating a favorable environment for blockchain adoption in HR.')]));
+
+// 4.4.3
+children.push(h3('4.4.3  Organizational Adoption of Blockchain Technology'));
+children.push(tableTitle('Table 4.4.3 — Organization Currently Using Blockchain Technology'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Yes','245','35%'],['2','No','210','30%'],['3','Planning to Adopt','245','35%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('35% of organizations are currently using blockchain, and an equal 35% are planning adoption. Only 30% indicated no current or planned use, suggesting strong momentum toward blockchain integration in HR operations.')]));
+
+// 4.4.4
+children.push(h3('4.4.4  Usage of Digital Credentials in HR Processes'));
+children.push(tableTitle('Table 4.4.4 — Organization Use Digital Credentials for HR Processes'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Yes','273','39%'],['2','Partially','266','38%'],['3','No','161','23%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('77% of organizations fully or partially use digital credentials in HR, indicating broad acceptance and adoption. The 23% not yet using such systems present a significant opportunity for future expansion.')]));
+
+// 4.4.5
+children.push(h3('4.4.5  HR Activities Involving Digital Credentials'));
+children.push(tableTitle('Table 4.4.5 — HR Activities Involving Digital Credentials'));
+children.push(dataTable(
+  ['Sr. No.', 'HR Activity', 'Respondents', 'Percentage'],
+  [['1','Employee Verification','182','26%'],['2','Recruitment and Selection','154','22%'],['3','Background Verification','126','18%'],['4','Training and Certification Records','105','15%'],['5','Employee Documentation & Record Management','91','13%'],['6','Performance Evaluation & Career Development','42','6%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Employee Verification (26%) and Recruitment & Selection (22%) emerged as the primary application areas. Background Verification (18%) and Training Records (15%) further confirm the broad applicability of digital credentials across the HR lifecycle.')]));
+
+// 4.4.6
+children.push(h3('4.4.6  Blockchain-Based Digital Credentials Reduce Candidate Verification Time'));
+children.push(tableTitle('Table 4.4.6 — Blockchain Reduces Time Spent on Candidate Verification'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Strongly Agree','294','42%'],['2','Agree','252','36%'],['3','Neutral','84','12%'],['4','Disagree','49','7%'],['5','Strongly Disagree','21','3%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('78% of respondents agreed or strongly agreed that blockchain reduces candidate verification time, reflecting strong confidence in blockchain\'s capability to accelerate recruitment processes. Only 10% expressed disagreement.')]));
+
+// 4.4.7 — with chart
+children.push(h3('4.4.7  Digital Credentials Reduce Manual Paperwork in HR Operations'));
+children.push(para([normal(
+  'Manual paperwork has traditionally been one of the most time-consuming and resource-intensive aspects of Human Resource Management. With the advancement of digital technologies, organizations are increasingly shifting toward digital credential systems to streamline HR operations and improve efficiency. The present study examined respondents\' perceptions regarding whether digital credentials reduce manual paperwork in HR operations.'
+)]));
+children.push(tableTitle('Table 4.4.7 — Digital Credentials Reduce Manual Paperwork in HR Operations'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Strongly Agree','315','45%'],['2','Agree','245','35%'],['3','Neutral','77','11%'],['4','Disagree','42','6%'],['5','Strongly Disagree','21','3%'],['','Total','700','100%']]
+));
+
+// interpretation BEFORE graph
+children.push(para([bold('Interpretation: ', 22, BLUE), normal(
+  '80% of respondents (45% Strongly Agree + 35% Agree) confirmed that digital credentials significantly reduce manual paperwork in HR operations. This overwhelming consensus underscores the transformative impact of digital credential systems in eliminating documentation burden, improving record accessibility, and reducing administrative workload. Only 9% of respondents disagreed, reflecting minimal resistance to this technological shift.'
+)]));
+
+// Graph 4.4.7 image
+children.push(graphTitle('Graph No. 4.4.7 — Graphical Representation: Digital Credentials Reduce Manual Paperwork in HR Operations'));
+children.push(new Paragraph({
+  alignment: AlignmentType.CENTER,
+  spacing: { before: 100, after: 120 },
+  children: [
+    new ImageRun({
+      data: imgData,
+      transformation: { width: 540, height: 297 },
+      type: 'png',
+    }),
+  ],
+}));
+children.push(para([italic('Source: Primary Data — n = 700 Respondents')], AlignmentType.CENTER));
+
+// 4.4.8
+children.push(h3('4.4.8  Blockchain Helps in Reducing Recruitment Cycle Time'));
+children.push(tableTitle('Table 4.4.8 — Blockchain Helps in Reducing Recruitment Cycle Time'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Strongly Agree','280','40%'],['2','Agree','245','35%'],['3','Neutral','91','13%'],['4','Disagree','56','8%'],['5','Strongly Disagree','28','4%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('75% of respondents agreed that blockchain reduces recruitment cycle time. Faster credential validation, automated workflows, and reduced manual intervention were key factors cited. 12% remained neutral, while 12% expressed some level of disagreement.')]));
+
+// 4.4.9
+children.push(h3('4.4.9  Digital Credentials Reduce Overall HR Operational Costs'));
+children.push(tableTitle('Table 4.4.9 — Digital Credentials Reduce Overall HR Operational Costs'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Strongly Agree','252','36%'],['2','Agree','259','37%'],['3','Neutral','98','14%'],['4','Disagree','63','9%'],['5','Strongly Disagree','28','4%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('73% of respondents (36% + 37%) recognized digital credentials as effective in reducing HR operational costs. Reduction in paperwork, manual verification, and administrative duplication were identified as key cost drivers. 14% remained neutral, while 13% disagreed.')]));
+
+// 4.4.10
+children.push(h3('4.4.10  Blockchain-Based Systems Improve Recruiter Productivity'));
+children.push(tableTitle('Table 4.4.10 — Blockchain-Based Systems Improve Recruiter Productivity'));
+children.push(dataTable(
+  ['Sr. No.', 'Response', 'Respondents', 'Percentage'],
+  [['1','Strongly Agree','238','34%'],['2','Agree','273','39%'],['3','Neutral','91','13%'],['4','Disagree','70','10%'],['5','Strongly Disagree','28','4%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('73% agreed that blockchain improves recruiter productivity by enabling faster access to verified credentials, reducing administrative repetition, and freeing recruiters for strategic talent acquisition activities. Only 14% disagreed, indicating broad positive acceptance.')]));
+
+// ── 4.5 SECURITY & TRUST ──────────────────────────────────────────────────────
+children.push(pageBreak(), h2('4.5  Security and Trust Analysis'));
+
+const securityData = [
+  ['4.5.1','Blockchain Ensures Tamper-Proof Employee Credential Records',
+    [['1','Strongly Agree','266','38%'],['2','Agree','245','35%'],['3','Neutral','91','13%'],['4','Disagree','63','9%'],['5','Strongly Disagree','35','5%'],['','Total','700','100%']],
+    '73% strongly agreed or agreed that blockchain ensures tamper-proof records. The decentralized and immutable architecture of blockchain minimizes risks of record manipulation and unauthorized modification, enhancing organizational trust and data integrity.'
+  ],
+  ['4.5.2','Digital Credentials Reduce Fake or Forged Certificates',
+    [['1','Strongly Agree','287','41%'],['2','Agree','238','34%'],['3','Neutral','91','13%'],['4','Disagree','56','8%'],['5','Strongly Disagree','28','4%'],['','Total','700','100%']],
+    '75% of respondents agreed or strongly agreed that digital credentials reduce fraudulent documentation. Secure authentication and traceable record-keeping were perceived as highly effective in minimizing fake credential submission.'
+  ],
+  ['4.5.3','Blockchain Improves Data Accuracy in HR Records',
+    [['1','Strongly Agree','259','37%'],['2','Agree','273','39%'],['3','Neutral','84','12%'],['4','Disagree','56','8%'],['5','Strongly Disagree','28','4%'],['','Total','700','100%']],
+    '76% of respondents confirmed that blockchain improves data accuracy. Reduction in manual entry errors, consistent record storage, and real-time validation were identified as key contributors to improved information quality in HR processes.'
+  ],
+  ['4.5.4','Digital Credentials Increase Trust in Candidate Information',
+    [['1','Strongly Agree','280','40%'],['2','Agree','252','36%'],['3','Neutral','84','12%'],['4','Disagree','56','8%'],['5','Strongly Disagree','28','4%'],['','Total','700','100%']],
+    '76% of respondents agreed that digital credentials increase trust in candidate information. Authenticated and tamper-resistant records provide organizations with confidence in making recruitment decisions, reducing information asymmetry.'
+  ],
+  ['4.5.5','Blockchain-Based Systems are More Secure than Traditional HR Databases',
+    [['1','Strongly Agree','301','43%'],['2','Agree','245','35%'],['3','Neutral','77','11%'],['4','Disagree','56','8%'],['5','Strongly Disagree','21','3%'],['','Total','700','100%']],
+    '78% of respondents agreed that blockchain-based systems provide greater security than traditional HR databases. Features including decentralization, cryptographic protection, and immutability were recognized as key advantages over conventional centralized systems.'
+  ],
+];
+
+securityData.forEach(([section, title, rows, interp]) => {
+  children.push(h3(`${section}  ${title}`));
+  children.push(tableTitle(`Table ${section} — ${title}`));
+  children.push(dataTable(['Sr. No.', 'Response', 'Respondents', 'Percentage'], rows));
+  children.push(para([bold('Interpretation: ', 22, BLUE), normal(interp)]));
+});
+
+// ── 4.6 CHALLENGES ────────────────────────────────────────────────────────────
+children.push(pageBreak(), h2('4.6  Challenges in Adoption of Blockchain Technology'));
+
+const challenges = [
+  ['4.6.1','High Implementation Cost is a Barrier to Blockchain Adoption',
+    [['1','Strongly Agree','224','32%'],['2','Agree','252','36%'],['3','Neutral','105','15%'],['4','Disagree','77','11%'],['5','Strongly Disagree','42','6%'],['','Total','700','100%']],
+    '68% of respondents agreed that high implementation cost is a significant barrier. Infrastructure development, software integration, and ongoing maintenance expenses are major cost drivers, particularly for small and medium-sized organizations with limited budgets.'
+  ],
+  ['4.6.2','Lack of Technical Expertise Limits Blockchain Use in HR',
+    [['1','Strongly Agree','210','30%'],['2','Agree','280','40%'],['3','Neutral','98','14%'],['4','Disagree','77','11%'],['5','Strongly Disagree','35','5%'],['','Total','700','100%']],
+    '70% of respondents recognized lack of technical expertise as a limiting factor. Specialized knowledge requirements in cryptography, distributed ledgers, and system integration make workforce skill development a critical prerequisite for successful adoption.'
+  ],
+  ['4.6.3','Resistance to Change Among HR Staff Affects Adoption',
+    [['1','Strongly Agree','196','28%'],['2','Agree','294','42%'],['3','Neutral','91','13%'],['4','Disagree','77','11%'],['5','Strongly Disagree','42','6%'],['','Total','700','100%']],
+    '70% of respondents agreed that organizational resistance to change is a significant adoption barrier. HR professionals accustomed to traditional workflows may require structured change management, training, and leadership support to overcome adoption hesitancy.'
+  ],
+  ['4.6.4','Data Privacy and Legal Compliance are Major Concerns',
+    [['1','Strongly Agree','217','31%'],['2','Agree','294','42%'],['3','Neutral','91','13%'],['4','Disagree','70','10%'],['5','Strongly Disagree','28','4%'],['','Total','700','100%']],
+    '73% of respondents agreed that data privacy and legal compliance represent major concerns. Managing sensitive employee data on decentralized systems requires robust governance frameworks and regulatory clarity to ensure responsible and compliant deployment.'
+  ],
+  ['4.6.5','Lack of Government Guidelines Restricts Implementation',
+    [['1','Strongly Agree','182','26%'],['2','Agree','308','44%'],['3','Neutral','98','14%'],['4','Disagree','77','11%'],['5','Strongly Disagree','35','5%'],['','Total','700','100%']],
+    '70% agreed that absence of government guidelines restricts implementation. Standardized regulatory frameworks, legal recognition of digital credentials, and policy support would significantly accelerate organizational adoption and reduce implementation uncertainty.'
+  ],
+];
+
+challenges.forEach(([section, title, rows, interp]) => {
+  children.push(h3(`${section}  ${title}`));
+  children.push(tableTitle(`Table ${section} — ${title}`));
+  children.push(dataTable(['Sr. No.', 'Response', 'Respondents', 'Percentage'], rows));
+  children.push(para([bold('Interpretation: ', 22, BLUE), normal(interp)]));
+});
+
+// ── 4.7 PERCEIVED BENEFITS ────────────────────────────────────────────────────
+children.push(pageBreak(), h2('4.7  Perceived Benefits of Blockchain-Powered Digital Credentials in HRM'));
+
+children.push(h3('4.7.1  Biggest Benefit of Blockchain-Powered Digital Credentials in HR'));
+children.push(tableTitle('Table 4.7.1 — "Biggest Benefit" of Blockchain-Powered Digital Credentials in HR'));
+children.push(dataTable(
+  ['Sr. No.', 'Biggest Benefit', 'Respondents', 'Percentage'],
+  [['1','Faster Employee Verification','238','34%'],['2','Reduction in Fraudulent Credentials','182','26%'],['3','Improved Data Security','126','18%'],['4','Reduction in Manual HR Efforts','84','12%'],['5','Increased Transparency and Trust','49','7%'],['6','Cost Reduction','21','3%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Faster Employee Verification (34%) and Reduction in Fraudulent Credentials (26%) emerged as the two most valued benefits. Together they account for 60% of responses, underscoring speed and authenticity as the primary value propositions of blockchain in HR.')]));
+
+children.push(h3('4.7.2  Major Challenges Foreseen in Implementing Blockchain-Based Credentials'));
+children.push(tableTitle('Table 4.7.2 — Major Challenges Foreseen in Implementing Blockchain-Based Credentials in HR'));
+children.push(dataTable(
+  ['Sr. No.', 'Foreseen Challenge', 'Respondents', 'Percentage'],
+  [['1','High Implementation Cost','203','29%'],['2','Lack of Technical Expertise','168','24%'],['3','Data Privacy and Security Concerns','140','20%'],['4','Resistance to Organizational Change','98','14%'],['5','Lack of Government Guidelines','56','8%'],['6','Integration with Existing HR Systems','35','5%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Cost (29%) and technical expertise (24%) are the most anticipated implementation challenges. These findings highlight the need for cost-effective deployment strategies and comprehensive professional development programs before full-scale rollout.')]));
+
+children.push(h3('4.7.3  Perceived Role of Blockchain in Reducing Human Effort in Recruitment and Verification'));
+children.push(tableTitle('Table 4.7.3 — Perceived Reduction of Human Effort in Recruitment and Verification'));
+children.push(dataTable(
+  ['Sr. No.', 'Perceived Contribution Area', 'Respondents', 'Percentage'],
+  [['1','Faster Credential Verification','217','31%'],['2','Automation of Recruitment Processes','182','26%'],['3','Reduction in Manual Documentation','126','18%'],['4','Prevention of Duplicate Verification','91','13%'],['5','Improved Accessibility of Employee Records','56','8%'],['6','Reduction in Administrative Workload','28','4%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Faster Credential Verification (31%) and Automation of Recruitment Processes (26%) represent the most anticipated efficiency gains. These findings collectively indicate that blockchain is primarily expected to deliver operational value through speed and automation.')]));
+
+children.push(h3('4.7.4  Perceived Role of Government and Regulatory Authorities'));
+children.push(tableTitle('Table 4.7.4 — Role of Government / Regulators in Promoting Blockchain Adoption in HR'));
+children.push(dataTable(
+  ['Sr. No.', 'Perceived Government / Regulatory Role', 'Respondents', 'Percentage'],
+  [['1','Establish Clear Policies and Regulatory Guidelines','224','32%'],['2','Promote Awareness and Training Programs','168','24%'],['3','Develop Data Privacy and Security Standards','133','19%'],['4','Provide Financial Incentives and Support','91','13%'],['5','Encourage Industry–Government Collaboration','56','8%'],['6','Support Research and Innovation Initiatives','28','4%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Establishing clear policies (32%) and awareness programs (24%) are viewed as the most critical government roles. Respondents see regulatory bodies as key enablers of adoption rather than direct implementers, emphasizing policy-driven facilitation.')]));
+
+children.push(h3('4.7.5  Suggestions for Effective Implementation of Blockchain-Based Digital Credentials in HR'));
+children.push(tableTitle('Table 4.7.5 — Suggestions for Effective Implementation of Blockchain-Based Digital Credentials in HR'));
+children.push(dataTable(
+  ['Sr. No.', 'Suggestion', 'Respondents', 'Percentage'],
+  [['1','Conduct Awareness and Training Programs','182','26%'],['2','Develop Clear Government Policies','154','22%'],['3','Invest in Digital Infrastructure','126','18%'],['4','Provide Technical Skill Development for HR Professionals','105','15%'],['5','Introduce Pilot Projects Before Full Implementation','84','12%'],['6','Strengthen Data Security and Privacy Measures','49','7%'],['','Total','700','100%']]
+));
+children.push(para([bold('Interpretation: ', 22, BLUE), normal('Training and awareness (26%) and policy development (22%) are identified as the most critical implementation prerequisites. Respondents emphasized a collaborative, phased approach involving all stakeholders — organizations, regulators, and employees.')]));
+
+// ── 4.8 HYPOTHESIS TESTING ────────────────────────────────────────────────────
+children.push(pageBreak(), h2('4.8  Hypothesis Testing and Justification'));
+
+// H1
+children.push(h3('4.8.1  Hypothesis 1 — Administrative Efficiency and Cost Reduction'));
+children.push(labeledPara('H0₁', 'Digital credentials have no impact on administrative efforts in candidate verification and screening processes, and they do not lead to time or cost savings for HR departments.'));
+children.push(labeledPara('H1₁', 'Digital credentials reduce administrative efforts in candidate verification and screening processes, resulting in time and cost savings for HR departments.'));
+children.push(labeledPara('Statistical Tool', 'Composite Mean Analysis'));
+children.push(tableTitle('Table 4.8.1 — Composite Mean Score: Administrative Efficiency and Cost Reduction'));
+children.push(new Table({
+  width: { size: 8000, type: WidthType.DXA },
+  columnWidths: [500, 1800, 4000, 1700],
+  rows: [
+    new TableRow({ tableHeader: true, children: ['Sr.','Variable','Question','Mean Score'].map(h => new TableCell({ borders: tableBorders, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: h, bold: true, size: 20, color: WHITE, font: 'Arial' })] })] })) }),
+    ...[[1,'Efficiency','Blockchain reduces candidate verification time','4.07'],[2,'Efficiency','Digital credentials reduce manual paperwork','4.13'],[3,'Efficiency','Blockchain reduces recruitment cycle time','3.99'],[4,'Efficiency','Digital credentials reduce HR operational cost','3.92'],[5,'Efficiency','Blockchain improves recruiter productivity','4.01']].map((row, ri) =>
+      new TableRow({ children: row.map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: ri % 2 === 0 ? 'F7FBFF' : WHITE, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 0 || ci === 3 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: String(v), size: 20, font: 'Arial' })] })] })) })
+    ),
+    new TableRow({ children: ['','','Administrative Efficiency Composite Mean (X)','4.02'].map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: GREY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 3 || ci === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: v, bold: true, size: 20, font: 'Arial', color: NAVY })] })] })) }),
+  ],
+}));
+children.push(para([bold('Composite Mean = 4.02 → High Agreement', 22, NAVY)]));
+children.push(para([bold('Result: ', 22, BLUE), normal('H0₁ Rejected | H1₁ Accepted'), new TextRun({ text: '  —  Digital credentials are perceived to improve administrative efficiency and reduce HR operational burden.', size: 22, font: 'Arial', color: BLACK })]));
+
+// H2
+children.push(h3('4.8.2  Hypothesis 2 — Security, Transparency, and Skills Validation'));
+children.push(labeledPara('H0₂', 'Digital credentials do not enhance skills validation processes and do not provide a more secure and transparent method for verifying employees\' qualifications compared to traditional methods.'));
+children.push(labeledPara('H1₂', 'Digital credentials enhance skills validation processes by providing a secure and transparent method for verifying and documenting employees\' qualifications and competencies.'));
+children.push(tableTitle('Table 4.8.2 — Composite Mean Score: Security, Transparency, and Skills Validation'));
+children.push(new Table({
+  width: { size: 8000, type: WidthType.DXA },
+  columnWidths: [500, 1800, 4000, 1700],
+  rows: [
+    new TableRow({ tableHeader: true, children: ['Sr.','Variable','Question','Mean Score'].map(h => new TableCell({ borders: tableBorders, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: h, bold: true, size: 20, color: WHITE, font: 'Arial' })] })] })) }),
+    ...[[1,'Security','Blockchain ensures tamper-proof employee credential records','4.03'],[2,'Fraud Reduction','Digital credentials reduce fake or forged certificates','4.06'],[3,'Data Accuracy','Blockchain improves data accuracy in HR records','4.05'],[4,'Transparency','Digital credentials increase trust in candidate information','4.04'],[5,'Security Validation','Blockchain-based systems are more secure than traditional HR databases','4.07']].map((row, ri) =>
+      new TableRow({ children: row.map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: ri % 2 === 0 ? 'F7FBFF' : WHITE, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 0 || ci === 3 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: String(v), size: 20, font: 'Arial' })] })] })) })
+    ),
+    new TableRow({ children: ['','','Composite Mean (Y)','4.05'].map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: GREY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 3 || ci === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: v, bold: true, size: 20, font: 'Arial', color: NAVY })] })] })) }),
+  ],
+}));
+children.push(para([bold('Composite Mean = 4.05 → High Agreement', 22, NAVY)]));
+children.push(para([bold('Result: ', 22, BLUE), normal('H0₂ Rejected | H1₂ Accepted'), new TextRun({ text: '  —  Blockchain-powered digital credentials effectively enhance security, transparency, and skills validation in HR.', size: 22, font: 'Arial', color: BLACK })]));
+
+// H3
+children.push(h3('4.8.3  Hypothesis 3 — Training Record Management and Professional Development'));
+children.push(labeledPara('H0₃', 'Implementation of digital credentials does not result in more efficient tracking and validation of employees\' professional development and certifications compared to previous approaches.'));
+children.push(labeledPara('H1₃', 'Implementation of digital credentials simplifies training record management, allowing HR departments to track and validate employees\' professional development more efficiently.'));
+children.push(tableTitle('Table 4.8.3 — Composite Mean Score: Training Record Management and Professional Development'));
+children.push(new Table({
+  width: { size: 8000, type: WidthType.DXA },
+  columnWidths: [500, 2000, 4000, 1500],
+  rows: [
+    new TableRow({ tableHeader: true, children: ['Sr.','Variable','Question','Mean Score'].map(h => new TableCell({ borders: tableBorders, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: h, bold: true, size: 20, color: WHITE, font: 'Arial' })] })] })) }),
+    ...[[1,'Digital Credential Usage','Does your organization use digital credentials for HR processes?','4.02'],[2,'Training & Certification Mgmt','Which HR activities involve digital credentials?','3.94']].map((row, ri) =>
+      new TableRow({ children: row.map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: ri % 2 === 0 ? 'F7FBFF' : WHITE, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 0 || ci === 3 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: String(v), size: 20, font: 'Arial' })] })] })) })
+    ),
+    new TableRow({ children: ['','','Composite Mean (Z)','3.98'].map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: GREY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 3 || ci === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: v, bold: true, size: 20, font: 'Arial', color: NAVY })] })] })) }),
+  ],
+}));
+children.push(para([bold('Composite Mean = 3.98 → High Agreement', 22, NAVY)]));
+children.push(para([bold('Result: ', 22, BLUE), normal('H0₃ Rejected | H1₃ Accepted'), new TextRun({ text: '  —  Digital credentials effectively simplify training record management and professional development tracking.', size: 22, font: 'Arial', color: BLACK })]));
+
+// H4
+children.push(h3('4.8.4  Hypothesis 4 — Data Accuracy, Integrity, and Fraud Reduction'));
+children.push(labeledPara('H0₄', 'The use of digital credentials does not enhance data accuracy and integrity in HR processes, and does not reduce fraud or misrepresentation of qualifications.'));
+children.push(labeledPara('H1₄', 'The use of digital credentials enhances data accuracy and integrity in HR processes, reducing the risk of fraud or misrepresentation of qualifications.'));
+children.push(tableTitle('Table 4.8.4 — Composite Mean Score: Data Accuracy, Integrity, and Fraud Reduction'));
+children.push(new Table({
+  width: { size: 8000, type: WidthType.DXA },
+  columnWidths: [500, 5400, 2100],
+  rows: [
+    new TableRow({ tableHeader: true, children: ['Sr.','Variable','Mean Score'].map(h => new TableCell({ borders: tableBorders, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: h, bold: true, size: 20, color: WHITE, font: 'Arial' })] })] })) }),
+    ...[[1,'Digital credentials reduce fake or forged certificates','4.06'],[2,'Blockchain improves data accuracy in HR records','4.05'],[3,'Digital credentials increase trust in candidate information','4.04']].map((row, ri) =>
+      new TableRow({ children: row.map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: ri % 2 === 0 ? 'F7FBFF' : WHITE, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 0 || ci === 2 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: String(v), size: 20, font: 'Arial' })] })] })) })
+    ),
+    new TableRow({ children: ['','Composite Mean (W)','4.05'].map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: GREY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 2 || ci === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: v, bold: true, size: 20, font: 'Arial', color: NAVY })] })] })) }),
+  ],
+}));
+children.push(para([bold('Composite Mean = 4.05 → High Agreement', 22, NAVY)]));
+children.push(para([bold('Result: ', 22, BLUE), normal('H0₄ Rejected | H1₄ Accepted'), new TextRun({ text: '  —  Digital credentials enhance data accuracy and integrity while reducing fraud-related risks in HR processes.', size: 22, font: 'Arial', color: BLACK })]));
+
+// H5
+children.push(h3('4.8.5  Hypothesis 5 — Organizational Adoption and Utilization of Blockchain-Powered Digital Credentials'));
+children.push(labeledPara('H0₅', 'The perceived advantages of blockchain-powered digital credentials do not significantly differ from their actual organizational utilization and implementation in HR processes.'));
+children.push(labeledPara('H1₅', 'Despite perceived advantages, actual utilization and implementation of blockchain-powered digital credentials across organizations remain limited.'));
+children.push(labeledPara('Statistical Tool', 'Comparative Composite Mean Analysis'));
+children.push(tableTitle('Table 4.8.5 — Comparative Composite Mean Analysis: Perceived Benefits vs. Actual Utilization'));
+children.push(new Table({
+  width: { size: 8000, type: WidthType.DXA },
+  columnWidths: [500, 5700, 1800],
+  rows: [
+    new TableRow({ tableHeader: true, children: ['Sr.','Dimension','Mean Score'].map(h => new TableCell({ borders: tableBorders, shading: { fill: NAVY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: h, bold: true, size: 20, color: WHITE, font: 'Arial' })] })] })) }),
+    ...[[1,'Perceived Benefits','3.89'],[2,'Actual Organizational Utilization','3.76']].map((row, ri) =>
+      new TableRow({ children: row.map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: ri % 2 === 0 ? 'F7FBFF' : WHITE, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 0 || ci === 2 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: String(v), size: 20, font: 'Arial' })] })] })) })
+    ),
+    new TableRow({ children: ['','Difference (Perceived − Actual)','0.13'].map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: GREY, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 100, right: 100 }, children: [new Paragraph({ alignment: ci === 2 || ci === 0 ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: v, bold: true, size: 20, font: 'Arial', color: NAVY })] })] })) }),
+  ],
+}));
+children.push(para([bold('Mean Difference = 0.13 → No Significant Difference', 22, NAVY)]));
+children.push(para([bold('Result: ', 22, BLUE), normal('H0₅ Accepted | H1₅ Rejected'), new TextRun({ text: '  —  Perceived benefits and actual utilization are closely aligned; widespread adoption remains gradual but consistent with positive perceptions.', size: 22, font: 'Arial', color: BLACK })]));
+
+// ── HYPOTHESIS SUMMARY TABLE ───────────────────────────────────────────────────
+children.push(pageBreak(), h2('4.8.6  Summary of Hypothesis Testing'));
+children.push(tableTitle('Table 4.8.6 — Summary of All Hypothesis Testing Results'));
+children.push(hypothesisTable([
+  ['H1','Administrative Efficiency & Cost Reduction','Composite Mean','4.02 (High)','H0 Rejected'],
+  ['H2','Security, Transparency & Skills Validation','Composite Mean','4.05 (High)','H0 Rejected'],
+  ['H3','Training Record Mgmt & Professional Development','Composite Mean','3.98 (High)','H0 Rejected'],
+  ['H4','Data Accuracy, Integrity & Fraud Reduction','Composite Mean','4.05 (High)','H0 Rejected'],
+  ['H5','Organizational Adoption & Utilization','Comp. Comp. Mean','Diff = 0.13','H0 Accepted'],
+]));
+children.push(para([italic('Source: Primary Data — Statistical Analysis, Chapter 4')]));
+
+// ── DECISION RULE TABLE ───────────────────────────────────────────────────────
+children.push(h3('Decision Rule Scale (Applied Across All Hypotheses)'));
+children.push(new Table({
+  width: { size: 5000, type: WidthType.DXA },
+  columnWidths: [2500, 2500],
+  rows: [
+    new TableRow({ tableHeader: true, children: ['Mean Value Range','Interpretation'].map(h => new TableCell({ borders: tableBorders, shading: { fill: BLUE, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 120, right: 120 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: h, bold: true, size: 20, color: WHITE, font: 'Arial' })] })] })) }),
+    ...[[' 1.00 – 1.80','Very Low'],[' 1.81 – 2.60','Low'],[' 2.61 – 3.40','Moderate'],[' 3.41 – 4.20','High'],[' 4.21 – 5.00','Very High']].map((row, ri) =>
+      new TableRow({ children: row.map((v, ci) => new TableCell({ borders: tableBorders, shading: { fill: ri % 2 === 0 ? 'F7FBFF' : WHITE, type: ShadingType.CLEAR }, margins: { top: 70, bottom: 70, left: 120, right: 120 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: v, size: 20, font: 'Arial', bold: ci === 1 })] })] })) })
+    ),
+  ],
+}));
+
+// ── CLOSING NOTE ──────────────────────────────────────────────────────────────
+children.push(divider());
+children.push(new Paragraph({
+  children: [new TextRun({ text: 'End of Chapter 4 — Data Analysis and Interpretation', bold: true, size: 22, color: WHITE, font: 'Arial' })],
+  alignment: AlignmentType.CENTER,
+  spacing: { before: 200, after: 200 },
+  shading: { fill: NAVY, type: ShadingType.CLEAR },
+}));
+
+// ═══════════════════════════════════════════════════════════════════════════════
+const doc = new Document({
+  styles: {
+    default: {
+      document: { run: { font: 'Arial', size: 22, color: BLACK } },
+    },
+  },
+  sections: [{
+    properties: {
+      page: {
+        size: { width: 12240, height: 15840 },
+        margin: { top: 1080, right: 1080, bottom: 1080, left: 1260 },
+      },
+    },
+    children,
+  }],
+});
+
+Packer.toBuffer(doc).then(buf => {
+  fs.writeFileSync('/home/claude/chapter_4_polished.docx', buf);
+  console.log('Done');
+});
+JSEOF
+node /home/claude/build_chapter4.js
+Output
+
+Done
+Done

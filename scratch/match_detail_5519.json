@@ -1,0 +1,8 @@
+{
+  "step_index": 5519,
+  "source": "MODEL",
+  "type": "RUN_COMMAND",
+  "status": "DONE",
+  "created_at": "2026-06-26T06:54:49Z",
+  "content": "Created At: 2026-06-26T06:54:49Z\nCompleted At: 2026-06-26T06:54:54Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\t\tOutput:\n\t\t\t\tTotal customers: 1\n1. Name: \"atharva manohar kharapkar \", JoinDate: \"2026-06-26\", Plan: \"Monthly\", Amount: 2200, Deposited: 0, Remaining: 2200, Phone: \"+919112083787\"\n\n"
+}

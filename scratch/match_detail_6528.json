@@ -1,0 +1,8 @@
+{
+  "step_index": 6528,
+  "source": "MODEL",
+  "type": "RUN_COMMAND",
+  "status": "DONE",
+  "created_at": "2026-06-30T08:35:07Z",
+  "content": "Created At: 2026-06-30T08:35:07Z\nCompleted At: 2026-06-30T08:35:55Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\t\tOutput:\n\t\t\t\tAll customers in DB:\n[0] ID: cust_1782418880380, Name: \"atharva manohar kharapkar \", Phone: \"+919112083787\", Plan: \"Monthly\", Amount: 2200, Deposited: 4400, JoinDate: \"2026-06-27\"\n[1] ID: cust_1782545308285, Name: \"mohan \", Phone: \"+919112083787\", Plan: \"Monthly\", Amount: 2200, Deposited: 4200, JoinDate: \"2026-06-27\"\n[2] ID: cust_1782549652122, Name: \"ankit  \", Phone: \"+919112083787\", Plan: \"Monthly\", Amount: 2200, Deposited: 2200, JoinDate: \"2026-06-27\"\n[3] ID: cust_1782553902654, Name: \"atharva deshmukh \", Phone: \"+919112083787\", Plan: \"Monthly\", Amount: 2200, Deposited: 4400, JoinDate: \"2026-05-27\"\n[4] ID: cust_1782585099794, Name: \"samrat deshmukh \", Phone: \"+919112083787\", Plan: \"Monthly\", Amount: 2200, Deposited: 4400, JoinDate: \"2026-05-27\"\n[5] ID: cust_1782591548011, Name: \"parth ulhe \", Phone: \"+919112083787\", Plan: \"Monthly\", Amount: 2199, Deposited: 2199, JoinDate: \"2026-06-28\"\n[6] ID: cust_1782796082324, Name: \"Rahul Babulkar\", Phone: \"+919156920840\", Plan: \"Monthly\", Amount: 2199, Deposited: 546, JoinDate: \"2026-06-30\"\n[7] ID: cust_1782796127530, Name: \"Rahul Babulkar \", Phone: \"+919156920840\", Plan: \"Monthly\", Amount: 1500, Deposited: 0, JoinDate: \"2026-06-30\"\n\n"
+}

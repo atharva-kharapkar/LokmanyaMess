@@ -1,0 +1,8 @@
+{
+  "step_index": 6011,
+  "source": "MODEL",
+  "type": "RUN_COMMAND",
+  "status": "DONE",
+  "created_at": "2026-06-27T09:49:20Z",
+  "content": "Created At: 2026-06-27T09:49:20Z\nCompleted At: 2026-06-27T09:49:25Z\n\n\t\t\t\tThe command completed successfully.\n\t\t\t\tOutput:\n\t\t\t\tTotal customers: 3\n0 atharva manohar kharapkar  amount: 2200 deposited: 6600\n1 mohan  amount: 2200 deposited: 2200\n2 ankit   amount: 2200 deposited: 2200\n\n"
+}

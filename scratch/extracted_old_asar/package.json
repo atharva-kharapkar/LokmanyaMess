@@ -1,0 +1,11 @@
+{
+  "name": "lokmanya-mess-desktop",
+  "version": "1.2.0",
+  "description": "Offline Mess Management Software for Windows",
+  "main": "main.js",
+  "dependencies": {
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

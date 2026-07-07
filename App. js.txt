@@ -1,0 +1,1039 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Modal, Alert, FlatList, Image, StatusBar,
+  SafeAreaView, KeyboardAvoidingView, Platform, Dimensions,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import * as Sharing from 'expo-sharing';
+import * as Linking from 'expo-linking';
+import { initializeApp, getApps } from 'firebase/app';
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc,
+  onSnapshot, query, orderBy, serverTimestamp
+} from 'firebase/firestore';
+
+const { width, height } = Dimensions.get('window');
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBbwcQ-Cd6CawCd8NDqk7aSZH6TA2-Po-Q",
+  authDomain: "mess-management-62b32.firebaseapp.com",
+  projectId: "mess-management-62b32",
+  storageBucket: "mess-management-62b32.firebasestorage.app",
+  messagingSenderId: "72179753747",
+  appId: "1:72179753747:android:58f59d0249da6fd48ef0e6"
+};
+
+const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(firebaseApp);
+
+const OWNER_PIN = '1234';
+const WORKER_PIN = '4321';
+
+const C = {
+  primary: '#D85A30', pl: '#FAECE7', pd: '#993C1D',
+  success: '#1D9E75', sl: '#E1F5EE',
+  warning: '#BA7517', wl: '#FAEEDA',
+  danger: '#E24B4A', dl: '#FCEBEB',
+  info: '#378ADD', il: '#E6F1FB',
+  bg: '#F2F2F7', card: '#FFFFFF',
+  text: '#1A1A1A', t2: '#6E6E73', border: '#E5E5EA',
+};
+
+const PLAN_DAYS = { Monthly: 30, Weekly: 7, Daily: 1, Custom: 30 };
+const PLAN_AMT = { Monthly: 1500, Weekly: 500, Daily: 80, Custom: 0 };
+const AV_COLORS = [
+  { bg: '#FAECE7', tc: '#993C1D' },
+  { bg: '#E1F5EE', tc: '#085041' },
+  { bg: '#E6F1FB', tc: '#0C447C' },
+  { bg: '#FAEEDA', tc: '#633806' },
+];
+
+const T = {
+  en: {
+    appName: 'Lokmanya Mess', home: 'Home', customers: 'Customers',
+    payments: 'Payments', staff: 'Staff', settings: 'Settings',
+    enterPIN: 'Enter your PIN', wrongPIN: 'Wrong PIN! Try again.',
+    owner: 'Owner', worker: 'Worker',
+    totalCustomers: 'Total Customers', active: 'Active',
+    expiredLabel: 'Expired', expiringSoon: 'Expiring',
+    pendingPayments: 'Pending Payments',
+    addCustomer: 'Add Customer', editCustomer: 'Edit Customer',
+    fullName: 'Full Name *', whatsappNo: 'WhatsApp Number *',
+    aadharId: 'Aadhar ID (optional)', plan: 'Plan',
+    amount: 'Amount (Rs) *', joiningDate: 'Joining Date (YYYY-MM-DD) *',
+    address: 'Address / Room', save: 'Save', cancel: 'Cancel',
+    delete: 'Delete',
+    addEmployee: 'Add Employee', editEmployee: 'Edit Employee',
+    role: 'Role', salary: 'Salary (Rs/mo) *', phoneNo: 'Phone',
+    bankUpi: 'Bank / UPI (optional)', markPaid: 'Mark Paid', paid: 'Paid',
+    salaryTracker: 'Salary Tracker',
+    recordPayment: 'Record Payment', amountReceived: 'Amount Received (Rs) *',
+    paymentDate: 'Payment Date (YYYY-MM-DD)',
+    paymentMode: 'Payment Mode', note: 'Note (optional)',
+    confirmPayment: 'Confirm Payment',
+    recentTxns: 'Recent Transactions', noTxns: 'No payments yet',
+    upiSetup: 'UPI Payment Setup', upiId: 'UPI ID',
+    uploadQR: 'Tap to Upload QR', shareQR: 'Share QR',
+    pendingPay: 'Pending Payments',
+    subExpired: 'Expired', endingSoon: 'Ending Soon', both: 'Both',
+    allActive: 'All subscriptions are active!',
+    sendReminder: 'Send Reminder to All',
+    waReminder: 'WhatsApp Reminder', msgPreview: 'Message Preview',
+    recipients: 'Recipients', startSending: 'Start Sending',
+    noApiNote: 'Opens WhatsApp one by one. No API. Free.',
+    editTemplate: 'Edit Template', saveMsg: 'Save Message',
+    editProfile: 'Edit Profile', ownerName: 'Owner Name', messName: 'Mess Name',
+    waTemplate: 'WhatsApp Message Template',
+    language: 'Language', logout: 'Logout',
+    cannotUndo: 'This cannot be undone.',
+    expiredOn: 'Expired', expires: 'Expires',
+    today: 'Today', dayLeft: 'day left', daysLeft: 'days left',
+    takePhoto: 'Take Photo', uploadGallery: 'Upload from Gallery',
+    monthly: 'Monthly', weekly: 'Weekly', daily: 'Daily', custom: 'Custom',
+    upiPay: 'UPI / QR', cash: 'Cash', bank: 'Bank Transfer',
+    cook: 'Cook', helper: 'Helper', delivery: 'Delivery',
+    cleaner: 'Cleaner', other: 'Other',
+    notSet: 'Not set - tap to add',
+    saveProfile: 'Save Profile',
+    deleteSelected: 'Delete Selected', sendWhatsApp: 'Send WhatsApp',
+    syncing: 'Syncing...', synced: 'Synced', offline: 'Offline',
+    noAccess: 'Access Denied',
+    workerNoAccess: 'Workers cannot access this section.',
+  },
+  mr: {
+    appName: 'Lokmanya Mess', home: 'Home', customers: 'Customers',
+    payments: 'Payments', staff: 'Staff', settings: 'Settings',
+    enterPIN: 'PIN टाका', wrongPIN: 'चुकीचा PIN! पुन्हा प्रयत्न करा.',
+    owner: 'मालक', worker: 'कर्मचारी',
+    totalCustomers: 'एकूण ग्राहक', active: 'सक्रिय',
+    expiredLabel: 'संपलेले', expiringSoon: 'संपणारे',
+    pendingPayments: 'प्रलंबित देयके',
+    addCustomer: 'ग्राहक जोडा', editCustomer: 'ग्राहक संपादन',
+    fullName: 'पूर्ण नाव *', whatsappNo: 'WhatsApp नंबर *',
+    aadharId: 'आधार (ऐच्छिक)', plan: 'योजना',
+    amount: 'रक्कम *', joiningDate: 'तारीख (YYYY-MM-DD) *',
+    address: 'पत्ता / खोली', save: 'जतन करा', cancel: 'रद्द करा',
+    delete: 'काढा',
+    addEmployee: 'कर्मचारी जोडा', editEmployee: 'कर्मचारी संपादन',
+    role: 'पद', salary: 'पगार *', phoneNo: 'फोन',
+    bankUpi: 'बँक / UPI (ऐच्छिक)', markPaid: 'दिला', paid: 'दिला',
+    salaryTracker: 'पगार ट्रॅकर',
+    recordPayment: 'देयक नोंद करा', amountReceived: 'प्राप्त रक्कम *',
+    paymentDate: 'देयक तारीख (YYYY-MM-DD)',
+    paymentMode: 'देयक पद्धत', note: 'टीप (ऐच्छिक)',
+    confirmPayment: 'देयक नोंद करा',
+    recentTxns: 'अलीकडील व्यवहार', noTxns: 'अद्याप देयक नाही',
+    upiSetup: 'UPI सेटअप', upiId: 'UPI ID',
+    uploadQR: 'QR अपलोड करा', shareQR: 'QR शेअर करा',
+    pendingPay: 'प्रलंबित देयके',
+    subExpired: 'संपलेले', endingSoon: 'लवकर संपणारे', both: 'दोन्ही',
+    allActive: 'सर्व सदस्यता सक्रिय आहेत!',
+    sendReminder: 'सर्वांना रिमाइंडर पाठवा',
+    waReminder: 'WhatsApp रिमाइंडर', msgPreview: 'संदेश पूर्वावलोकन',
+    recipients: 'प्राप्तकर्ते', startSending: 'पाठवणे सुरू करा',
+    noApiNote: 'एक-एक करून WhatsApp उघडते. मोफत.',
+    editTemplate: 'टेम्पलेट संपादन', saveMsg: 'संदेश जतन करा',
+    editProfile: 'प्रोफाइल संपादन', ownerName: 'मालकाचे नाव', messName: 'मेस नाव',
+    waTemplate: 'WhatsApp संदेश टेम्पलेट',
+    language: 'भाषा', logout: 'लॉगआउट',
+    cannotUndo: 'ही क्रिया पूर्वपदावर येणार नाही.',
+    expiredOn: 'संपले', expires: 'संपते',
+    today: 'आज', dayLeft: 'दिवस', daysLeft: 'दिवस',
+    takePhoto: 'फोटो काढा', uploadGallery: 'गॅलरीतून अपलोड करा',
+    monthly: 'मासिक', weekly: 'साप्ताहिक', daily: 'दैनिक', custom: 'सानुकूल',
+    upiPay: 'UPI / QR', cash: 'रोख', bank: 'बँक',
+    cook: 'स्वयंपाकी', helper: 'मदतनीस', delivery: 'डिलिव्हरी',
+    cleaner: 'साफसफाई', other: 'इतर',
+    notSet: 'सेट नाही',
+    saveProfile: 'प्रोफाइल जतन करा',
+    deleteSelected: 'निवडलेले काढा', sendWhatsApp: 'WhatsApp पाठवा',
+    syncing: 'समक्रमण...', synced: 'समक्रमित', offline: 'ऑफलाइन',
+    noAccess: 'प्रवेश नाकारला',
+    workerNoAccess: 'कर्मचाऱ्यांना या विभागात प्रवेश नाही.',
+  }
+};
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function isValidDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  const dateObj = new Date(year, month - 1, day);
+  return dateObj.getFullYear() === year && dateObj.getMonth() === month - 1 && dateObj.getDate() === day;
+}
+function ini(n) { if (!n) return '?'; return n.trim().split(' ').slice(0,2).map(w => w[0]?.toUpperCase()||'').join(''); }
+function rupee(n) { return 'Rs ' + (Number(n)||0).toLocaleString('en-IN'); }
+function computeStatus(joinDate, plan) {
+  if (!joinDate) return 'active';
+  const d = new Date(joinDate); d.setDate(d.getDate() + (PLAN_DAYS[plan]||30));
+  const diff = Math.ceil((d - new Date()) / 86400000);
+  if (diff < 0) return 'expired'; if (diff <= 2) return 'expiring'; return 'active';
+}
+function daysLeft(joinDate, plan) {
+  if (!joinDate) return null;
+  const d = new Date(joinDate); d.setDate(d.getDate() + (PLAN_DAYS[plan]||30));
+  return Math.ceil((d - new Date()) / 86400000);
+}
+function expiryStr(joinDate, plan) {
+  if (!joinDate) return '';
+  const d = new Date(joinDate); d.setDate(d.getDate() + (PLAN_DAYS[plan]||30));
+  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+function buildMsg(tpl, c, upi, mess) {
+  const t = tpl || 'Hi {name},\n\nYour mess subscription has ended.\nPlan: {plan} | Amount: Rs {amount}\n\nPay via UPI: {upi}\n\nThank you\n{mess}';
+  return t.replace(/\{name\}/g, c?.name||'').replace(/\{plan\}/g, c?.plan||'').replace(/\{amount\}/g, c?.amount||'').replace(/\{upi\}/g, upi||'Not set').replace(/\{mess\}/g, mess||'Lokmanya Mess');
+}function formatWaPhone(phone) {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) return '91' + digits;
+  return digits;
+}
+
+
+function StableInput({ label, value, onChangeText, placeholder, keyboardType, multiline }) {
+  const [local, setLocal] = React.useState(value || '');
+  React.useEffect(() => { setLocal(value || ''); }, [value]);
+  const handleChange = (text) => { setLocal(text); onChangeText(text); };
+  return (
+    <View style={{ marginBottom: 13 }}>
+      {label ? <Text style={S.label}>{label}</Text> : null}
+      <TextInput
+        style={[S.input, multiline && { minHeight: 80, textAlignVertical: 'top' }]}
+        value={local}
+        onChangeText={handleChange}
+        placeholder={placeholder}
+        placeholderTextColor={C.t2}
+        keyboardType={keyboardType || 'default'}
+        multiline={!!multiline}
+        autoCorrect={false}
+        autoCapitalize="none"
+        blurOnSubmit={false}
+      />
+    </View>
+  );
+}
+
+const Av = React.memo(({ name, photo, index, size = 40 }) => {
+  const av = AV_COLORS[(index||0) % 4];
+  return (
+    <View style={{ width: size, height: size, borderRadius: size/2, backgroundColor: av.bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      {photo ? <Image source={{ uri: photo }} style={{ width: size, height: size, borderRadius: size/2 }} /> : <Text style={{ fontSize: size*0.32, fontWeight: '700', color: av.tc }}>{ini(name)}</Text>}
+    </View>
+  );
+});
+
+const SBadge = React.memo(({ status, t }) => {
+  const m = { active:{bg:C.sl,c:'#085041',l:t.active}, expired:{bg:C.dl,c:'#791F1F',l:t.expiredLabel}, expiring:{bg:C.wl,c:'#633806',l:t.expiringSoon} };
+  const x = m[status]||m.active;
+  return <View style={{ backgroundColor:x.bg, borderRadius:99, paddingHorizontal:8, paddingVertical:3 }}><Text style={{ fontSize:10, fontWeight:'700', color:x.c }}>{x.l}</Text></View>;
+});
+
+const PlanPicker = React.memo(({ label, opts, val, onSel }) => (
+  <View style={{ marginBottom: 13 }}>
+    <Text style={S.label}>{label}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={{ flexDirection:'row', gap:6 }}>
+        {opts.map(o => (
+          <TouchableOpacity key={o.v} onPress={() => onSel(o.v)} style={[S.btn, S.btnSm, val===o.v && S.btnP]} activeOpacity={0.7}>
+            <Text style={{ fontSize:12, fontWeight:'600', color: val===o.v ? '#fff' : C.text }}>{o.l}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
+  </View>
+));
+
+const PPicker = React.memo(({ photo, onCam, onGal, t }) => (
+  <View style={{ flexDirection:'row', alignItems:'center', gap:14, marginBottom:16, padding:14, backgroundColor:'#F8F8F8', borderRadius:12 }}>
+    <TouchableOpacity onPress={onGal} style={{ width:72, height:72, borderRadius:36, borderWidth:2, borderColor:C.border, borderStyle:'dashed', backgroundColor:'#eee', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
+      {photo ? <Image source={{ uri: photo }} style={{ width:72, height:72, borderRadius:36 }} /> : <Text style={{ fontSize:28 }}>+</Text>}
+    </TouchableOpacity>
+    <View style={{ flex:1, gap:7 }}>
+      <TouchableOpacity style={[S.btn, S.btnSm]} onPress={onCam} activeOpacity={0.7}><Text style={{ fontSize:12, fontWeight:'500', color:C.text }}>{t.takePhoto}</Text></TouchableOpacity>
+      <TouchableOpacity style={[S.btn, S.btnSm]} onPress={onGal} activeOpacity={0.7}><Text style={{ fontSize:12, fontWeight:'500', color:C.text }}>{t.uploadGallery}</Text></TouchableOpacity>
+    </View>
+  </View>
+));
+
+const HomeTab = React.memo(({ customers, expiredList, expiringList, activeCount, pendAmt, homeFilter, setHomeFilter, openRecordPay, waSingle, openWAModal, t }) => {
+  const subCards = homeFilter==='expired' ? expiredList : homeFilter==='expiring' ? expiringList : [...expiredList,...expiringList];
+  return (
+    <ScrollView style={S.scroll} contentContainerStyle={S.sc} showsVerticalScrollIndicator={false}>
+      <View style={S.sg}>
+        <View style={S.sc2}><Text style={{ fontSize:11,color:C.t2,marginBottom:4,fontWeight:'500' }}>{t.totalCustomers}</Text><Text style={{ fontSize:22,fontWeight:'700',color:C.text }}>{customers.length}</Text></View>
+        <View style={[S.sc2,{backgroundColor:C.sl,borderColor:'#9FE1CB'}]}><Text style={{ fontSize:11,color:C.success,marginBottom:4,fontWeight:'500' }}>{t.active}</Text><Text style={{ fontSize:22,fontWeight:'700',color:C.success }}>{activeCount}</Text></View>
+      </View>
+      <View style={S.sg}>
+        <View style={[S.sc2,{backgroundColor:C.dl,borderColor:'#F7C1C1'}]}><Text style={{ fontSize:11,color:C.danger,marginBottom:4,fontWeight:'500' }}>{t.expiredLabel}</Text><Text style={{ fontSize:22,fontWeight:'700',color:C.danger }}>{expiredList.length}</Text></View>
+        <View style={[S.sc2,{backgroundColor:C.wl,borderColor:'#FAC775'}]}><Text style={{ fontSize:11,color:C.warning,marginBottom:4,fontWeight:'500' }}>{t.expiringSoon}</Text><Text style={{ fontSize:22,fontWeight:'700',color:C.warning }}>{expiringList.length}</Text></View>
+      </View>
+      <View style={[S.sc2,{backgroundColor:C.il,borderColor:'#B5D4F4',marginBottom:10}]}><Text style={{ fontSize:11,color:C.info,marginBottom:4,fontWeight:'500' }}>{t.pendingPayments}</Text><Text style={{ fontSize:22,fontWeight:'700',color:C.info }}>{rupee(pendAmt)}</Text></View>
+      <View style={S.fbar}>
+        {[{k:'expired',l:'Expired',ac:C.danger},{k:'expiring',l:'Ending Soon',ac:'#F5A623'},{k:'both',l:'Both',ac:C.primary}].map(f=>(
+          <TouchableOpacity key={f.k} style={[S.chip,homeFilter===f.k&&{backgroundColor:f.ac,borderColor:f.ac}]} onPress={()=>setHomeFilter(f.k)} activeOpacity={0.7}>
+            <Text style={{ fontSize:11,fontWeight:'600',color:homeFilter===f.k?'#fff':C.t2 }}>{f.l}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {subCards.length===0
+        ? <View style={S.empty}><Text style={S.emptyI}>OK</Text><Text style={S.emptyT}>{t.allActive}</Text></View>
+        : <>
+            {subCards.map(c=>{
+              const st=computeStatus(c.joinDate,c.plan); const dl=daysLeft(c.joinDate,c.plan); const isExp=st==='expired';
+              const badge=isExp?t.expiredLabel:dl===0?t.today:dl===1?'1 '+t.dayLeft:dl+' '+t.daysLeft;
+              return (
+                <View key={c.id} style={[S.subCard,{backgroundColor:isExp?C.danger:'#F5A623'}]}>
+                  <Av name={c.name} photo={c.photo} index={c.avIndex} size={42}/>
+                  <View style={{flex:1}}>
+                    <Text style={{fontSize:15,fontWeight:'700',color:'#fff'}} numberOfLines={1}>{c.name}</Text>
+                    <Text style={{fontSize:12,color:'rgba(255,255,255,0.85)',marginTop:2}}>{c.plan} - {isExp?t.expiredOn:t.expires} {expiryStr(c.joinDate,c.plan)}</Text>
+                  </View>
+                  <View style={{backgroundColor:'rgba(255,255,255,0.28)',borderRadius:99,paddingHorizontal:10,paddingVertical:4}}>
+                    <Text style={{fontSize:11,fontWeight:'700',color:'#fff'}}>{badge}</Text>
+                  </View>
+                  <TouchableOpacity style={{backgroundColor:'rgba(255,255,255,0.22)',borderRadius:8,width:32,height:32,alignItems:'center',justifyContent:'center'}} onPress={()=>openRecordPay(c)} activeOpacity={0.7}><Text>Pay</Text></TouchableOpacity>
+                  <TouchableOpacity style={{backgroundColor:'rgba(255,255,255,0.22)',borderRadius:8,width:32,height:32,alignItems:'center',justifyContent:'center'}} onPress={()=>waSingle(c)} activeOpacity={0.7}><Text>WA</Text></TouchableOpacity>
+                </View>
+              );
+            })}
+            <TouchableOpacity style={[S.btn,S.btnWA,{marginTop:4,marginBottom:8}]} onPress={()=>openWAModal([])} activeOpacity={0.7}>
+              <Text style={S.btnTW}>{t.sendReminder}</Text>
+            </TouchableOpacity>
+          </>
+      }
+    </ScrollView>
+  );
+});
+
+const CustomersTab = React.memo(({ customers, filtCusts, custSearch, setCustSearch, custFilter, setCustFilter, selectedIds, setSelectedIds, role, openAddCust, openEditCust, openRecordPay, waSingle, openWAModal, deleteSelected, deleteCust, setConf, t }) => (
+  <View style={S.flex1}>
+    <View style={{padding:12,paddingBottom:0}}>
+      <View style={{flexDirection:'row',alignItems:'center',backgroundColor:'#fff',borderWidth:1,borderColor:C.border,borderRadius:10,paddingHorizontal:12,marginBottom:10,gap:8}}>
+        <Text style={{fontSize:16}}>S</Text>
+        <TextInput style={{flex:1,paddingVertical:10,fontSize:14,color:C.text}} value={custSearch} onChangeText={setCustSearch} placeholder="Search..." placeholderTextColor={C.t2} autoCorrect={false}/>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom:10}}>
+        <View style={{flexDirection:'row',gap:6}}>
+          {[{k:'all',l:'All'},{k:'active',l:t.active},{k:'expiring',l:t.expiringSoon},{k:'expired',l:t.expiredLabel}].map(f=>(
+            <TouchableOpacity key={f.k} style={[{borderWidth:1,borderColor:C.border,borderRadius:99,paddingHorizontal:14,paddingVertical:5,backgroundColor:'#fff'},custFilter===f.k&&{backgroundColor:C.pl,borderColor:C.primary}]} onPress={()=>setCustFilter(f.k)} activeOpacity={0.7}>
+              <Text style={{fontSize:12,fontWeight:'600',color:custFilter===f.k?C.pd:C.t2}}>{f.l}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+      <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+        <Text style={{fontSize:12,color:C.t2}}>{filtCusts.length} customers</Text>
+        <TouchableOpacity style={[S.btn,S.btnP,S.btnSm]} onPress={openAddCust} activeOpacity={0.7}>
+          <Text style={[S.btnTW,{fontSize:12}]}>+ {t.addCustomer}</Text>
+        </TouchableOpacity>
+      </View>
+      {selectedIds.length>0 && role==='owner' && (
+        <View style={{backgroundColor:C.pl,borderWidth:1,borderColor:C.primary,borderRadius:10,padding:10,marginBottom:8}}>
+          <Text style={{fontSize:13,fontWeight:'700',color:C.pd,marginBottom:6}}>{selectedIds.length} selected</Text>
+          <View style={{flexDirection:'row',gap:8}}>
+            <TouchableOpacity style={[S.btn,S.btnWA,S.btnSm,{flex:1}]} onPress={()=>openWAModal(selectedIds)} activeOpacity={0.7}><Text style={[S.btnTW,{fontSize:12}]}>{t.sendWhatsApp}</Text></TouchableOpacity>
+            <TouchableOpacity style={[S.btn,S.btnD,S.btnSm,{flex:1}]} onPress={deleteSelected} activeOpacity={0.7}><Text style={[S.btnTW,{fontSize:12}]}>{t.deleteSelected}</Text></TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
+    <FlatList
+      data={filtCusts} keyExtractor={i=>i.id}
+      contentContainerStyle={{paddingHorizontal:12,paddingBottom:24}}
+      removeClippedSubviews maxToRenderPerBatch={10} windowSize={5}
+      ListEmptyComponent={<View style={S.empty}><Text style={S.emptyI}>--</Text><Text style={S.emptyT}>{t.addCustomer}</Text></View>}
+      renderItem={({item:c})=>{
+        const st=computeStatus(c.joinDate,c.plan); const dl=daysLeft(c.joinDate,c.plan); const isSel=selectedIds.includes(c.id);
+        return (
+          <View style={[S.row,{borderRadius:14,backgroundColor:'#fff',marginBottom:6,borderWidth:1,borderColor:C.border}]}>
+            {role==='owner'&&(
+              <TouchableOpacity onPress={()=>setSelectedIds(s=>isSel?s.filter(x=>x!==c.id):[...s,c.id])} activeOpacity={0.7}>
+                <View style={{width:20,height:20,borderRadius:4,borderWidth:2,borderColor:isSel?C.primary:C.border,backgroundColor:isSel?C.primary:'#fff',alignItems:'center',justifyContent:'center'}}>
+                  {isSel&&<Text style={{color:'#fff',fontSize:12}}>v</Text>}
+                </View>
+              </TouchableOpacity>
+            )}
+            <Av name={c.name} photo={c.photo} index={c.avIndex}/>
+            <View style={{flex:1}}>
+              <Text style={{fontSize:14,fontWeight:'600',color:C.text}} numberOfLines={1}>{c.name}</Text>
+              <Text style={{fontSize:11,color:C.t2,marginTop:1}}>{c.plan} - {rupee(c.amount)} - {dl!==null?(dl<0?t.expiredLabel:dl===0?t.today:dl+'d'):''}  </Text>
+            </View>
+            <SBadge status={st} t={t}/>
+            <View style={{flexDirection:'row',gap:4}}>
+              <TouchableOpacity style={[S.ibtn,{backgroundColor:C.sl,borderColor:'#9FE1CB'}]} onPress={()=>openRecordPay(c)} activeOpacity={0.7}><Text style={{fontSize:10}}>Pay</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.ibtn,{backgroundColor:'#f0fff4',borderColor:'#b5eaa0'}]} onPress={()=>waSingle(c)} activeOpacity={0.7}><Text style={{fontSize:10}}>WA</Text></TouchableOpacity>
+              {role==='owner'&&<>
+                <TouchableOpacity style={[S.ibtn,{backgroundColor:C.il,borderColor:'#B5D4F4'}]} onPress={()=>openEditCust(c)} activeOpacity={0.7}><Text style={{fontSize:10}}>Ed</Text></TouchableOpacity>
+                <TouchableOpacity style={[S.ibtn,{backgroundColor:C.dl,borderColor:'#F7C1C1'}]} onPress={()=>setConf({open:true,title:'Delete '+c.name+'?',sub:t.cannotUndo,onOk:()=>{deleteCust(c.id);setConf({open:false});}})} activeOpacity={0.7}><Text style={{fontSize:10}}>Del</Text></TouchableOpacity>
+              </>}
+            </View>
+          </View>
+        );
+      }}
+    />
+  </View>
+));
+
+const PaymentsTab = React.memo(({ customers, transactions, role, upiId, qrImg, openRecordPay, waSingle, pickImg, setQrImg, setUpiInput, setUpiModal, t }) => {
+  const pend = customers.filter(c=>['expired','expiring'].includes(computeStatus(c.joinDate,c.plan)));
+  const txns = transactions.slice(0,15);
+  return (
+    <KeyboardAvoidingView style={S.flex1} behavior={Platform.OS==='ios'?'padding':'height'} keyboardVerticalOffset={80}>
+      <ScrollView style={S.scroll} contentContainerStyle={S.sc} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {role==='owner'&&<>
+          <Text style={S.secTit}>{t.upiSetup}</Text>
+          <View style={S.card}>
+            <TouchableOpacity style={S.qrBox} onPress={async()=>{const u=await pickImg('gallery');if(u){setQrImg(u);await AsyncStorage.setItem('qrImg',u);}}}>
+              {qrImg?<Image source={{uri:qrImg}} style={{width:150,height:150}} resizeMode="contain"/>:<View style={{alignItems:'center'}}><Text style={{fontSize:32,marginBottom:6}}>+</Text><Text style={{fontSize:12,color:C.t2,textAlign:'center'}}>{t.uploadQR}</Text></View>}
+            </TouchableOpacity>
+            <View style={{flexDirection:'row',alignItems:'center',backgroundColor:'#F8F8F8',borderRadius:10,padding:12,marginBottom:10}}>
+              <View style={{flex:1}}><Text style={{fontSize:10,color:C.t2,fontWeight:'600',marginBottom:2}}>{t.upiId}</Text><Text style={{fontSize:14,fontWeight:'600',color:upiId?C.primary:C.t2}}>{upiId||t.notSet}</Text></View>
+              <TouchableOpacity onPress={()=>{setUpiInput(upiId);setUpiModal(true);}} activeOpacity={0.7}><Text style={{fontSize:20}}>Edit</Text></TouchableOpacity>
+            </View>
+            <View style={{flexDirection:'row',gap:8}}>
+              <TouchableOpacity style={[S.btn,S.btnP,S.btnSm,{flex:1}]} onPress={async()=>{const u=await pickImg('gallery');if(u){setQrImg(u);await AsyncStorage.setItem('qrImg',u);}}} activeOpacity={0.7}><Text style={[S.btnTW,{fontSize:12}]}>{t.uploadQR}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnSm,{flex:1}]} onPress={async()=>{if(!qrImg){Alert.alert('','Upload QR first');return;}if(await Sharing.isAvailableAsync())await Sharing.shareAsync(qrImg);}} activeOpacity={0.7}><Text style={[S.btnT,{fontSize:12}]}>{t.shareQR}</Text></TouchableOpacity>
+            </View>
+          </View>
+        </>}
+        <Text style={S.secTit}>{t.pendingPay}</Text>
+        {pend.length===0?<View style={S.empty}><Text style={S.emptyI}>OK</Text><Text style={S.emptyT}>No pending payments!</Text></View>:(
+          <View style={S.listCard}>
+            {pend.map((c,i)=>(
+              <View key={c.id} style={[S.row,i===pend.length-1&&{borderBottomWidth:0}]}>
+                <Av name={c.name} photo={c.photo} index={c.avIndex}/>
+                <View style={{flex:1}}><Text style={{fontSize:14,fontWeight:'600',color:C.text}} numberOfLines={1}>{c.name}</Text><Text style={{fontSize:11,color:C.t2}}>{rupee(c.amount)} due</Text></View>
+                <View style={{flexDirection:'row',gap:4}}>
+                  <TouchableOpacity style={[S.ibtn,{backgroundColor:C.sl,borderColor:'#9FE1CB'}]} onPress={()=>openRecordPay(c)} activeOpacity={0.7}><Text style={{fontSize:10}}>Pay</Text></TouchableOpacity>
+                  <TouchableOpacity style={[S.ibtn,{backgroundColor:'#f0fff4',borderColor:'#b5eaa0'}]} onPress={()=>waSingle(c)} activeOpacity={0.7}><Text style={{fontSize:10}}>WA</Text></TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+        <Text style={S.secTit}>{t.recentTxns}</Text>
+        {txns.length===0?<View style={S.empty}><Text style={S.emptyI}>--</Text><Text style={S.emptyT}>{t.noTxns}</Text></View>:(
+          <View style={S.listCard}>
+            {txns.map((tx,i)=>(
+              <View key={tx.id} style={[{flexDirection:'row',alignItems:'center',padding:11,paddingHorizontal:13,borderBottomWidth:1,borderBottomColor:C.border,gap:10},i===txns.length-1&&{borderBottomWidth:0}]}>
+                <View style={{width:36,height:36,borderRadius:18,backgroundColor:C.sl,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:16}}>Rs</Text></View>
+                <View style={{flex:1}}><Text style={{fontSize:13,fontWeight:'600',color:C.text}}>{tx.custName}</Text><Text style={{fontSize:11,color:C.t2}}>{tx.date}{tx.mode?' - '+tx.mode:''}{tx.note?' - '+tx.note:''}</Text></View>
+                <Text style={{fontSize:14,fontWeight:'700',color:C.success}}>{rupee(tx.amount)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+});
+
+const StaffTab = React.memo(({ role, employees, openAddEmp, openEditEmp, markSal, markAllSal, deleteEmp, setConf, t }) => {
+  if (role==='worker') return <View style={S.denied}><Text style={{fontSize:18,fontWeight:'700',color:C.text,marginBottom:8}}>{t.noAccess}</Text><Text style={{fontSize:14,color:C.t2,textAlign:'center'}}>{t.workerNoAccess}</Text></View>;
+  return (
+    <ScrollView style={S.scroll} contentContainerStyle={S.sc} showsVerticalScrollIndicator={false}>
+      <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <Text style={[S.secTit,{marginTop:0}]}>{t.staff}</Text>
+        <TouchableOpacity style={[S.btn,S.btnP,S.btnSm]} onPress={openAddEmp} activeOpacity={0.7}><Text style={[S.btnTW,{fontSize:12}]}>+ {t.addEmployee}</Text></TouchableOpacity>
+      </View>
+      {employees.length===0?<View style={S.empty}><Text style={S.emptyI}>--</Text><Text style={S.emptyT}>{t.addEmployee}</Text></View>:(
+        <View style={S.listCard}>
+          {employees.map((e,i)=>(
+            <View key={e.id} style={[S.row,i===employees.length-1&&{borderBottomWidth:0}]}>
+              <Av name={e.name} photo={e.photo} index={e.avIndex}/>
+              <View style={{flex:1}}><Text style={{fontSize:14,fontWeight:'600',color:C.text}} numberOfLines={1}>{e.name}</Text><Text style={{fontSize:11,color:C.t2}}>{e.role} - {rupee(e.salary)}/mo</Text></View>
+              <View style={{flexDirection:'row',gap:4}}>
+                <TouchableOpacity style={[S.ibtn,{backgroundColor:C.il,borderColor:'#B5D4F4'}]} onPress={()=>openEditEmp(e)} activeOpacity={0.7}><Text style={{fontSize:10}}>Ed</Text></TouchableOpacity>
+                <TouchableOpacity style={[S.ibtn,{backgroundColor:C.dl,borderColor:'#F7C1C1'}]} onPress={()=>setConf({open:true,title:'Delete '+e.name+'?',sub:t.cannotUndo,onOk:()=>{deleteEmp(e.id);setConf({open:false});}})} activeOpacity={0.7}><Text style={{fontSize:10}}>Del</Text></TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+      <Text style={S.secTit}>{t.salaryTracker}</Text>
+      <View style={S.card}>
+        {employees.length===0?<Text style={{color:C.t2,textAlign:'center',padding:10}}>No employees yet</Text>:employees.map(e=>(
+          <View key={e.id} style={[S.row,{paddingHorizontal:0}]}>
+            <Av name={e.name} index={e.avIndex}/>
+            <View style={{flex:1}}><Text style={{fontSize:14,fontWeight:'600',color:C.text}} numberOfLines={1}>{e.name}</Text><Text style={{fontSize:11,color:C.t2}}>{rupee(e.salary)}</Text></View>
+            {e.paid?<View style={{backgroundColor:C.sl,borderRadius:99,paddingHorizontal:8,paddingVertical:3}}><Text style={{fontSize:10,fontWeight:'700',color:'#085041'}}>{t.paid}</Text></View>:<TouchableOpacity style={[S.btn,S.btnS,S.btnSm]} onPress={()=>markSal(e.id)} activeOpacity={0.7}><Text style={[S.btnTW,{fontSize:12}]}>{t.markPaid}</Text></TouchableOpacity>}
+          </View>
+        ))}
+        {employees.length>0&&<TouchableOpacity style={[S.btn,S.btnS,{marginTop:10}]} onPress={markAllSal} activeOpacity={0.7}><Text style={S.btnTW}>Mark All Salary Paid</Text></TouchableOpacity>}
+      </View>
+    </ScrollView>
+  );
+});
+
+const SettingsTab = React.memo(({ role, admin, lang, setLang, setAdminForm, setAdminModal, setTplInput, setTplModal, setUpiInput, setUpiModal, upiId, qrImg, waTemplate, pickImg, setAdmin, setScreen, setTab, setRole, setPinInput, t }) => {
+  if (role==='worker') return <View style={S.denied}><Text style={{fontSize:18,fontWeight:'700',color:C.text,marginBottom:8}}>{t.noAccess}</Text><Text style={{fontSize:14,color:C.t2,textAlign:'center'}}>{t.workerNoAccess}</Text></View>;
+  return (
+    <ScrollView style={S.scroll} contentContainerStyle={S.sc} showsVerticalScrollIndicator={false}>
+      <View style={S.aHdr}>
+        <TouchableOpacity style={S.aAv} onPress={async()=>{const u=await pickImg('gallery');if(u){const a={...admin,photo:u};setAdmin(a);await AsyncStorage.setItem('admin',JSON.stringify(a));}}} activeOpacity={0.7}>
+          {admin.photo?<Image source={{uri:admin.photo}} style={{width:80,height:80,borderRadius:40}}/>:<Text style={{fontSize:28,fontWeight:'700',color:C.pd}}>{ini(admin.name)}</Text>}
+        </TouchableOpacity>
+        <Text style={{fontSize:18,fontWeight:'700',color:C.text,marginBottom:4}}>{admin.mess}</Text>
+        <Text style={{fontSize:13,color:C.t2}}>{admin.phone||'+91 XXXXXXXXXX'}</Text>
+        <TouchableOpacity style={[S.btn,S.btnP,S.btnSm,{marginTop:10}]} onPress={()=>{
+          setAdminForm({name:admin.name||'',phone:admin.phone||'',mess:admin.mess||''});
+          setAdminModal(true);
+        }} activeOpacity={0.7}>
+          <Text style={[S.btnTW,{fontSize:12}]}>{t.editProfile}</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={S.secTit}>{t.waTemplate}</Text>
+      <View style={S.card}>
+        <Text style={{fontSize:12,color:C.t2,marginBottom:8}}>Use name, upi, amount, plan in curly braces</Text>
+        <View style={S.waPrev}><Text style={{fontSize:12,color:'#222',lineHeight:18}}>{buildMsg(waTemplate,{name:'[Customer]',plan:'Monthly',amount:'1500'},upiId,admin.mess)}</Text></View>
+        <TouchableOpacity style={[S.btn,S.btnP,S.btnSm,{marginTop:8}]} onPress={()=>{setTplInput(waTemplate||'Hi {name},\n\nYour mess subscription has ended.\nPlan: {plan} | Amount: Rs {amount}\n\nPay via UPI: {upi}\n\nThank you\n{mess}');setTplModal(true);}} activeOpacity={0.7}>
+          <Text style={[S.btnTW,{fontSize:12}]}>{t.editTemplate}</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={S.secTit}>App Settings</Text>
+      <View style={[S.listCard,{marginBottom:14}]}>
+        <TouchableOpacity style={S.srow} onPress={async()=>{const nl=lang==='en'?'mr':'en';setLang(nl);await AsyncStorage.setItem('lang',nl);}} activeOpacity={0.7}>
+          <View style={{width:36,height:36,borderRadius:10,backgroundColor:C.il,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:18}}>L</Text></View>
+          <View style={{flex:1}}><Text style={{fontSize:14,fontWeight:'600',color:C.text}}>{t.language}</Text><Text style={{fontSize:11,color:C.t2}}>Current: {lang==='en'?'English':'Marathi'}</Text></View>
+          <Text style={{color:C.t2,fontSize:18}}>{'>'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[S.srow,{borderBottomWidth:0}]} onPress={()=>{setRole(null);setScreen('pin');setPinInput('');setTab('home');}} activeOpacity={0.7}>
+          <View style={{width:36,height:36,borderRadius:10,backgroundColor:C.wl,alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:18}}>X</Text></View>
+          <View style={{flex:1}}><Text style={{fontSize:14,fontWeight:'600',color:C.warning}}>{t.logout}</Text><Text style={{fontSize:11,color:C.t2}}>Go back to PIN screen</Text></View>
+          <Text style={{color:C.warning,fontSize:18}}>{'>'}</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={{textAlign:'center',fontSize:12,color:C.t2,paddingBottom:20}}>Lokmanya Mess v2.0 - Made with love</Text>
+    </ScrollView>
+  );
+});
+
+const S = StyleSheet.create({
+  flex1: { flex:1 },
+  safe: { flex:1, backgroundColor:C.primary },
+  app: { flex:1, backgroundColor:C.bg },
+  pinBg: { flex:1, backgroundColor:C.primary, alignItems:'center', justifyContent:'center', padding:32 },
+  pinLogo: { fontSize:58, marginBottom:8 },
+  pinTitle: { fontSize:26, fontWeight:'800', color:'#fff', marginBottom:4 },
+  pinSub: { fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:40 },
+  pinPrompt: { fontSize:17, fontWeight:'600', color:'#fff', marginBottom:22 },
+  pinDots: { flexDirection:'row', gap:16, marginBottom:32 },
+  pinDot: { width:18, height:18, borderRadius:9, borderWidth:2, borderColor:'rgba(255,255,255,0.5)' },
+  pinDotFill: { backgroundColor:'#fff', borderColor:'#fff' },
+  pinGrid: { flexDirection:'row', flexWrap:'wrap', width:264, gap:12, justifyContent:'center' },
+  pinKey: { width:78, height:78, borderRadius:39, backgroundColor:'rgba(255,255,255,0.15)', alignItems:'center', justifyContent:'center' },
+  pinKeyTxt: { fontSize:28, fontWeight:'600', color:'#fff' },
+  pinErr: { color:'#FFD7D7', fontSize:13, marginTop:14, fontWeight:'500' },
+  pinClr: { marginTop:18, paddingVertical:9, paddingHorizontal:22, backgroundColor:'rgba(255,255,255,0.15)', borderRadius:20 },
+  pinClrTxt: { color:'#fff', fontSize:13, fontWeight:'500' },
+  topbar: {
+    backgroundColor:C.primary, paddingHorizontal:16,
+    paddingTop: Platform.OS==='android' ? (StatusBar.currentHeight||24)+8 : 14,
+    paddingBottom:12, flexDirection:'row', alignItems:'center', justifyContent:'space-between'
+  },
+  topTitle: { color:'#fff', fontSize:17, fontWeight:'700' },
+  topSub: { color:'rgba(255,255,255,0.7)', fontSize:10, marginTop:1 },
+  langBtn: { backgroundColor:'rgba(255,255,255,0.2)', borderRadius:8, paddingHorizontal:10, paddingVertical:5 },
+  syncBadge: { flexDirection:'row', alignItems:'center', gap:4, backgroundColor:'rgba(255,255,255,0.15)', borderRadius:8, paddingHorizontal:8, paddingVertical:4 },
+  bottomNav: {
+    flexDirection:'row', backgroundColor:'#fff',
+    borderTopWidth:1, borderTopColor:C.border,
+    paddingBottom: Platform.OS==='android' ? 10 : 0,
+    minHeight: Platform.OS==='android' ? 72 : 62,
+  },
+  navItem: { flex:1, alignItems:'center', justifyContent:'center', paddingVertical:8, borderTopWidth:3, borderTopColor:'transparent' },
+  navActive: { borderTopColor:C.primary },
+  navIcon: { fontSize:21, lineHeight:25 },
+  navLbl: { fontSize:9, color:C.t2, marginTop:2 },
+  navLblA: { color:C.primary, fontWeight:'700' },
+  scroll: { flex:1 },
+  sc: { padding:12, paddingBottom:24 },
+  card: { backgroundColor:C.card, borderRadius:14, borderWidth:1, borderColor:C.border, padding:14, marginBottom:10 },
+  listCard: { backgroundColor:C.card, borderRadius:14, borderWidth:1, borderColor:C.border, overflow:'hidden', marginBottom:10 },
+  row: { flexDirection:'row', alignItems:'center', padding:11, paddingHorizontal:13, borderBottomWidth:1, borderBottomColor:C.border, gap:8 },
+  secTit: { fontSize:11, fontWeight:'700', color:C.t2, textTransform:'uppercase', letterSpacing:0.5, marginTop:14, marginBottom:8 },
+  sg: { flexDirection:'row', gap:10, marginBottom:10 },
+  sc2: { flex:1, backgroundColor:C.card, borderRadius:14, borderWidth:1, borderColor:C.border, padding:14 },
+  btn: { borderWidth:1, borderColor:C.border, backgroundColor:C.card, borderRadius:10, paddingHorizontal:16, paddingVertical:10, alignItems:'center', justifyContent:'center' },
+  btnP: { backgroundColor:C.primary, borderColor:C.primary },
+  btnS: { backgroundColor:C.success, borderColor:C.success },
+  btnD: { backgroundColor:C.danger, borderColor:C.danger },
+  btnWA: { backgroundColor:'#25D366', borderColor:'#25D366' },
+  btnSm: { paddingHorizontal:12, paddingVertical:6 },
+  btnT: { fontSize:13, fontWeight:'600', color:C.text },
+  btnTW: { fontSize:13, fontWeight:'600', color:'#fff' },
+  ibtn: { width:32, height:32, borderRadius:8, borderWidth:1, borderColor:C.border, backgroundColor:C.card, alignItems:'center', justifyContent:'center' },
+  subCard: { borderRadius:14, padding:14, marginBottom:8, flexDirection:'row', alignItems:'center', gap:10 },
+  fbar: { flexDirection:'row', gap:8, marginBottom:10 },
+  chip: { flex:1, borderWidth:1.5, borderColor:C.border, borderRadius:10, paddingVertical:9, alignItems:'center', backgroundColor:'#fff' },
+  ov: { flex:1, backgroundColor:'rgba(0,0,0,0.52)', justifyContent:'flex-end' },
+  sh: { backgroundColor:'#fff', borderTopLeftRadius:22, borderTopRightRadius:22, padding:20, paddingBottom:38, maxHeight:height*0.92 },
+  shT: { fontSize:17, fontWeight:'700', marginBottom:16, color:C.text },
+  label: { fontSize:12, color:C.t2, fontWeight:'600', marginBottom:5 },
+  input: { borderWidth:1, borderColor:C.border, borderRadius:10, padding:12, fontSize:15, color:C.text, backgroundColor:'#fff', minHeight:48 },
+  qrBox: { width:150, height:150, borderRadius:12, borderWidth:2, borderColor:C.border, borderStyle:'dashed', alignItems:'center', justifyContent:'center', backgroundColor:'#F8F8F8', alignSelf:'center', marginBottom:12, overflow:'hidden' },
+  waPrev: { backgroundColor:'#DCF8C6', borderRadius:10, padding:12, borderWidth:1, borderColor:'#b5eaa0', marginBottom:10 },
+  srow: { flexDirection:'row', alignItems:'center', gap:12, padding:13, paddingHorizontal:14, borderBottomWidth:1, borderBottomColor:C.border },
+  aHdr: { alignItems:'center', padding:22, backgroundColor:'#fff', borderRadius:14, borderWidth:1, borderColor:C.border, marginBottom:14 },
+  aAv: { width:80, height:80, borderRadius:40, borderWidth:3, borderColor:C.primary, alignItems:'center', justifyContent:'center', marginBottom:10, overflow:'hidden', backgroundColor:C.pl },
+  covOv: { flex:1, backgroundColor:'rgba(0,0,0,0.52)', justifyContent:'center', alignItems:'center', padding:20 },
+  cBox: { backgroundColor:'#fff', borderRadius:16, padding:24, width:'100%', maxWidth:300, alignItems:'center' },
+  cTit: { fontSize:16, fontWeight:'700', marginBottom:6, color:C.text },
+  cSub: { fontSize:13, color:C.t2, marginBottom:18, textAlign:'center' },
+  empty: { alignItems:'center', padding:28 },
+  emptyI: { fontSize:36, marginBottom:8 },
+  emptyT: { color:C.t2, fontSize:14, textAlign:'center' },
+  denied: { flex:1, alignItems:'center', justifyContent:'center', padding:24 },
+});
+
+export default function App() {
+  const [screen, setScreen] = useState('pin');
+  const [pinInput, setPinInput] = useState('');
+  const [pinErr, setPinErr] = useState('');
+  const [role, setRole] = useState(null);
+  const [lang, setLang] = useState('en');
+  const [tab, setTab] = useState('home');
+  const [customers, setCustomers] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [upiId, setUpiId] = useState('');
+  const [qrImg, setQrImg] = useState(null);
+  const [waTemplate, setWaTemplate] = useState('');
+  const [admin, setAdmin] = useState({ name:'Mess Owner', phone:'', mess:'Lokmanya Mess', photo:null });
+  const [syncStatus, setSyncStatus] = useState('synced');
+  const [homeFilter, setHomeFilter] = useState('both');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [custSearch, setCustSearch] = useState('');
+  const [custFilter, setCustFilter] = useState('all');
+  const [custModal, setCustModal] = useState(false);
+  const [empModal, setEmpModal] = useState(false);
+  const [payModal, setPayModal] = useState(false);
+  const [waModal, setWaModal] = useState(false);
+  const [adminModal, setAdminModal] = useState(false);
+  const [tplModal, setTplModal] = useState(false);
+  const [upiModal, setUpiModal] = useState(false);
+  const [conf, setConf] = useState({ open:false, title:'', sub:'', onOk:null });
+  const [editCustId, setEditCustId] = useState(null);
+  const [editEmpId, setEditEmpId] = useState(null);
+  const [payingCustId, setPayingCustId] = useState(null);
+  const [custForm, setCustForm] = useState({ name:'', phone:'', aadhar:'', plan:'Monthly', amount:'1500', joinDate:todayStr(), addr:'', photo:null });
+  const [empForm, setEmpForm] = useState({ name:'', role:'Cook', salary:'', phone:'', aadhar:'', joinDate:todayStr(), bank:'', photo:null });
+  const [payForm, setPayForm] = useState({ amount:'', date:todayStr(), mode:'UPI', note:'' });
+  const [adminForm, setAdminForm] = useState({ name:'', phone:'', mess:'' });
+  const [upiInput, setUpiInput] = useState('');
+  const [tplInput, setTplInput] = useState('');
+  const [waQueue, setWaQueue] = useState([]);
+  const [waIdx, setWaIdx] = useState(0);
+  const nidRef = useRef(1000);
+  const t = T[lang];
+
+  useEffect(() => {
+    AsyncStorage.multiGet(['lang','upiId','qrImg','waTemplate','admin']).then(pairs => {
+      pairs.forEach(([k,v]) => {
+        if (!v) return;
+        if (k==='lang') setLang(v);
+        if (k==='upiId') setUpiId(v);
+        if (k==='qrImg') setQrImg(v);
+        if (k==='waTemplate') setWaTemplate(v);
+        if (k==='admin') { try { setAdmin(JSON.parse(v)); } catch(e){} }
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (screen !== 'app') return;
+    setSyncStatus('syncing');
+    const u1 = onSnapshot(query(collection(db,'customers'), orderBy('createdAt','desc')), s => { setCustomers(s.docs.map(d=>({id:d.id,...d.data()}))); setSyncStatus('synced'); }, () => setSyncStatus('offline'));
+    const u2 = onSnapshot(query(collection(db,'employees'), orderBy('createdAt','desc')), s => setEmployees(s.docs.map(d=>({id:d.id,...d.data()}))), () => {});
+    const u3 = onSnapshot(query(collection(db,'transactions'), orderBy('createdAt','desc')), s => setTransactions(s.docs.map(d=>({id:d.id,...d.data()}))), () => {});
+    return () => { u1(); u2(); u3(); };
+  }, [screen]);
+
+  const pressPIN = useCallback((k) => {
+    if (pinInput.length >= 4) return;
+    const np = pinInput + k;
+    setPinInput(np);
+    setPinErr('');
+    if (np.length === 4) {
+      setTimeout(() => {
+        if (np === OWNER_PIN) { setRole('owner'); setPinInput(''); setScreen('app'); }
+        else if (np === WORKER_PIN) { setRole('worker'); setPinInput(''); setScreen('app'); }
+        else { setPinErr(t.wrongPIN); setPinInput(''); }
+      }, 200);
+    }
+  }, [pinInput, t]);
+
+  const pickImg = useCallback(async (src) => {
+    try {
+      const perm = src==='camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Permission needed'); return null; }
+      const res = src==='camera'
+        ? await ImagePicker.launchCameraAsync({ quality:0.5, allowsEditing:true, aspect:[1,1] })
+        : await ImagePicker.launchImageLibraryAsync({ quality:0.5, allowsEditing:true, aspect:[1,1] });
+      if (!res.canceled && res.assets?.[0]?.uri) return res.assets[0].uri;
+      return null;
+    } catch(e) { return null; }
+  }, []);
+
+  const genId = () => 'id_' + Date.now() + '_' + nidRef.current++;
+
+  const saveCust = useCallback(async () => {
+    if (!custForm.name.trim()) { Alert.alert('','Enter name'); return; }
+    if (!custForm.phone || custForm.phone.replace(/\D/g,'').length < 10) { Alert.alert('','Enter valid phone'); return; }
+    if (!custForm.amount) { Alert.alert('','Enter amount'); return; }
+    if (!custForm.joinDate || !isValidDate(custForm.joinDate)) { Alert.alert('','Enter valid joining date (YYYY-MM-DD)'); return; }
+    setSyncStatus('syncing');
+    try {
+      const id = editCustId || genId();
+      const existing = editCustId ? customers.find(c=>c.id===editCustId) : null;
+      await setDoc(doc(db,'customers',id), { ...custForm, amount:Number(custForm.amount), avIndex: existing ? existing.avIndex : customers.length % 4, updatedAt: serverTimestamp(), createdAt: existing?.createdAt || serverTimestamp() }, { merge:true });
+      setCustModal(false); setEditCustId(null);
+    } catch(e) { Alert.alert('Error','Failed to save. Check internet.'); setSyncStatus('offline'); }
+  }, [custForm, editCustId, customers]);
+
+  const deleteCust = useCallback(async (id) => {
+    try { await deleteDoc(doc(db,'customers',id)); setSelectedIds(s=>s.filter(x=>x!==id)); }
+    catch(e) { Alert.alert('Error','Failed to delete.'); }
+  }, []);
+
+  const deleteSelected = useCallback(async () => {
+    try { await Promise.all(selectedIds.map(id=>deleteDoc(doc(db,'customers',id)))); setSelectedIds([]); }
+    catch(e) { Alert.alert('Error','Failed to delete.'); }
+  }, [selectedIds]);
+
+  const saveEmp = useCallback(async () => {
+    if (!empForm.name.trim()) { Alert.alert('','Enter name'); return; }
+    if (!empForm.salary) { Alert.alert('','Enter salary'); return; }
+    if (empForm.joinDate && !isValidDate(empForm.joinDate)) { Alert.alert('','Enter valid joining date (YYYY-MM-DD)'); return; }
+    setSyncStatus('syncing');
+    try {
+      const id = editEmpId || genId();
+      const existing = editEmpId ? employees.find(e=>e.id===editEmpId) : null;
+      await setDoc(doc(db,'employees',id), { ...empForm, salary:Number(empForm.salary), paid: existing ? existing.paid : false, avIndex: existing ? existing.avIndex : employees.length % 4, updatedAt: serverTimestamp(), createdAt: existing?.createdAt || serverTimestamp() }, { merge:true });
+      setEmpModal(false); setEditEmpId(null);
+    } catch(e) { Alert.alert('Error','Failed to save.'); setSyncStatus('offline'); }
+  }, [empForm, editEmpId, employees]);
+
+  const deleteEmp = useCallback(async (id) => {
+    try { await deleteDoc(doc(db,'employees',id)); }
+    catch(e) { Alert.alert('Error','Failed to delete.'); }
+  }, []);
+
+  const markSal = useCallback(async (id) => {
+    try { await setDoc(doc(db,'employees',id), { paid:true, paidDate:todayStr(), updatedAt:serverTimestamp() }, { merge:true }); }
+    catch(e) { Alert.alert('Error','Failed.'); }
+  }, []);
+
+  const markAllSal = useCallback(async () => {
+    try { await Promise.all(employees.map(e=>setDoc(doc(db,'employees',e.id), { paid:true, paidDate:todayStr(), updatedAt:serverTimestamp() }, { merge:true }))); }
+    catch(e) { Alert.alert('Error','Failed.'); }
+  }, [employees]);
+
+  const recordPayment = useCallback(async () => {
+    if (!payForm.amount || isNaN(Number(payForm.amount)) || Number(payForm.amount) <= 0) { Alert.alert('','Enter valid amount'); return; }
+    if (!payForm.date || !isValidDate(payForm.date)) { Alert.alert('','Enter valid payment date (YYYY-MM-DD)'); return; }
+    const c = customers.find(x=>x.id===payingCustId);
+    if (!c) return;
+    setSyncStatus('syncing');
+    try {
+      await setDoc(doc(db,'transactions',genId()), { custId:payingCustId, custName:c.name, amount:Number(payForm.amount), date:payForm.date, mode:payForm.mode, note:payForm.note, plan:c.plan, createdAt: serverTimestamp() });
+      await setDoc(doc(db,'customers',payingCustId), { joinDate:payForm.date, updatedAt:serverTimestamp() }, { merge:true });
+      setPayForm({ amount:'', date:todayStr(), mode:'UPI', note:'' });
+      setPayModal(false);
+    } catch(e) { Alert.alert('Error','Failed to record.'); setSyncStatus('offline'); }
+  }, [payForm, payingCustId, customers]);
+
+  const saveAdmin = useCallback(async () => {
+    const a = {
+      name: adminForm.name.trim() || admin.name,
+      phone: adminForm.phone.trim() || admin.phone,
+      mess: adminForm.mess.trim() || admin.mess,
+      photo: admin.photo
+    };
+    setAdmin(a); setAdminModal(false);
+    await AsyncStorage.setItem('admin', JSON.stringify(a));
+  }, [adminForm, admin]);
+
+  const saveUPI = useCallback(async () => {
+    setUpiId(upiInput); setUpiModal(false);
+    await AsyncStorage.setItem('upiId', upiInput);
+  }, [upiInput]);
+
+  const saveTpl = useCallback(async () => {
+    setWaTemplate(tplInput); setTplModal(false);
+    await AsyncStorage.setItem('waTemplate', tplInput);
+  }, [tplInput]);
+
+  const openAddCust = useCallback(() => {
+    setEditCustId(null);
+    setCustForm({ name:'', phone:'', aadhar:'', plan:'Monthly', amount:'1500', joinDate:todayStr(), addr:'', photo:null });
+    setCustModal(true);
+  }, []);
+
+  const openEditCust = useCallback((c) => {
+    setEditCustId(c.id);
+    setCustForm({ name:c.name||'', phone:c.phone||'', aadhar:c.aadhar||'', plan:c.plan||'Monthly', amount:String(c.amount||''), joinDate:c.joinDate||todayStr(), addr:c.addr||'', photo:c.photo||null });
+    setCustModal(true);
+  }, []);
+
+  const openAddEmp = useCallback(() => {
+    setEditEmpId(null);
+    setEmpForm({ name:'', role:'Cook', salary:'', phone:'', aadhar:'', joinDate:todayStr(), bank:'', photo:null });
+    setEmpModal(true);
+  }, []);
+
+  const openEditEmp = useCallback((e) => {
+    setEditEmpId(e.id);
+    setEmpForm({ name:e.name||'', role:e.role||'Cook', salary:String(e.salary||''), phone:e.phone||'', aadhar:e.aadhar||'', joinDate:e.joinDate||todayStr(), bank:e.bank||'', photo:e.photo||null });
+    setEmpModal(true);
+  }, []);
+
+  const openRecordPay = useCallback((c) => {
+    setPayingCustId(c.id);
+    setPayForm({ amount:String(c.amount||''), date:todayStr(), mode:'UPI', note:'' });
+    setPayModal(true);
+  }, []);
+
+  const waSingle = useCallback((c) => {
+    Linking.openURL('https://wa.me/' + formatWaPhone(c.phone) + '?text=' + encodeURIComponent(buildMsg(waTemplate,c,upiId,admin.mess)));
+  }, [waTemplate, upiId, admin.mess]);
+
+  const openWAModal = useCallback((ids) => {
+    const list = ids && ids.length>0 ? customers.filter(c=>ids.includes(c.id)) : customers.filter(c=>['expired','expiring'].includes(computeStatus(c.joinDate,c.plan)));
+    if (!list.length) { Alert.alert('','No customers to message'); return; }
+    setWaQueue(list); setWaIdx(0); setWaModal(true);
+  }, [customers]);
+
+  const sendNext = useCallback(() => {
+    if (waIdx >= waQueue.length) { setWaModal(false); setWaIdx(0); return; }
+    const c = waQueue[waIdx];
+    Linking.openURL('https://wa.me/' + formatWaPhone(c.phone) + '?text=' + encodeURIComponent(buildMsg(waTemplate,c,upiId,admin.mess)));
+    setWaIdx(i=>i+1);
+  }, [waIdx, waQueue, waTemplate, upiId, admin.mess]);
+
+  const expiredList = customers.filter(c=>computeStatus(c.joinDate,c.plan)==='expired');
+  const expiringList = customers.filter(c=>computeStatus(c.joinDate,c.plan)==='expiring');
+  const activeCount = customers.filter(c=>computeStatus(c.joinDate,c.plan)==='active').length;
+  const pendAmt = customers.filter(c=>['expired','expiring'].includes(computeStatus(c.joinDate,c.plan))).reduce((s,c)=>s+(c.amount||0),0);
+  const filtCusts = customers.filter(c=>{
+    const st=computeStatus(c.joinDate,c.plan);
+    return (custFilter==='all'||st===custFilter) && (c.name||'').toLowerCase().includes(custSearch.toLowerCase());
+  });
+
+  const TABS = [{k:'home',i:'Home',l:t.home},{k:'customers',i:'Cust',l:t.customers},{k:'payments',i:'Pay',l:t.payments},{k:'staff',i:'Staff',l:t.staff},{k:'settings',i:'Set',l:t.settings}];
+
+  if (screen === 'pin') {
+    const keys = ['1','2','3','4','5','6','7','8','9','','0','<'];
+    return (
+      <View style={S.pinBg}>
+        <StatusBar backgroundColor={C.primary} barStyle="light-content" />
+        <Text style={S.pinLogo}>M</Text>
+        <Text style={S.pinTitle}>{t.appName}</Text>
+        <Text style={S.pinSub}>Mess Management System</Text>
+        <Text style={S.pinPrompt}>{t.enterPIN}</Text>
+        <View style={S.pinDots}>
+          {[0,1,2,3].map(i=>(<View key={i} style={[S.pinDot, pinInput.length>i && S.pinDotFill]} />))}
+        </View>
+        <View style={S.pinGrid}>
+          {keys.map((k,i)=>(
+            <TouchableOpacity key={i} style={[S.pinKey, !k&&{backgroundColor:'transparent'}]}
+              onPress={()=>{ if(!k) return; if(k==='<'){setPinInput(p=>p.slice(0,-1));setPinErr('');} else pressPIN(k); }}
+              activeOpacity={k?0.7:1} disabled={!k}>
+              {k?<Text style={S.pinKeyTxt}>{k}</Text>:null}
+            </TouchableOpacity>
+          ))}
+        </View>
+        {pinErr?<Text style={S.pinErr}>{pinErr}</Text>:null}
+        <TouchableOpacity style={S.pinClr} onPress={()=>{setPinInput('');setPinErr('');}} activeOpacity={0.7}>
+          <Text style={S.pinClrTxt}>Clear</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={S.safe}>
+      <StatusBar backgroundColor={C.primary} barStyle="light-content" />
+      <View style={S.app}>
+        <View style={S.topbar}>
+          <View>
+            <Text style={S.topTitle}>{admin.mess||t.appName}</Text>
+            <Text style={S.topSub}>{role==='owner'?'Owner':'Worker'}</Text>
+          </View>
+          <View style={{flexDirection:'row',gap:8,alignItems:'center'}}>
+            <View style={S.syncBadge}>
+              <Text style={{color:'#fff',fontSize:10,fontWeight:'500'}}>{syncStatus==='syncing'?t.syncing:syncStatus==='synced'?t.synced:t.offline}</Text>
+            </View>
+            <TouchableOpacity style={S.langBtn} onPress={async()=>{const nl=lang==='en'?'mr':'en';setLang(nl);await AsyncStorage.setItem('lang',nl);}} activeOpacity={0.7}>
+              <Text style={{color:'#fff',fontSize:12,fontWeight:'600'}}>{lang==='en'?'MR':'EN'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={S.flex1}>
+          {tab==='home' && <HomeTab customers={customers} expiredList={expiredList} expiringList={expiringList} activeCount={activeCount} pendAmt={pendAmt} homeFilter={homeFilter} setHomeFilter={setHomeFilter} openRecordPay={openRecordPay} waSingle={waSingle} openWAModal={openWAModal} t={t}/>}
+          {tab==='customers' && <CustomersTab customers={customers} filtCusts={filtCusts} custSearch={custSearch} setCustSearch={setCustSearch} custFilter={custFilter} setCustFilter={setCustFilter} selectedIds={selectedIds} setSelectedIds={setSelectedIds} role={role} openAddCust={openAddCust} openEditCust={openEditCust} openRecordPay={openRecordPay} waSingle={waSingle} openWAModal={openWAModal} deleteSelected={deleteSelected} deleteCust={deleteCust} setConf={setConf} t={t}/>}
+          {tab==='payments' && <PaymentsTab customers={customers} transactions={transactions} role={role} upiId={upiId} qrImg={qrImg} openRecordPay={openRecordPay} waSingle={waSingle} pickImg={pickImg} setQrImg={setQrImg} setUpiInput={setUpiInput} setUpiModal={setUpiModal} t={t}/>}
+          {tab==='staff' && <StaffTab role={role} employees={employees} openAddEmp={openAddEmp} openEditEmp={openEditEmp} markSal={markSal} markAllSal={markAllSal} deleteEmp={deleteEmp} setConf={setConf} t={t}/>}
+          {tab==='settings' && <SettingsTab role={role} admin={admin} lang={lang} setLang={setLang} setAdminForm={setAdminForm} setAdminModal={setAdminModal} setTplInput={setTplInput} setTplModal={setTplModal} setUpiInput={setUpiInput} setUpiModal={setUpiModal} upiId={upiId} qrImg={qrImg} waTemplate={waTemplate} pickImg={pickImg} setAdmin={setAdmin} setScreen={setScreen} setTab={setTab} setRole={setRole} setPinInput={setPinInput} t={t}/>}
+        </View>
+
+        <View style={S.bottomNav}>
+          {TABS.map(item=>(
+            <TouchableOpacity key={item.k} style={[S.navItem,tab===item.k&&S.navActive]} onPress={()=>setTab(item.k)} activeOpacity={0.7}>
+              <Text style={S.navIcon}>{item.i}</Text>
+              <Text style={[S.navLbl,tab===item.k&&S.navLblA]}>{item.l}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <Modal visible={custModal} animationType="slide" transparent onRequestClose={()=>setCustModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={S.ov}>
+          <ScrollView style={S.sh} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={S.shT}>{editCustId?t.editCustomer:t.addCustomer}</Text>
+            <PPicker photo={custForm.photo} onCam={async()=>{const u=await pickImg('camera');if(u)setCustForm(f=>({...f,photo:u}));}} onGal={async()=>{const u=await pickImg('gallery');if(u)setCustForm(f=>({...f,photo:u}));}} t={t}/>
+            <StableInput label={t.fullName} value={custForm.name} onChangeText={v=>setCustForm(f=>({...f,name:v}))} placeholder="e.g. Rahul Kulkarni"/>
+            <StableInput label={t.whatsappNo} value={custForm.phone} onChangeText={v=>setCustForm(f=>({...f,phone:v}))} placeholder="91XXXXXXXXXX" keyboardType="phone-pad"/>
+            <StableInput label={t.aadharId} value={custForm.aadhar} onChangeText={v=>setCustForm(f=>({...f,aadhar:v}))} placeholder="XXXX XXXX XXXX" keyboardType="numeric"/>
+            <PlanPicker label={t.plan} opts={[{v:'Monthly',l:t.monthly},{v:'Weekly',l:t.weekly},{v:'Daily',l:t.daily},{v:'Custom',l:t.custom}]} val={custForm.plan} onSel={v=>setCustForm(f=>({...f,plan:v,amount:v!=='Custom'?String(PLAN_AMT[v]):f.amount}))}/>
+            <StableInput label={t.amount} value={custForm.amount} onChangeText={v=>setCustForm(f=>({...f,amount:v}))} placeholder="1500" keyboardType="numeric"/>
+            <StableInput label={t.joiningDate} value={custForm.joinDate} onChangeText={v=>setCustForm(f=>({...f,joinDate:v}))} placeholder="YYYY-MM-DD"/>
+            <StableInput label={t.address} value={custForm.addr} onChangeText={v=>setCustForm(f=>({...f,addr:v}))} placeholder="Room no. / Building"/>
+            <View style={{flexDirection:'row',gap:8,marginTop:4,marginBottom:20}}>
+              <TouchableOpacity style={[S.btn,{flex:1}]} onPress={()=>setCustModal(false)} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnP,{flex:2}]} onPress={saveCust} activeOpacity={0.7}><Text style={S.btnTW}>{t.save}</Text></TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={empModal} animationType="slide" transparent onRequestClose={()=>setEmpModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={S.ov}>
+          <ScrollView style={S.sh} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={S.shT}>{editEmpId?t.editEmployee:t.addEmployee}</Text>
+            <PPicker photo={empForm.photo} onCam={async()=>{const u=await pickImg('camera');if(u)setEmpForm(f=>({...f,photo:u}));}} onGal={async()=>{const u=await pickImg('gallery');if(u)setEmpForm(f=>({...f,photo:u}));}} t={t}/>
+            <StableInput label={t.fullName} value={empForm.name} onChangeText={v=>setEmpForm(f=>({...f,name:v}))} placeholder="e.g. Suresh Kamble"/>
+            <PlanPicker label={t.role} opts={[{v:'Cook',l:t.cook},{v:'Helper',l:t.helper},{v:'Delivery',l:t.delivery},{v:'Cleaner',l:t.cleaner},{v:'Other',l:t.other}]} val={empForm.role} onSel={v=>setEmpForm(f=>({...f,role:v}))}/>
+            <StableInput label={t.salary} value={empForm.salary} onChangeText={v=>setEmpForm(f=>({...f,salary:v}))} placeholder="6000" keyboardType="numeric"/>
+            <StableInput label={t.phoneNo} value={empForm.phone} onChangeText={v=>setEmpForm(f=>({...f,phone:v}))} placeholder="Mobile number" keyboardType="phone-pad"/>
+            <StableInput label={t.aadharId} value={empForm.aadhar} onChangeText={v=>setEmpForm(f=>({...f,aadhar:v}))} placeholder="XXXX XXXX XXXX" keyboardType="numeric"/>
+            <StableInput label={t.joiningDate} value={empForm.joinDate} onChangeText={v=>setEmpForm(f=>({...f,joinDate:v}))} placeholder="YYYY-MM-DD"/>
+            <StableInput label={t.bankUpi} value={empForm.bank} onChangeText={v=>setEmpForm(f=>({...f,bank:v}))} placeholder="Bank account or UPI ID"/>
+            <View style={{flexDirection:'row',gap:8,marginTop:4,marginBottom:20}}>
+              <TouchableOpacity style={[S.btn,{flex:1}]} onPress={()=>setEmpModal(false)} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnP,{flex:2}]} onPress={saveEmp} activeOpacity={0.7}><Text style={S.btnTW}>{t.save}</Text></TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={payModal} animationType="slide" transparent onRequestClose={()=>setPayModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={S.ov}>
+          <ScrollView style={S.sh} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={S.shT}>{t.recordPayment}</Text>
+            {(()=>{const c=customers.find(x=>x.id===payingCustId);return c?(<View style={[S.card,{backgroundColor:C.sl,borderColor:'#9FE1CB',marginBottom:14}]}><View style={{flexDirection:'row',alignItems:'center',gap:10}}><Av name={c.name} photo={c.photo} index={c.avIndex} size={44}/><View><Text style={{fontSize:15,fontWeight:'700',color:C.text}}>{c.name}</Text><Text style={{fontSize:12,color:C.t2}}>{c.plan} - {rupee(c.amount)}</Text></View></View></View>):null;})()}
+            <StableInput label={t.amountReceived} value={payForm.amount} onChangeText={v=>setPayForm(f=>({...f,amount:v}))} placeholder="1500" keyboardType="numeric"/>
+            <StableInput label={t.paymentDate} value={payForm.date} onChangeText={v=>setPayForm(f=>({...f,date:v}))} placeholder="YYYY-MM-DD"/>
+            <PlanPicker label={t.paymentMode} opts={[{v:'UPI',l:t.upiPay},{v:'Cash',l:t.cash},{v:'Bank',l:t.bank}]} val={payForm.mode} onSel={v=>setPayForm(f=>({...f,mode:v}))}/>
+            <StableInput label={t.note} value={payForm.note} onChangeText={v=>setPayForm(f=>({...f,note:v}))} placeholder="e.g. April payment"/>
+            <View style={{flexDirection:'row',gap:8,marginTop:4,marginBottom:20}}>
+              <TouchableOpacity style={[S.btn,{flex:1}]} onPress={()=>setPayModal(false)} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnS,{flex:2}]} onPress={recordPayment} activeOpacity={0.7}><Text style={S.btnTW}>{t.confirmPayment}</Text></TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={waModal} animationType="slide" transparent onRequestClose={()=>setWaModal(false)}>
+        <View style={S.ov}>
+          <View style={S.sh}>
+            <Text style={S.shT}>{t.waReminder}</Text>
+            <Text style={[S.label,{marginBottom:6}]}>{t.msgPreview}</Text>
+            <View style={S.waPrev}><Text style={{fontSize:13,color:'#222',lineHeight:20}}>{buildMsg(waTemplate,waQueue[0]||{name:'[Customer]',plan:'Monthly',amount:'1500'},upiId,admin.mess)}</Text></View>
+            <Text style={[S.secTit,{marginTop:10}]}>{t.recipients} ({waQueue.length})</Text>
+            <ScrollView style={{maxHeight:130,marginBottom:12}}>
+              {waQueue.map(c=>(
+                <View key={c.id} style={{flexDirection:'row',alignItems:'center',gap:8,paddingVertical:7,borderBottomWidth:1,borderBottomColor:C.border}}>
+                  <Av name={c.name} photo={c.photo} index={c.avIndex} size={30}/>
+                  <Text style={{fontSize:13,flex:1}}>{c.name}</Text>
+                  <SBadge status={computeStatus(c.joinDate,c.plan)} t={t}/>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={[S.btn,S.btnWA,{marginBottom:8}]} onPress={sendNext} activeOpacity={0.7}>
+              <Text style={S.btnTW}>{waIdx<waQueue.length?t.startSending+' '+(waIdx+1)+'/'+waQueue.length:'All Sent!'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={S.btn} onPress={()=>{setWaModal(false);setWaIdx(0);}} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+            <Text style={{fontSize:11,color:C.t2,textAlign:'center',marginTop:8}}>{t.noApiNote}</Text>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={adminModal} animationType="slide" transparent onRequestClose={()=>setAdminModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={S.ov}>
+          <View style={S.sh}>
+            <Text style={S.shT}>{t.editProfile}</Text>
+            <StableInput label={t.ownerName} value={adminForm.name} onChangeText={v=>setAdminForm(f=>({...f,name:v}))} placeholder="Your name"/>
+            <StableInput label="Phone Number" value={adminForm.phone} onChangeText={v=>setAdminForm(f=>({...f,phone:v}))} placeholder="+91XXXXXXXXXX" keyboardType="phone-pad"/>
+            <StableInput label={t.messName} value={adminForm.mess} onChangeText={v=>setAdminForm(f=>({...f,mess:v}))} placeholder="e.g. Lokmanya Mess"/>
+            <View style={{flexDirection:'row',gap:8,marginTop:4}}>
+              <TouchableOpacity style={[S.btn,{flex:1}]} onPress={()=>setAdminModal(false)} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnP,{flex:2}]} onPress={saveAdmin} activeOpacity={0.7}><Text style={S.btnTW}>{t.saveProfile}</Text></TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={tplModal} animationType="slide" transparent onRequestClose={()=>setTplModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={S.ov}>
+          <ScrollView style={S.sh} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={S.shT}>{t.editTemplate}</Text>
+            <View style={{marginBottom:10}}>
+              <TextInput style={[S.input,{minHeight:120,textAlignVertical:'top'}]} value={tplInput} onChangeText={setTplInput} multiline numberOfLines={6} placeholderTextColor={C.t2} autoCorrect={false}/>
+            </View>
+            <Text style={[S.label,{marginBottom:6}]}>Preview:</Text>
+            <View style={[S.waPrev,{marginBottom:12}]}><Text style={{fontSize:12,color:'#222',lineHeight:18}}>{buildMsg(tplInput,{name:'[Customer]',plan:'Monthly',amount:'1500'},upiId,admin.mess)}</Text></View>
+            <View style={{flexDirection:'row',gap:8,marginBottom:20}}>
+              <TouchableOpacity style={[S.btn,{flex:1}]} onPress={()=>setTplModal(false)} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnP,{flex:2}]} onPress={saveTpl} activeOpacity={0.7}><Text style={S.btnTW}>{t.saveMsg}</Text></TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={upiModal} animationType="slide" transparent onRequestClose={()=>setUpiModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={S.ov}>
+          <View style={S.sh}>
+            <Text style={S.shT}>{t.upiId}</Text>
+            <StableInput value={upiInput} onChangeText={setUpiInput} placeholder="e.g. name@paytm"/>
+            <View style={{flexDirection:'row',gap:8}}>
+              <TouchableOpacity style={[S.btn,{flex:1}]} onPress={()=>setUpiModal(false)} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnP,{flex:2}]} onPress={saveUPI} activeOpacity={0.7}><Text style={S.btnTW}>Save UPI ID</Text></TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={conf.open} animationType="fade" transparent onRequestClose={()=>setConf({open:false})}>
+        <View style={S.covOv}>
+          <View style={S.cBox}>
+            <Text style={S.cTit}>{conf.title}</Text>
+            <Text style={S.cSub}>{conf.sub}</Text>
+            <View style={{flexDirection:'row',gap:8,width:'100%'}}>
+              <TouchableOpacity style={[S.btn,{flex:1}]} onPress={()=>setConf({open:false})} activeOpacity={0.7}><Text style={S.btnT}>{t.cancel}</Text></TouchableOpacity>
+              <TouchableOpacity style={[S.btn,S.btnD,{flex:1}]} onPress={conf.onOk} activeOpacity={0.7}><Text style={S.btnTW}>{t.delete}</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
