@@ -20,3 +20,4 @@ if (regex.test(content)) {
 } else {
   console.error('Regex did not match inside App.jsx!');
 }
+

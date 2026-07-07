@@ -4,13 +4,13 @@ const { getFirestore, doc, setDoc } = require('firebase/firestore');
 
 // Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyDJA3ndXJ05NYDKCUI7sTttoZL1E-tN1wM",
+  apiKey: "REDACTED",
   authDomain: "mess-management-62b32.firebaseapp.com",
   projectId: "mess-management-62b32",
   storageBucket: "mess-management-62b32.firebasestorage.app",
-  messagingSenderId: "72179753747",
-  appId: "1:72179753747:web:29e83c55a175ca518ef0w6",
-  measurementId: "G-MBQ34EPW90"
+  messagingSenderId: "REDACTED",
+  appId: "REDACTED",
+  measurementId: "REDACTED"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -201,7 +201,7 @@ async function run() {
       lang: 'mr',
       upiId: '',
       waTemplate: '',
-      ownerPin: '123456',
+      ownerPin: 'REDACTED_PIN',
       workerPin: '654321',
       messName: 'Lokmanya Mess',
       ownerName: 'Rahul Babulkar',
@@ -251,3 +251,4 @@ async function run() {
 }
 
 run();
+

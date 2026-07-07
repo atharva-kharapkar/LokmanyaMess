@@ -9,3 +9,4 @@ content = content.replace('persistentMultipleTabManager()', 'persistentSingleTab
 
 fs.writeFileSync(firebaseFile, content, 'utf8');
 console.log('Successfully updated firebase.js to use persistentSingleTabManager!');
+

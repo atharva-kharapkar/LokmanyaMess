@@ -332,3 +332,4 @@ if (content.includes(saveDbTarget)) {
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Finished updating App.jsx for Firebase sync');
+

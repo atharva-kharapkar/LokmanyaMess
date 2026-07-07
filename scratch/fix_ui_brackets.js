@@ -21,3 +21,4 @@ if (content.includes(target)) {
 } else {
   console.error('Target parenthesized block not found!');
 }
+

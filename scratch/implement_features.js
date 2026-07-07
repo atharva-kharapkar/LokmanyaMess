@@ -430,3 +430,4 @@ if (content.includes(headerTitleTarget)) {
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Finished updating translations, state, and sidebar layout inside App.jsx');
+

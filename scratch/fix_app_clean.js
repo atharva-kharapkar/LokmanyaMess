@@ -55,3 +55,4 @@ if (content.includes(uniqueTarget)) {
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Finished bracket fixes.');
+

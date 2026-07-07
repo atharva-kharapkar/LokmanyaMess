@@ -20,3 +20,4 @@ if (fs.existsSync('scratch/all_raw_matches.txt')) {
     }
   });
 }
+

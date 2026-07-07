@@ -67,3 +67,4 @@ if (content.includes(targetSelect)) {
 
 fs.writeFileSync(file, content, 'utf8');
 console.log('Finished updating App.jsx');
+

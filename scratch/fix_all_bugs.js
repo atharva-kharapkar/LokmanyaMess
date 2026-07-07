@@ -153,3 +153,4 @@ if (content.includes(sortTarget)) {
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Finished updating App.jsx');
+

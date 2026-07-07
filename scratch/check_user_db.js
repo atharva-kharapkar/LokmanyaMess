@@ -26,3 +26,4 @@ if (!fs.existsSync(dbPath)) {
     console.error('Error reading/parsing database.json:', e);
   }
 }
+

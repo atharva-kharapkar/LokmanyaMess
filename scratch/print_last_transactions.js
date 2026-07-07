@@ -15,3 +15,4 @@ if (fs.existsSync(dbPath)) {
 } else {
   console.log('No DB found.');
 }
+

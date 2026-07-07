@@ -8,7 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
-    "dist": "vite build && electron-builder"
+    "dist": "vite build && electron-builder",
+    "check:secrets": "node scripts/check-secrets.js",
+    "check:ipc": "node scripts/check-ipc.js",
+    "check:all": "npm run check:secrets && npm run check:ipc",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
   },
   "dependencies": {
     "firebase": "^12.15.0",

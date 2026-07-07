@@ -96,3 +96,4 @@ if (bottomIndex !== -1) {
 
 fs.writeFileSync(file, content, 'utf8');
 console.log('Done!');
+

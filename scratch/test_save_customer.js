@@ -1,7 +1,7 @@
 const db = {
   customers: [],
   transactions: [],
-  settings: { lang: 'en', ownerPin: '123456' }
+  settings: { lang: 'en', ownerPin: 'REDACTED_PIN' }
 };
 
 const custForm = {
@@ -77,3 +77,4 @@ function saveCustomer() {
 }
 
 saveCustomer();
+

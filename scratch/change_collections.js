@@ -18,3 +18,4 @@ content = content.replaceAll("doc(firestoreDb, 'salaries',", "doc(firestoreDb, '
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Successfully separated desktop database collections from APK!');
+

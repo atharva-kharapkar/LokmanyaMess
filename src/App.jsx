@@ -417,6 +417,59 @@ export default function App() {
     }
   }, [toast]);
 
+  // Global renderer-side error handlers to prevent uncaught errors from breaking the UI
+  useEffect(() => {
+    const onError = (event) => {
+      console.error('Renderer error:', event.error || event.message || event);
+      showToast(db.settings && db.settings.lang === 'mr' ? 'अनपेक्षित त्रुटी आली' : 'An unexpected error occurred', 'error');
+    };
+    const onRejection = (event) => {
+      console.error('Unhandled rejection in renderer:', event.reason || event);
+      showToast(db.settings && db.settings.lang === 'mr' ? 'अनपेक्षित वचन त्रुटी' : 'An unexpected promise rejection occurred', 'error');
+    };
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, [db.settings]);
+
+  // First-run flow: if Owner PIN is not configured, show an in-app modal to set it
+  const [firstRunPrompted, setFirstRunPrompted] = useState(false);
+  const [firstRunModalVisible, setFirstRunModalVisible] = useState(false);
+  const [firstRunPinInput, setFirstRunPinInput] = useState('');
+  const [firstRunPinError, setFirstRunPinError] = useState('');
+
+  useEffect(() => {
+    if (firstRunPrompted) return;
+    if (!db || !db.settings) return;
+    const ownerPin = db.settings.ownerPin;
+    const requireSetup = db.settings.requireSetup;
+    if ((!ownerPin || ownerPin === '') && requireSetup) {
+      setFirstRunPrompted(true);
+      setFirstRunModalVisible(true);
+    }
+  }, [db, firstRunPrompted]);
+
+  const handleFirstRunSave = async () => {
+    const cleaned = String(firstRunPinInput).replace(/\D/g, '');
+    if (cleaned.length !== 6) {
+      setFirstRunPinError('PIN must be exactly 6 digits');
+      return;
+    }
+    const newSettings = { ...db.settings, ownerPin: cleaned };
+    if (newSettings.requireSetup) delete newSettings.requireSetup;
+    await saveDb({ ...db, settings: newSettings });
+    setFirstRunModalVisible(false);
+    showToast(db.settings.lang === 'mr' ? 'पिन सेट केला गेला!' : 'Owner PIN set successfully!', 'success');
+  };
+
+  const handleFirstRunCancel = () => {
+    setFirstRunModalVisible(false);
+    setCurrentTab('settings');
+    showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये PIN सेट करा.' : 'Please set the PIN in Settings to continue.', 'error');
+  };
 
 
   // Database states
@@ -429,7 +482,7 @@ export default function App() {
     settings: {
       lang: 'en',
       upiId: '',
-      ownerPin: '123456',
+      ownerPin: '', // requires initial setup
       messName: 'Lokmanya Mess',
       ownerName: 'Mess Owner'
     }
@@ -477,7 +530,7 @@ export default function App() {
           if (JSON.stringify(prev.settings) === JSON.stringify(settingsData)) return prev;
           return { ...prev, settings: settingsData };
         });
-        setNewPinInput(settingsData.ownerPin || '123456');
+        setNewPinInput(settingsData.ownerPin || '');
         setMessNameInput(settingsData.messName || 'Lokmanya Mess');
         setOwnerNameInput(settingsData.ownerName || 'Mess Owner');
       }
@@ -693,6 +746,12 @@ export default function App() {
 
   const handlePinSubmit = (e) => {
     if (e) e.preventDefault();
+    // If owner PIN not configured, force the user to open settings and set it up first
+    if (!db.settings || !db.settings.ownerPin) {
+      showToast(db.settings && db.settings.lang === 'mr' ? 'कृपया प्रथम सेटिंग्जमध्ये मालक PIN सेट करा.' : 'Please set the Owner PIN in Settings before logging in.', 'error');
+      setCurrentTab('settings');
+      return;
+    }
     if (pinInput === db.settings.ownerPin) {
       setIsLoggedIn(true);
       if (rememberPin) {
@@ -1633,11 +1692,54 @@ export default function App() {
 
 
       </div>
+
+      {firstRunModalVisible && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 420, maxWidth: '92%', background: 'var(--card)', padding: 20, borderRadius: 12, boxShadow: 'var(--shadow-lg)' }}>
+            <h3 style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'प्रवेश सेटअप' : 'Initial Setup'}</h3>
+            <p style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'कृपया या संगणकासाठी 6-अंकी मालक PIN सेट करा.' : 'Please set a 6-digit Owner PIN for this device.'}</p>
+            <input
+              type="password"
+              value={firstRunPinInput}
+              maxLength={6}
+              onChange={(e) => setFirstRunPinInput(e.target.value.replace(/\D/g, ''))}
+              style={{ width: '100%', padding: '10px 12px', fontSize: 18, borderRadius: 8, border: '1px solid rgba(0,0,0,0.12)', marginTop: 8 }}
+            />
+            {firstRunPinError && <div style={{ color: 'var(--danger)', marginTop: 8 }}>{firstRunPinError}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button className="btn" onClick={handleFirstRunCancel}>{db.settings && db.settings.lang === 'mr' ? 'रद्द करा' : 'Cancel'}</button>
+              <button className="btn btn-primary" onClick={handleFirstRunSave}>{db.settings && db.settings.lang === 'mr' ? 'पिन सेट करा' : 'Save PIN'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     );
   }
 
   return (
     <div className="app-container">
+      {firstRunModalVisible && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 420, maxWidth: '92%', background: 'var(--card)', padding: 20, borderRadius: 12, boxShadow: 'var(--shadow-lg)' }}>
+            <h3 style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'प्रवेश सेटअप' : 'Initial Setup'}</h3>
+            <p style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'कृपया या संगणकासाठी 6-अंकी मालक PIN सेट करा.' : 'Please set a 6-digit Owner PIN for this device.'}</p>
+            <input
+              type="password"
+              value={firstRunPinInput}
+              maxLength={6}
+              onChange={(e) => setFirstRunPinInput(e.target.value.replace(/\D/g, ''))}
+              style={{ width: '100%', padding: '10px 12px', fontSize: 18, borderRadius: 8, border: '1px solid rgba(0,0,0,0.12)', marginTop: 8 }}
+            />
+            {firstRunPinError && <div style={{ color: 'var(--danger)', marginTop: 8 }}>{firstRunPinError}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button className="btn" onClick={handleFirstRunCancel}>{db.settings && db.settings.lang === 'mr' ? 'रद्द करा' : 'Cancel'}</button>
+              <button className="btn btn-primary" onClick={handleFirstRunSave}>{db.settings && db.settings.lang === 'mr' ? 'पिन सेट करा' : 'Save PIN'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>

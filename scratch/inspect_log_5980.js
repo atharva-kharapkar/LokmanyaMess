@@ -14,3 +14,4 @@ if (fs.existsSync(logPath)) {
 } else {
   console.log('Log not found.');
 }
+

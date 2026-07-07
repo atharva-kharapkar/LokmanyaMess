@@ -19,3 +19,4 @@ if (fs.existsSync('scratch/txn_log_matches.txt')) {
     }
   });
 }
+

@@ -2,6 +2,19 @@ const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// Runtime flags
+const isDev = !app.isPackaged;
+
+// Global crash handlers for the main process — log and show a dialog so the app doesn't silently exit
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception (main):', err);
+  try { dialog.showErrorBox('Unexpected Error', String(err)); } catch (e) { /* best-effort */ }
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection (main):', reason);
+  try { dialog.showErrorBox('Unhandled Promise Rejection', String(reason)); } catch (e) { /* best-effort */ }
+});
+
 let mainWindow;
 
 function createWindow() {
@@ -33,13 +46,20 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // Automatically grant camera permissions for Webcams
+  // Permission handler: only allow camera/microphone for trusted origins (dev server or packaged file://)
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (permission === 'media') {
-      callback(true);
-    } else {
-      callback(false);
+    try {
+      const url = webContents.getURL();
+      if (permission === 'media') {
+        if ((isDev && url.startsWith('http://localhost:5173')) || (!isDev && url.startsWith('file://'))) {
+          callback(true);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Permission handler error:', e);
     }
+    callback(false);
   });
 
   createWindow();
@@ -64,34 +84,55 @@ const getDbPath = () => {
 
 ipcMain.handle('read-database', async () => {
   const dbPath = getDbPath();
+  const defaultDb = {
+    customers: [],
+    employees: [],
+    transactions: [],
+    salaries: [],
+    settings: {
+      lang: 'en',
+      upiId: '',
+    ownerPin: '', // Owner must set PIN on first run
+    requireSetup: true,
+    messName: 'Lokmanya Mess',
+    ownerName: 'Mess Owner'
+    }
+  };
+
   if (!fs.existsSync(dbPath)) {
-    return {
-      customers: [],
-      employees: [],
-      transactions: [],
-      salaries: [],
-      settings: {
-        lang: 'en',
-        upiId: '',
-        ownerPin: '123456',
-        messName: 'Lokmanya Mess',
-        ownerName: 'Mess Owner'
-      }
-    };
+    return defaultDb;
   }
   try {
     const data = fs.readFileSync(dbPath, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    // Basic validation: ensure parsed is an object with settings
+    if (!parsed || typeof parsed !== 'object') return defaultDb;
+    if (!parsed.settings || typeof parsed.settings !== 'object') parsed.settings = defaultDb.settings;
+    return parsed;
   } catch (e) {
     console.error("Error reading database:", e);
-    return null;
+    // On parse/read error, return a safe default instead of null to avoid crashes in renderer
+    return defaultDb;
   }
 });
 
 ipcMain.handle('write-database', async (event, data) => {
   const dbPath = getDbPath();
+  // Validate input to avoid corruption of the local DB file
+  if (!data || typeof data !== 'object') {
+    console.error('write-database: invalid payload');
+    return { success: false, error: 'Invalid payload' };
+  }
   try {
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf8');
+    // Minimal structural sanity check
+    const safeData = {
+      customers: Array.isArray(data.customers) ? data.customers : [],
+      employees: Array.isArray(data.employees) ? data.employees : [],
+      transactions: Array.isArray(data.transactions) ? data.transactions : [],
+      salaries: Array.isArray(data.salaries) ? data.salaries : [],
+      settings: (data.settings && typeof data.settings === 'object') ? data.settings : { lang: 'en' }
+    };
+    fs.writeFileSync(dbPath, JSON.stringify(safeData, null, 2), 'utf8');
     return { success: true };
   } catch (e) {
     console.error("Error writing database:", e);

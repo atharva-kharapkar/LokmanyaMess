@@ -25,3 +25,4 @@ if (content.includes(sortTarget)) {
 } else {
   console.error('Target sorting block not found in App.jsx!');
 }
+

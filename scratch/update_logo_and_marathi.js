@@ -36,3 +36,4 @@ if (content.includes(targetSidebarHeader)) {
 
 fs.writeFileSync(file, content, 'utf8');
 console.log('Finished updating App.jsx');
+

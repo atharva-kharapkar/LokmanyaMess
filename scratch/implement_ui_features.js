@@ -500,3 +500,4 @@ if (content.includes(settingsSecurityTarget)) {
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Finished updating UI features inside App.jsx');
+

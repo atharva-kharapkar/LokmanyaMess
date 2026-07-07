@@ -1102,3 +1102,27 @@ input, textarea, [contenteditable="true"] {
   user-select: text !important;
   cursor: text !important;
 }
+
+/* First-run modal overrides */
+.first-run-modal-overlay {
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.55);
+  z-index:2200;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.first-run-modal-card {
+  width:420px;
+  max-width:92%;
+  border-radius:12px;
+  background:var(--card);
+  padding:18px;
+  box-shadow:var(--shadow-lg);
+}
+.first-run-modal-card h3 { margin:0 0 8px 0 }
+.first-run-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px }
+.first-run-modal-input { width:100%; padding:10px 12px; font-size:18px; border-radius:8px; border:1px solid var(--border) }
+.first-run-modal-error { color:var(--danger); margin-top:8px }
+

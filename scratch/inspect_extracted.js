@@ -8,3 +8,4 @@ if (fs.existsSync('scratch/extracted_log_match.txt')) {
 } else {
   console.log('No matches found.');
 }
+

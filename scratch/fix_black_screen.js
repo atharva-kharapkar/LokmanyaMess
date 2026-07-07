@@ -308,3 +308,4 @@ if (content.includes(dashboardStatsTarget)) {
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Finished App.jsx modifications for black screen fix.');
+

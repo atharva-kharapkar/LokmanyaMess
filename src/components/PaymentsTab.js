@@ -116,7 +116,8 @@ const PaymentsTab = React.memo(({
         csvContent += `"${date}","${name}","${plan}",${amount},"${mode}","${note}"\n`;
       });
 
-      const fileName = `lokmanya_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+      const now = new Date();
+      const fileName = `lokmanya_transactions_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.csv`;
       const fileUri = FileSystem.documentDirectory + fileName;
 
       await FileSystem.writeAsStringAsync(fileUri, csvContent, {

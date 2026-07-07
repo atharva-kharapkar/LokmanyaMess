@@ -8,3 +8,4 @@ if (fs.existsSync('scratch/recovered_database_dumps.txt')) {
 } else {
   console.log('No matches found.');
 }
+

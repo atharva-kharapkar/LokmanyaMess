@@ -5,3 +5,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeDatabase: (data) => ipcRenderer.invoke('write-database', data),
   saveCsv: (content, defaultName) => ipcRenderer.invoke('save-csv', { content, defaultName })
 });
+

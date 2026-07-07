@@ -8,3 +8,4 @@ content = content.replaceAll("'lokmanya_migration_done'", "'lokmanya_migration_d
 
 fs.writeFileSync(appFile, content, 'utf8');
 console.log('Successfully updated the migration flag key!');
+

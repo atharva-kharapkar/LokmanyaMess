@@ -73,7 +73,7 @@ ipcMain.handle('read-database', async () => {
       settings: {
         lang: 'en',
         upiId: '',
-        ownerPin: '123456',
+        ownerPin: 'REDACTED_PIN',
         messName: 'Lokmanya Mess',
         ownerName: 'Mess Owner'
       }
@@ -121,3 +121,4 @@ ipcMain.handle('save-csv', async (event, { content, defaultName }) => {
     return { success: false, error: e.message };
   }
 });
+
