@@ -519,13 +519,14 @@ body {
 }
 
 .btn-success {
-  background-color:var(--success);
-  border-color:var(--success);
+  background-color:#008000;
+  border-color:#008000;
   color:#fff
 }
 
 .btn-success:hover {
-  background-color:#178764
+  background-color:#006600;
+  border-color:#006600
 }
 
 .btn-danger {

@@ -350,7 +350,42 @@ function computeStatus(c) {
   return 'active';
 }
 
+function getDueWarningDays(c) {
+  if (!c || !c.joinDate || c.category === 'shortterm' || c.status === 'old') return 0;
+
+  const remaining = getCustomerDues(c);
+  if (remaining <= 0) return 0;
+
+  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+  const startDate = parseLocalDate(c.joinDate);
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const elapsedTime = todayMidnight - startDate;
+  const elapsedDays = Math.round(elapsedTime / 86400000);
+  const cycleDay = elapsedDays % daysPerCycle;
+
+  return cycleDay >= 6 ? cycleDay : 0;
+}
+
 export default function App() {
+  // Database states
+  const [db, setDb] = useState({
+    customers: [],
+    employees: [],
+    transactions: [],
+    salaries: [],
+    expenses: [],
+    settings: {
+      lang: 'en',
+      upiId: '',
+      ownerPin: '', // requires initial setup
+      messName: 'Lokmanya Mess',
+      ownerName: 'Mess Owner',
+      whatsappReceiptTemplate: 'Dear [Name], we received your payment of ₹[Amount] on [Date]. Thank you! - [MessName]',
+      whatsappDuesTemplate: 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]'
+    }
+  });
+
   // Authentication & Screen states
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem('lokmanya_remember_pin') === 'true';
@@ -360,16 +395,19 @@ export default function App() {
   });
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
-  const [showPinPad, setShowPinPad] = useState(false);
-  const [introPlayed, setIntroPlayed] = useState(() => {
-    return localStorage.getItem('lokmanya_remember_pin') === 'true';
-  });
+  const [showPinPad, setShowPinPad] = useState(true);
+  const [introPlayed, setIntroPlayed] = useState(true);
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [newPinInput, setNewPinInput] = useState('');
   const [showSettingsPin, setShowSettingsPin] = useState(false);
-  const role = 'owner';
+  const [role, setRole] = useState(() => {
+    return localStorage.getItem('lokmanya_user_role') || 'owner';
+  });
+  const [newBranch1PinInput, setNewBranch1PinInput] = useState('');
+  const [newBranch2PinInput, setNewBranch2PinInput] = useState('');
 
   const [toast, setToast] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
   const [messNameInput, setMessNameInput] = useState('');
   const [ownerNameInput, setOwnerNameInput] = useState('');
   const [activeBranch, setActiveBranch] = useState(() => localStorage.getItem('lokmanya_active_branch') || 'Branch 1');
@@ -382,10 +420,24 @@ export default function App() {
 
   const [expenseForm, setExpenseForm] = useState({ amount: '', note: '' });
   const [expenseFilter, setExpenseFilter] = useState('today');
+  const [expStartDate, setExpStartDate] = useState(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  });
+  const [expEndDate, setExpEndDate] = useState(todayStr);
   const [isExpenseArchiveUnlocked, setIsExpenseArchiveUnlocked] = useState(false);
   const [expenseArchivePinInput, setExpenseArchivePinInput] = useState('');
 
   const [collectionFilter, setCollectionFilter] = useState('today');
+  const [colStartDate, setColStartDate] = useState(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  });
+  const [colEndDate, setColEndDate] = useState(todayStr);
   const [isCollectionArchiveUnlocked, setIsCollectionArchiveUnlocked] = useState(false);
   const [collectionArchivePinInput, setCollectionArchivePinInput] = useState('');
 
@@ -440,17 +492,19 @@ export default function App() {
   const [firstRunModalVisible, setFirstRunModalVisible] = useState(false);
   const [firstRunPinInput, setFirstRunPinInput] = useState('');
   const [firstRunPinError, setFirstRunPinError] = useState('');
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     if (firstRunPrompted) return;
     if (!db || !db.settings) return;
     const ownerPin = db.settings.ownerPin;
     const requireSetup = db.settings.requireSetup;
-    if ((!ownerPin || ownerPin === '') && requireSetup) {
+    if ((!ownerPin || ownerPin === '') && (requireSetup !== false)) {
       setFirstRunPrompted(true);
       setFirstRunModalVisible(true);
     }
-  }, [db, firstRunPrompted]);
+  }, [db, firstRunPrompted, settingsLoaded]);
 
   const handleFirstRunSave = async () => {
     const cleaned = String(firstRunPinInput).replace(/\D/g, '');
@@ -472,21 +526,7 @@ export default function App() {
   };
 
 
-  // Database states
-  const [db, setDb] = useState({
-    customers: [],
-    employees: [],
-    transactions: [],
-    salaries: [],
-    expenses: [],
-    settings: {
-      lang: 'en',
-      upiId: '',
-      ownerPin: '', // requires initial setup
-      messName: 'Lokmanya Mess',
-      ownerName: 'Mess Owner'
-    }
-  });
+
 
   // Load database and setup Firebase real-time listeners on mount
   useEffect(() => {
@@ -531,8 +571,11 @@ export default function App() {
           return { ...prev, settings: settingsData };
         });
         setNewPinInput(settingsData.ownerPin || '');
+        setNewBranch1PinInput(settingsData.branch1Pin || '');
+        setNewBranch2PinInput(settingsData.branch2Pin || '');
         setMessNameInput(settingsData.messName || 'Lokmanya Mess');
         setOwnerNameInput(settingsData.ownerName || 'Mess Owner');
+        setSettingsLoaded(true);
       }
     });
 
@@ -739,6 +782,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('lokmanya_remember_pin');
+    localStorage.removeItem('lokmanya_user_role');
     setRememberPin(false);
     setIsLoggedIn(false);
     setPinInput('');
@@ -746,14 +790,20 @@ export default function App() {
 
   const handlePinSubmit = (e) => {
     if (e) e.preventDefault();
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    
     // If owner PIN not configured, force the user to open settings and set it up first
     if (!db.settings || !db.settings.ownerPin) {
-      showToast(db.settings && db.settings.lang === 'mr' ? 'कृपया प्रथम सेटिंग्जमध्ये मालक PIN सेट करा.' : 'Please set the Owner PIN in Settings before logging in.', 'error');
+      showToast(isMarathi ? 'कृपया प्रथम सेटिंग्जमध्ये मालक PIN सेट करा.' : 'Please set the Owner PIN in Settings before logging in.', 'error');
       setCurrentTab('settings');
       return;
     }
+
+    // 1. Owner Master PIN Check
     if (pinInput === db.settings.ownerPin) {
       setIsLoggedIn(true);
+      setRole('owner');
+      localStorage.setItem('lokmanya_user_role', 'owner');
       if (rememberPin) {
         localStorage.setItem('lokmanya_remember_pin', 'true');
       } else {
@@ -761,10 +811,49 @@ export default function App() {
       }
       setPinInput('');
       setPinError('');
-    } else {
-      setPinError(t('pinError'));
-      setPinInput('');
+      showToast(isMarathi ? 'मालक म्हणून यशस्वी लॉगिन!' : 'Logged in successfully as Owner!', 'success');
+      return;
     }
+
+    // 2. Branch 1 PIN Check
+    if (db.settings.branch1Pin && pinInput === db.settings.branch1Pin) {
+      setIsLoggedIn(true);
+      setRole('branch_staff');
+      localStorage.setItem('lokmanya_user_role', 'branch_staff');
+      setActiveBranch('Branch 1');
+      localStorage.setItem('lokmanya_active_branch', 'Branch 1');
+      if (rememberPin) {
+        localStorage.setItem('lokmanya_remember_pin', 'true');
+      } else {
+        localStorage.removeItem('lokmanya_remember_pin');
+      }
+      setPinInput('');
+      setPinError('');
+      showToast(isMarathi ? 'शाखा १ मध्ये यशस्वी लॉगिन!' : 'Logged in successfully to Branch 1!', 'success');
+      return;
+    }
+
+    // 3. Branch 2 PIN Check
+    if (db.settings.branch2Pin && pinInput === db.settings.branch2Pin) {
+      setIsLoggedIn(true);
+      setRole('branch_staff');
+      localStorage.setItem('lokmanya_user_role', 'branch_staff');
+      setActiveBranch('Branch 2');
+      localStorage.setItem('lokmanya_active_branch', 'Branch 2');
+      if (rememberPin) {
+        localStorage.setItem('lokmanya_remember_pin', 'true');
+      } else {
+        localStorage.removeItem('lokmanya_remember_pin');
+      }
+      setPinInput('');
+      setPinError('');
+      showToast(isMarathi ? 'शाखा २ मध्ये यशस्वी लॉगिन!' : 'Logged in successfully to Branch 2!', 'success');
+      return;
+    }
+
+    // Invalid PIN
+    setPinError(t('pinError'));
+    setPinInput('');
   };
 
   // Handle intro logo video timer
@@ -908,6 +997,62 @@ export default function App() {
   const [payMode, setPayMode] = useState('Cash');
   const [payNote, setPayNote] = useState('');
   const [historyModalCustomer, setHistoryModalCustomer] = useState(null);
+  const [receiptModalCustomer, setReceiptModalCustomer] = useState(null);
+  const [receiptModalTxn, setReceiptModalTxn] = useState(null);
+
+  // Bulk WhatsApp Alert states
+  const [showBulkSmsModal, setShowBulkSmsModal] = useState(false);
+  const [sentCustomers, setSentCustomers] = useState([]);
+
+  const getUpiRedirectUrl = (amount) => {
+    const upiId = db.settings.upiId || 'lokmanya@upi';
+    const pn = encodeURIComponent(db.settings.messName || 'Lokmanya Mess');
+    return `https://atharva-kharapkar.github.io/LokmanyaMess/pay/index.html?pa=${upiId}&pn=${pn}&am=${amount}&tn=Mess%20Dues`;
+  };
+
+  const getBulkDueCount = () => {
+    let targetCategory = 'dinein';
+    if (currentTab === 'tiffin') targetCategory = 'tiffin';
+    else if (currentTab === 'shortterm') targetCategory = 'shortterm';
+
+    return db.customers.filter(c => {
+      const matchesBranch = (c.branch || 'Branch 1') === activeBranch;
+      const matchesStatus = c.status !== 'old';
+      const itemCat = c.category || 'dinein';
+      const matchesCategory = itemCat === targetCategory;
+      const hasDues = getCustomerDues(c) > 0;
+      return matchesBranch && matchesStatus && matchesCategory && hasDues;
+    }).length;
+  };
+
+  const getBulkDueCustomers = () => {
+    let targetCategory = 'dinein';
+    if (currentTab === 'tiffin') targetCategory = 'tiffin';
+    else if (currentTab === 'shortterm') targetCategory = 'shortterm';
+
+    return db.customers.filter(c => {
+      const matchesBranch = (c.branch || 'Branch 1') === activeBranch;
+      const matchesStatus = c.status !== 'old';
+      const itemCat = c.category || 'dinein';
+      const matchesCategory = itemCat === targetCategory;
+      const hasDues = getCustomerDues(c) > 0;
+      return matchesBranch && matchesStatus && matchesCategory && hasDues;
+    });
+  };
+
+
+
+  const getWhatsAppShareUrl = (phone, message) => {
+    let cleanNum = phone.replace(/\D/g, '');
+    if (cleanNum.startsWith('91') && cleanNum.length > 10) {
+      // already has country code
+    } else if (cleanNum.length === 10) {
+      cleanNum = '91' + cleanNum;
+    }
+    return `https://api.whatsapp.com/send?phone=${cleanNum}&text=${encodeURIComponent(message)}`;
+  };
+
+
 
   const openPayModal = (customer) => {
     setPayModalCustomer(customer);
@@ -966,6 +1111,12 @@ export default function App() {
     });
 
     showToast(db.settings.lang === 'mr' ? 'पेमेंट यशस्वीरित्या नोंदवले गेले!' : 'Payment recorded successfully!');
+
+
+
+    setReceiptModalCustomer(payModalCustomer);
+    setReceiptModalTxn(newTxn);
+
     setPayAmount('');
     setPayDate('');
     setPayMode('Cash');
@@ -1023,16 +1174,25 @@ export default function App() {
   };
 
   const saveCustomer = () => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
     if (!custForm.name.trim() || !custForm.phone.trim()) {
-      showToast('Name and Phone are required.', 'error');
+      showToast(isMarathi ? 'नाव आणि फोन नंबर आवश्यक आहेत.' : 'Name and Phone are required.', 'error');
       return;
     }
 
+    // Convert Devanagari numerals (०-९) to English digits (0-9)
+    let phoneInput = custForm.phone;
+    const devanagariMap = {
+      '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+      '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
+    };
+    phoneInput = phoneInput.split('').map(char => devanagariMap[char] || char).join('');
+
     // Clean and validate phone number (extract digits only)
-    let digits = custForm.phone.replace(/\D/g, '');
+    let digits = phoneInput.replace(/\D/g, '');
     
-    // Handle leading zero (e.g. 09876543210 -> 9876543210)
-    if (digits.startsWith('0')) {
+    // Strip all leading zeros (e.g. 0091... -> 91...)
+    while (digits.startsWith('0')) {
       digits = digits.slice(1);
     }
     
@@ -1053,7 +1213,12 @@ export default function App() {
     
     // Validate final format (exactly 12 digits starting with 91)
     if (digits.length !== 12 || !digits.startsWith('91')) {
-      showToast('Phone number must be a valid 10-digit number (e.g. +919876543210 or 9876543210).', 'error');
+      showToast(
+        isMarathi 
+          ? 'कृपया वैध १०-अंकी मोबाईल नंबर प्रविष्ट करा (उदा. +९१९८७६५४३२१० किंवा ९८७६५४३२१०).' 
+          : 'Phone number must be a valid 10-digit number (e.g. +919876543210 or 9876543210).', 
+        'error'
+      );
       return;
     }
     
@@ -1063,14 +1228,24 @@ export default function App() {
     if (custForm.aadhar && custForm.aadhar.trim()) {
       const aadharClean = custForm.aadhar.replace(/\D/g, '');
       if (aadharClean.length !== 12) {
-        showToast('Aadhar card number must be exactly 12 digits.', 'error');
+        showToast(
+          isMarathi 
+            ? 'आधार कार्ड नंबर अचूक १२ अंकी असावा.' 
+            : 'Aadhar card number must be exactly 12 digits.', 
+          'error'
+        );
         return;
       }
     }
 
     // Date format validation (must be valid YYYY-MM-DD)
     if (!isValidDate(custForm.joinDate)) {
-      showToast('Joining Date must be a valid date in YYYY-MM-DD format (e.g. 2026-06-25).', 'error');
+      showToast(
+        isMarathi 
+          ? 'प्रवेश तारीख वैध YYYY-MM-DD फॉरमॅटमध्ये असावी (उदा. २०२६-०६-२५).' 
+          : 'Joining Date must be a valid date in YYYY-MM-DD format (e.g. 2026-06-25).', 
+        'error'
+      );
       return;
     }
 
@@ -1078,6 +1253,19 @@ export default function App() {
 
     let updatedCustomers;
     let updatedTxns = [...(db.transactions || [])];
+
+    if (!editCustId) {
+      const activeBranchCount = (db.customers || []).filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old').length;
+      if (activeBranchCount >= 320) {
+        showToast(
+          isMarathi 
+            ? 'या शाखेची ३२० ग्राहकांची मर्यादा संपली आहे!' 
+            : 'This branch has reached its capacity limit of 320 customers!', 
+          'error'
+        );
+        return;
+      }
+    }
     
     let targetCat = custForm.category;
     if (!targetCat) {
@@ -1176,7 +1364,8 @@ export default function App() {
       amount: amt,
       note: expenseForm.note.trim(),
       date: todayStr(),
-      createdAt: new Date().getTime()
+      createdAt: new Date().getTime(),
+      branch: activeBranch
     };
 
     const updatedExpenses = [newExpense, ...(db.expenses || [])];
@@ -1300,24 +1489,27 @@ export default function App() {
     }
   };
 
-  // Calculations for Dashboard Metrics
+  // Calculations for Dashboard Metrics (filtered by branch)
   const metrics = useMemo(() => {
-    let totalCollected = db.customers.reduce((sum, c) => sum + (c.deposited || 0), 0);
+    const branchCusts = (db.customers || []).filter(c => (c.branch || 'Branch 1') === activeBranch);
+    const activeBranchCusts = branchCusts.filter(c => c.status !== 'old');
+    const totalCustomersCount = activeBranchCusts.length;
+    let totalCollected = branchCusts.reduce((sum, c) => sum + (c.deposited || 0), 0);
     let activeSubCount = 0;
     let expiredSubCount = 0;
     let expiringSubCount = 0;
     let pendingAmount = 0;
 
-    db.customers.forEach(c => {
+    branchCusts.forEach(c => {
       if (c.status === 'old') return; // Skip archived customers on active dashboard
       const status = computeStatus(c);
-      if (status === 'active') activeSubCount++;
+      const remaining = getCustomerDues(c);
+      if (status === 'active' && remaining === 0) activeSubCount++;
       else if (status === 'expiring') expiringSubCount++;
       else {
         expiredSubCount++;
       }
       
-      const remaining = getCustomerDues(c);
       if (remaining > 0) {
         pendingAmount += remaining;
       }
@@ -1328,47 +1520,51 @@ export default function App() {
       activeSubCount,
       expiredSubCount,
       expiringSubCount,
-      pendingAmount
+      pendingAmount,
+      totalCustomersCount
     };
-  }, [db.customers]);
+  }, [db.customers, activeBranch]);
+
+  const branchTxns = useMemo(() => {
+    const custMap = new Map((db.customers || []).map(c => [c.id, c]));
+    return (db.transactions || []).filter(tx => {
+      const cust = custMap.get(tx.custId);
+      const txBranch = cust ? (cust.branch || 'Branch 1') : 'Branch 1';
+      return txBranch === activeBranch;
+    });
+  }, [db.transactions, db.customers, activeBranch]);
 
   // --- Collections Calculations ---
   const todayCollectionTotal = useMemo(() => {
     const today = todayStr();
     const currentMonth = today.slice(0, 7);
-    return (db.transactions || [])
+    return branchTxns
       .filter(tx => tx.date === today && tx.date.slice(0, 7) === currentMonth)
       .reduce((sum, tx) => sum + (tx.amount || 0), 0);
-  }, [db.transactions]);
+  }, [branchTxns]);
 
   const currentMonthCollectionTotal = useMemo(() => {
     const currentMonth = todayStr().slice(0, 7);
-    return (db.transactions || [])
+    return branchTxns
       .filter(tx => tx.date && tx.date.slice(0, 7) === currentMonth)
       .reduce((sum, tx) => sum + (tx.amount || 0), 0);
-  }, [db.transactions]);
+  }, [branchTxns]);
 
   const filteredTxns = useMemo(() => {
     const today = todayStr();
     const currentMonth = today.slice(0, 7);
     
     // Auto-Archiving: Active views only display transactions from the current month
-    const activeTxns = (db.transactions || []).filter(tx => tx.date && tx.date.slice(0, 7) === currentMonth);
+    const activeTxns = branchTxns.filter(tx => tx.date && tx.date.slice(0, 7) === currentMonth);
 
     if (collectionFilter === 'today') {
       return activeTxns.filter(tx => tx.date === today);
     }
-    if (collectionFilter === '15days') {
-      const dates = [];
-      for (let i = 0; i < 15; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dates.push(toLocalYYYYMMDD(d));
-      }
-      return activeTxns.filter(tx => dates.includes(tx.date));
+    if (collectionFilter === 'custom') {
+      return activeTxns.filter(tx => tx.date >= colStartDate && tx.date <= colEndDate);
     }
     return activeTxns; // 'month' filter
-  }, [db.transactions, collectionFilter]);
+  }, [branchTxns, collectionFilter, colStartDate, colEndDate]);
 
   const filteredTxnsTotal = useMemo(() => {
     return filteredTxns.reduce((sum, tx) => sum + (tx.amount || 0), 0);
@@ -1377,7 +1573,7 @@ export default function App() {
   // Grouped Daily Collections (For active month)
   const dailyCollections = useMemo(() => {
     const currentMonth = todayStr().slice(0, 7);
-    const activeTxns = (db.transactions || []).filter(tx => tx.date && tx.date.slice(0, 7) === currentMonth);
+    const activeTxns = branchTxns.filter(tx => tx.date && tx.date.slice(0, 7) === currentMonth);
     
     const groups = {};
     activeTxns.forEach(tx => {
@@ -1399,12 +1595,12 @@ export default function App() {
           total
         };
       });
-  }, [db.transactions]);
+  }, [branchTxns]);
 
   // Grouped Collections Archive (Past Months)
   const archiveCollectionMonths = useMemo(() => {
     const currentMonth = todayStr().slice(0, 7);
-    const archived = (db.transactions || []).filter(tx => tx.date && tx.date.slice(0, 7) !== currentMonth);
+    const archived = branchTxns.filter(tx => tx.date && tx.date.slice(0, 7) !== currentMonth);
     
     const groups = {};
     archived.forEach(tx => {
@@ -1430,54 +1626,43 @@ export default function App() {
           total
         };
       });
-  }, [db.transactions]);
+  }, [branchTxns]);
+
+  const branchExpenses = useMemo(() => {
+    return (db.expenses || []).filter(e => (e.branch || 'Branch 1') === activeBranch);
+  }, [db.expenses, activeBranch]);
 
   // --- Expenses Calculations ---
   const todayExpenseTotal = useMemo(() => {
     const today = todayStr();
     const currentMonth = today.slice(0, 7);
-    return (db.expenses || [])
+    return branchExpenses
       .filter(e => e.date === today && e.date.slice(0, 7) === currentMonth)
       .reduce((sum, e) => sum + (e.amount || 0), 0);
-  }, [db.expenses]);
+  }, [branchExpenses]);
 
   const currentMonthExpenseTotal = useMemo(() => {
     const currentMonth = todayStr().slice(0, 7);
-    return (db.expenses || [])
+    return branchExpenses
       .filter(e => e.date && e.date.slice(0, 7) === currentMonth)
       .reduce((sum, e) => sum + (e.amount || 0), 0);
-  }, [db.expenses]);
+  }, [branchExpenses]);
 
   const filteredExpenses = useMemo(() => {
     const today = todayStr();
     const currentMonth = today.slice(0, 7);
     
     // Auto-Archiving: Active views only display expenses from the current month
-    const activeExpenses = (db.expenses || []).filter(e => e.date && e.date.slice(0, 7) === currentMonth);
+    const activeExpenses = branchExpenses.filter(e => e.date && e.date.slice(0, 7) === currentMonth);
 
     if (expenseFilter === 'today') {
       return activeExpenses.filter(e => e.date === today);
     }
-    if (expenseFilter === '2days') {
-      const dates = [];
-      for (let i = 0; i < 2; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dates.push(toLocalYYYYMMDD(d));
-      }
-      return activeExpenses.filter(e => dates.includes(e.date));
-    }
-    if (expenseFilter === '15days') {
-      const dates = [];
-      for (let i = 0; i < 15; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dates.push(toLocalYYYYMMDD(d));
-      }
-      return activeExpenses.filter(e => dates.includes(e.date));
+    if (expenseFilter === 'custom') {
+      return activeExpenses.filter(e => e.date >= expStartDate && e.date <= expEndDate);
     }
     return activeExpenses; // 'month' filter
-  }, [db.expenses, expenseFilter]);
+  }, [branchExpenses, expenseFilter, expStartDate, expEndDate]);
 
   const filteredExpensesTotal = useMemo(() => {
     return filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -1486,7 +1671,7 @@ export default function App() {
   // Grouped Expenses Archive (Past Months)
   const archiveExpenseMonths = useMemo(() => {
     const currentMonth = todayStr().slice(0, 7);
-    const archived = (db.expenses || []).filter(e => e.date && e.date.slice(0, 7) !== currentMonth);
+    const archived = branchExpenses.filter(e => e.date && e.date.slice(0, 7) !== currentMonth);
     
     const groups = {};
     archived.forEach(e => {
@@ -1512,7 +1697,7 @@ export default function App() {
           total
         };
       });
-  }, [db.expenses]);
+  }, [branchExpenses]);
 
   // Net Profit/Loss for current month
   const currentMonthNetProfit = useMemo(() => {
@@ -1570,7 +1755,8 @@ export default function App() {
   // If not logged in, render PIN screen with animated logo intro
   if (!isLoggedIn) {
     return (
-      <div className="pin-screen">
+      <>
+        <div className="pin-screen">
         <div className="pin-card" style={{ maxWidth: '500px', width: '90%', padding: '40px', transition: 'all 0.5s ease', background: 'rgba(30, 30, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
           {/* Animated Logo Video or Static Logo */}
           <div className="pin-logo" style={{ width: '100%', aspectRatio: '16/9', margin: '0 auto 24px auto', borderRadius: '16px', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', boxShadow: 'var(--shadow-lg)' }}>
@@ -1713,7 +1899,7 @@ export default function App() {
           </div>
         </div>
       )}
-
+      </>
     );
   }
 
@@ -1878,6 +2064,42 @@ export default function App() {
                 <span>{showCalculator ? (db.settings.lang === 'mr' ? 'लपवा' : 'Hide Calc') : (db.settings.lang === 'mr' ? 'दाखवा' : 'Show Calc')}</span>
               </button>
             )}
+            {role === 'owner' && (
+              <div style={{ marginRight: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                  {db.settings.lang === 'mr' ? 'शाखा:' : 'Branch:'}
+                </span>
+                <select
+                  className="form-select"
+                  value={activeBranch}
+                  onChange={(e) => {
+                    setActiveBranch(e.target.value);
+                    localStorage.setItem('lokmanya_active_branch', e.target.value);
+                    showToast(db.settings.lang === 'mr' ? 'शाखा बदलली!' : 'Active branch updated!', 'success');
+                  }}
+                  style={{ padding: '4px 8px', fontSize: '13px', width: '120px', height: '32px' }}
+                >
+                  <option value="Branch 1">Branch 1</option>
+                  <option value="Branch 2">Branch 2</option>
+                </select>
+              </div>
+            )}
+            {role === 'branch_staff' && (
+              <span 
+                style={{ 
+                  marginRight: '16px', 
+                  backgroundColor: 'var(--primary-light)', 
+                  color: 'var(--primary)', 
+                  padding: '6px 12px', 
+                  borderRadius: '20px', 
+                  fontSize: '12px', 
+                  fontWeight: '700',
+                  border: '1px solid var(--border)' 
+                }}
+              >
+                📍 {activeBranch === 'Branch 1' ? (db.settings.lang === 'mr' ? 'शाखा १' : 'Branch 1') : (db.settings.lang === 'mr' ? 'शाखा २' : 'Branch 2')}
+              </span>
+            )}
             <div className="profile-text">
               <div className="profile-name">{db.settings.ownerName}</div>
               <div className="profile-mess">{db.settings.messName}</div>
@@ -1888,9 +2110,18 @@ export default function App() {
 
         <div className="content-body">
           {/* DASHBOARD TAB */}
-          {currentTab === 'dashboard' && role === 'owner' && (
+          {currentTab === 'dashboard' && (
             <div className="tab-panel animate-fade">
-              <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+              <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+                <div className="stat-card">
+                  <div className="stat-icon" style={{ backgroundColor: 'rgba(79, 70, 229, 0.1)', color: 'var(--primary)' }}>
+                    <Users size={24} />
+                  </div>
+                  <div className="stat-info">
+                    <div className="stat-label">{db.settings.lang === 'mr' ? 'एकूण ग्राहक' : 'Total Customers'}</div>
+                    <div className="stat-value">{metrics.totalCustomersCount} <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>/ 320</span></div>
+                  </div>
+                </div>
                 <div className="stat-card">
                   <div className="stat-icon" style={{ backgroundColor: 'var(--success-light)', color: 'var(--success)' }}>
                     <Users size={24} />
@@ -1901,7 +2132,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-icon" style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
+                  <div className="stat-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
                     <Users size={24} />
                   </div>
                   <div className="stat-info">
@@ -1972,7 +2203,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {db.customers.filter(c => ['expired', 'expiring'].includes(computeStatus(c)) || getCustomerDues(c) > 0)
+                        {db.customers.filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old' && (['expired', 'expiring'].includes(computeStatus(c)) || getCustomerDues(c) > 0))
                           .sort((a, b) => getCustomerDues(b) - getCustomerDues(a))
                           .slice(0, 10)
                           .map(c => {
@@ -2161,6 +2392,18 @@ export default function App() {
                     <button className="btn" onClick={handleExportCustomers}>
                       <Download size={16} /> {t('exportCsv')}
                     </button>
+                     {currentTab !== 'oldcustomers' && role === 'owner' && (
+                       <button 
+                         className="btn" 
+                         onClick={() => {
+                           setSentCustomers([]);
+                           setShowBulkSmsModal(true);
+                         }}
+                         style={{ backgroundColor: '#22c55e', color: '#fff', borderColor: '#22c55e', fontWeight: '600' }}
+                       >
+                         💬 {db.settings.lang === 'mr' ? 'एकत्रित व्हॉट्सॲप पाठवा' : 'Send Bulk WhatsApp'}
+                       </button>
+                     )}
                   </div>
 
                   <div className="customer-bars-list">
@@ -2184,27 +2427,22 @@ export default function App() {
                         displayedDeposited = Math.max(0, (c.deposited || 0) - elapsedCycles * c.amount);
                       }
                       
-                      // 6-day grace period logic for Dine-in & Tiffin
-                      let isNameRed = false;
-                      if (hasDues && c.category !== 'shortterm' && c.status !== 'old') {
-                        const daysPerCycle = PLAN_DAYS[c.plan] || 30;
-                        const startDate = parseLocalDate(c.joinDate);
-                        const today = new Date();
-                        const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                        const elapsedTime = todayMidnight - startDate;
-                        const elapsedDays = Math.round(elapsedTime / 86400000);
-                        const currentCycleDays = elapsedDays % daysPerCycle;
-                        if (currentCycleDays >= 6) {
-                          isNameRed = true;
-                        }
-                      }
+                      const warningDays = getDueWarningDays(c);
+                      const isNameRed = warningDays > 0;
                       
                       return (
                         <div key={c.id} className={`customer-bar status-${status} ${hasDues ? 'has-dues' : 'no-dues'}`}>
                         {/* Left: Profile Photo */}
                         <div className="customer-bar-avatar-container">
                           {c.photo ? (
-                            <img src={c.photo} className="customer-bar-avatar" alt={c.name} />
+                            <img 
+                              src={c.photo} 
+                              className="customer-bar-avatar" 
+                              alt={c.name} 
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => setPreviewImage({ url: c.photo, name: c.name })}
+                              title={db.settings.lang === 'mr' ? 'फोटो मोठा करा' : 'Click to zoom'}
+                            />
                           ) : (
                             <div className="customer-bar-avatar-placeholder">
                               {(c.name || 'C').charAt(0).toUpperCase()}
@@ -2221,7 +2459,7 @@ export default function App() {
                               fontWeight: isNameRed ? '800' : '600'
                             }}
                           >
-                            {c.name} {isNameRed && (db.settings.lang === 'mr' ? ' (६ दिवस थकीत!)' : ' (6-Day Dues Warning!)')}
+                            {c.name} {isNameRed && (db.settings.lang === 'mr' ? ` (${warningDays} दिवस थकीत!)` : ` (Due pending for ${warningDays} days)`)}
                           </div>
                           <div className="customer-bar-subinfo">📞 {c.phone}</div>
                           {c.addr && <div className="customer-bar-subinfo">📍 {c.addr}</div>}
@@ -2297,8 +2535,28 @@ export default function App() {
                                 onClick={() => openPayModal(c)}
                                 style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
                               >
-                                <DollarSign size={12} style={{ marginRight: '2px' }} />
+                                <span style={{ marginRight: '2px', fontSize: '14px', fontWeight: '700' }}>₹</span>
                                 {db.settings.lang === 'mr' ? 'भरा' : 'Pay'}
+                              </button>
+                            )}
+                            {hasDues && c.status !== 'old' && (
+                              <button
+                                className="btn btn-sm btn-success"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const template = db.settings.whatsappDuesTemplate || 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]';
+                                  const formattedMsg = template
+                                    .replace(/https?:\/\/\s*\[UpiLink\]/gi, '[UpiLink]')
+                                    .replace(/\[Name\]/g, c.name)
+                                    .replace(/\[Dues\]/g, remaining)
+                                    .replace(/\[MessName\]/g, db.settings.messName || 'Lokmanya Mess')
+                                    .replace(/\[UpiLink\]/g, getUpiRedirectUrl(remaining));
+                                  window.open(getWhatsAppShareUrl(c.phone, formattedMsg), 'whatsapp_share_tab');
+                                }}
+                                style={{ height: '32px', padding: '0 10px', fontSize: '12px', backgroundColor: '#22c55e', borderColor: '#22c55e', color: '#fff' }}
+                                title="Send Dues Reminder via WhatsApp"
+                              >
+                                💬 {db.settings.lang === 'mr' ? 'व्हाट्सएप' : 'WhatsApp'}
                               </button>
                             )}
                             <button
@@ -2371,7 +2629,7 @@ export default function App() {
               </div>
 
               {/* Main Content Layout */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
                 {/* Left Panel: Detailed Transactions List */}
                 <div className="card-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2386,10 +2644,10 @@ export default function App() {
                         {db.settings.lang === 'mr' ? 'आज' : 'Today'}
                       </button>
                       <button 
-                        className={`btn btn-sm ${collectionFilter === '15days' ? 'btn-primary' : ''}`}
-                        onClick={() => setCollectionFilter('15days')}
+                        className={`btn btn-sm ${collectionFilter === 'custom' ? 'btn-primary' : ''}`}
+                        onClick={() => setCollectionFilter('custom')}
                       >
-                        {db.settings.lang === 'mr' ? '१५ दिवस' : '15 Days'}
+                        {db.settings.lang === 'mr' ? 'तारीख निवडा' : 'Date Range'}
                       </button>
                       <button 
                         className={`btn btn-sm ${collectionFilter === 'month' ? 'btn-primary' : ''}`}
@@ -2399,6 +2657,39 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+
+                  {collectionFilter === 'custom' && (
+                    <div className="date-picker-row" style={{ display: 'flex', gap: '12px', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center', backgroundColor: 'var(--primary-light)', borderRadius: '8px', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>
+                          {db.settings.lang === 'mr' ? 'पासून:' : 'From:'}
+                        </span>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={colStartDate}
+                          min={todayStr().slice(0, 7) + '-01'}
+                          max={todayStr()}
+                          onChange={(e) => setColStartDate(e.target.value)}
+                          style={{ padding: '4px 8px', fontSize: '13px', width: '130px', height: '30px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>
+                          {db.settings.lang === 'mr' ? 'पर्यंत:' : 'To:'}
+                        </span>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={colEndDate}
+                          min={todayStr().slice(0, 7) + '-01'}
+                          max={todayStr()}
+                          onChange={(e) => setColEndDate(e.target.value)}
+                          style={{ padding: '4px 8px', fontSize: '13px', width: '130px', height: '30px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Transactions List */}
                   <div style={{ flex: 1, maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', backgroundColor: '#f8f9fc' }}>
@@ -2449,12 +2740,11 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Right Panel: Daily Collections */}
                 <div className="card-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <h3 className="section-title">
-                    📅 {db.settings.lang === 'mr' ? 'दैनिक संकलन रिपोर्ट' : 'Daily Collections'}
+                    📅 {db.settings.lang === 'mr' ? 'दैनिक जमा वर्गीकरण' : 'Daily Collection Grouping'}
                   </h3>
-                  <div style={{ flex: 1, maxHeight: '480px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ flex: 1, maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px', backgroundColor: '#f8f9fc', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {dailyCollections.map(day => (
                       <div key={day.date} style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
@@ -2648,16 +2938,10 @@ export default function App() {
                         {db.settings.lang === 'mr' ? 'आज' : 'Today'}
                       </button>
                       <button 
-                        className={`btn btn-sm ${expenseFilter === '2days' ? 'btn-primary' : ''}`}
-                        onClick={() => setExpenseFilter('2days')}
+                        className={`btn btn-sm ${expenseFilter === 'custom' ? 'btn-primary' : ''}`}
+                        onClick={() => setExpenseFilter('custom')}
                       >
-                        {db.settings.lang === 'mr' ? '२ दिवस' : '2 Days'}
-                      </button>
-                      <button 
-                        className={`btn btn-sm ${expenseFilter === '15days' ? 'btn-primary' : ''}`}
-                        onClick={() => setExpenseFilter('15days')}
-                      >
-                        {db.settings.lang === 'mr' ? '१५ दिवस' : '15 Days'}
+                        {db.settings.lang === 'mr' ? 'तारीख निवडा' : 'Date Range'}
                       </button>
                       <button 
                         className={`btn btn-sm ${expenseFilter === 'month' ? 'btn-primary' : ''}`}
@@ -2667,6 +2951,39 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+
+                  {expenseFilter === 'custom' && (
+                    <div className="date-picker-row" style={{ display: 'flex', gap: '12px', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center', backgroundColor: 'var(--primary-light)', borderRadius: '8px', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>
+                          {db.settings.lang === 'mr' ? 'पासून:' : 'From:'}
+                        </span>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={expStartDate}
+                          min={todayStr().slice(0, 7) + '-01'}
+                          max={todayStr()}
+                          onChange={(e) => setExpStartDate(e.target.value)}
+                          style={{ padding: '4px 8px', fontSize: '13px', width: '130px', height: '30px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>
+                          {db.settings.lang === 'mr' ? 'पर्यंत:' : 'To:'}
+                        </span>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={expEndDate}
+                          min={todayStr().slice(0, 7) + '-01'}
+                          max={todayStr()}
+                          onChange={(e) => setExpEndDate(e.target.value)}
+                          style={{ padding: '4px 8px', fontSize: '13px', width: '130px', height: '30px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Filtered Expenses List */}
                   <div style={{ flex: 1, maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', backgroundColor: '#f8f9fc' }}>
@@ -2802,9 +3119,6 @@ export default function App() {
             </div>
           )}
 
-
-
-          {/* SETTINGS TAB */}
           {currentTab === 'settings' && (
             <div className="tab-panel animate-fade">
               <div className="card-section">
@@ -2812,214 +3126,351 @@ export default function App() {
                   <span className="section-title">{t('systemSettings')}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label className="form-label">{t('messName')}</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        value={messNameInput}
-                        onChange={(e) => setMessNameInput(e.target.value)}
-                        onBlur={() => saveDb({ ...db, settings: { ...db.settings, messName: messNameInput } })}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">{t('ownerName')}</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        value={ownerNameInput}
-                        onChange={(e) => setOwnerNameInput(e.target.value)}
-                        onBlur={() => saveDb({ ...db, settings: { ...db.settings, ownerName: ownerNameInput } })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group" style={{ maxWidth: '50%' }}>
-                      <label className="form-label">{t('langPreference')}</label>
-                      <select
-                        className="form-select"
-                        value={db.settings.lang || 'en'}
-                        onChange={(e) => saveDb({ ...db, settings: { ...db.settings, lang: e.target.value } })}
-                      >
-                        <option value="en">English</option>
-                        <option value="mr">मराठी (Marathi)</option>
-                      </select>
-                    </div>
-                    
-                    <div className="form-group" style={{ maxWidth: '50%' }}>
-                      <label className="form-label">{db.settings.lang === 'mr' ? 'या कॉम्प्युटरसाठी कार्यरत शाखा' : 'Active Branch for this Laptop'}</label>
-                      <select
-                        className="form-select"
-                        value={activeBranch}
-                        onChange={(e) => {
-                          setActiveBranch(e.target.value);
-                          localStorage.setItem('lokmanya_active_branch', e.target.value);
-                          showToast(db.settings.lang === 'mr' ? 'शाखा बदलली!' : 'Active branch updated!', 'success');
-                        }}
-                      >
-                        <option value="Branch 1">Branch 1 (Mess 1)</option>
-                        <option value="Branch 2">Branch 2 (Mess 2)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
-
-                  <div className="form-group" style={{ maxWidth: '50%' }}>
-                    <label className="form-label">{t('ownerPin')}</label>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <div style={{ position: 'relative', flex: 1 }}>
-                        <input
-                          type={showSettingsPin ? "text" : "password"}
-                          className="form-input"
-                          maxLength="6"
-                          placeholder="••••••"
-                          value={newPinInput}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/\D/g, '');
-                            setNewPinInput(val);
-                          }}
-                          style={{ width: '100%', paddingRight: '40px' }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowSettingsPin(!showSettingsPin)}
-                          style={{
-                            position: 'absolute',
-                            right: '12px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'var(--text-secondary)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 0
-                          }}
+                  {role !== 'owner' ? (
+                    /* Simplified view for branch staff - language preference only */
+                    <div className="form-row">
+                      <div className="form-group" style={{ maxWidth: '50%' }}>
+                        <label className="form-label">{t('langPreference')}</label>
+                        <select
+                          className="form-select"
+                          value={db.settings.lang || 'en'}
+                          onChange={(e) => saveDb({ ...db, settings: { ...db.settings, lang: e.target.value } })}
                         >
-                          {showSettingsPin ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => {
-                          if (newPinInput.length !== 6) {
-                            showToast(db.settings.lang === 'mr' ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
-                            return;
-                          }
-                          saveDb({ ...db, settings: { ...db.settings, ownerPin: newPinInput } });
-                          showToast(db.settings.lang === 'mr' ? 'पिन यशस्वीरित्या बदलला आणि जतन केला!' : 'PIN changed and saved successfully!', 'success');
-                        }}
-                      >
-                        {db.settings.lang === 'mr' ? 'पिन जतन करा' : 'Save PIN'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
-                  
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: '700', fontSize: '15px' }}>
-                      {db.settings.lang === 'mr' ? 'जुने ग्राहक आर्काइव्ह संकेतशब्द सेटिंग्ज' : 'Old Customers Archive Passcode settings'}
-                    </label>
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
-                      <div style={{ flex: 1, minWidth: '180px' }}>
-                        <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'डेव्हलपर मास्टर की' : 'Developer Master Key'}</label>
-                        <input
-                          type="password"
-                          className="form-input"
-                          placeholder="Developer Key"
-                          value={devKeyInput}
-                          onChange={(e) => setDevKeyInput(e.target.value)}
-                        />
-                      </div>
-                      <div style={{ flex: 1, minWidth: '180px' }}>
-                        <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}</label>
-                        <input
-                          type="password"
-                          className="form-input"
-                          maxLength="6"
-                          placeholder="New Passcode"
-                          value={newArchivePinInput}
-                          onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
-                        />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => {
-                            if (devKeyInput !== 'LKMESSDEV2026') {
-                              showToast(db.settings.lang === 'mr' ? 'चुकीची डेव्हलपर मास्टर की!' : 'Invalid Developer Master Key!', 'error');
-                              return;
-                            }
-                            if (newArchivePinInput.length < 4) {
-                              showToast(db.settings.lang === 'mr' ? 'पासवर्ड किमान ४ अंकी असावा!' : 'Password must be at least 4 digits!', 'error');
-                              return;
-                            }
-                            saveDb({ ...db, settings: { ...db.settings, archivePassword: newArchivePinInput } });
-                            setDevKeyInput('');
-                            setNewArchivePinInput('');
-                            showToast(db.settings.lang === 'mr' ? 'आर्काइव्ह पासवर्ड यशस्वीरित्या बदलला!' : 'Archive passcode updated successfully!', 'success');
-                          }}
-                        >
-                          {db.settings.lang === 'mr' ? 'अपडेट करा' : 'Update Passcode'}
-                        </button>
+                          <option value="en">English</option>
+                          <option value="mr">मराठी (Marathi)</option>
+                        </select>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Full view for owner */
+                    <>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label className="form-label">{t('messName')}</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={messNameInput}
+                            onChange={(e) => setMessNameInput(e.target.value)}
+                            onBlur={() => saveDb({ ...db, settings: { ...db.settings, messName: messNameInput } })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">{t('ownerName')}</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={ownerNameInput}
+                            onChange={(e) => setOwnerNameInput(e.target.value)}
+                            onBlur={() => saveDb({ ...db, settings: { ...db.settings, ownerName: ownerNameInput } })}
+                          />
+                        </div>
+                      </div>
 
-                  <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label className="form-label">{db.settings.lang === 'mr' ? 'मालकाचा UPI आयडी (उदा. name@upi)' : 'Owner UPI ID (e.g. name@upi)'}</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={db.settings.upiId || ''}
+                            onChange={(e) => saveDb({ ...db, settings: { ...db.settings, upiId: e.target.value.trim() } })}
+                            placeholder="Enter UPI VPA ID"
+                            style={{ WebkitUserSelect: 'text', userSelect: 'text' }}
+                          />
+                        </div>
+                      </div>
 
-                  <div>
-                    <label className="form-label">Local Data & Backups</label>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                      <button className="btn" onClick={() => {
-                        const dbString = JSON.stringify(db, null, 2);
-                        const blob = new Blob([dbString], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const link = document.createElement("a");
-                        link.setAttribute("href", url);
-                        link.setAttribute("download", `lokmanya_db_backup_${todayStr()}.json`);
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      }}>
-                        Download DB Backup file
-                      </button>
-                      <label className="btn" style={{ cursor: 'pointer' }}>
-                        Import DB Backup file
-                        <input
-                          type="file"
-                          accept=".json"
-                          style={{ display: 'none' }}
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (!file) return;
-                            const reader = new FileReader();
-                            reader.onload = async (evt) => {
-                              try {
-                                const parsed = JSON.parse(evt.target.result);
-                                if (parsed.customers && parsed.settings) {
-                                  await saveDb(parsed);
-                                  alert('Database imported successfully!');
-                                  window.location.reload();
-                                } else {
-                                  alert('Invalid database backup file format.');
+                      <div className="form-row">
+                        <div className="form-group" style={{ maxWidth: '50%' }}>
+                          <label className="form-label">{t('langPreference')}</label>
+                          <select
+                            className="form-select"
+                            value={db.settings.lang || 'en'}
+                            onChange={(e) => saveDb({ ...db, settings: { ...db.settings, lang: e.target.value } })}
+                          >
+                            <option value="en">English</option>
+                            <option value="mr">मराठी (Marathi)</option>
+                          </select>
+                        </div>
+                        
+                        <div className="form-group" style={{ maxWidth: '50%' }}>
+                          <label className="form-label">{db.settings.lang === 'mr' ? 'या कॉम्प्युटरसाठी कार्यरत शाखा' : 'Active Branch for this Laptop'}</label>
+                          <select
+                            className="form-select"
+                            value={activeBranch}
+                            onChange={(e) => {
+                              setActiveBranch(e.target.value);
+                              localStorage.setItem('lokmanya_active_branch', e.target.value);
+                              showToast(db.settings.lang === 'mr' ? 'शाखा बदलली!' : 'Active branch updated!', 'success');
+                            }}
+                          >
+                            <option value="Branch 1">Branch 1 (Mess 1)</option>
+                            <option value="Branch 2">Branch 2 (Mess 2)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
+
+                      {/* WhatsApp Message Templates Section */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <h3 className="section-title" style={{ fontSize: '15px', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          💬 {db.settings.lang === 'mr' ? 'व्हॉट्सॲप मेसेज साचे (Templates)' : 'WhatsApp Message Templates'}
+                        </h3>
+
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label className="form-label">{db.settings.lang === 'mr' ? 'पेमेंट पावती मेसेज साचा' : 'Payment Receipt Template'}</label>
+                            <textarea
+                              className="form-input"
+                              rows="2"
+                              value={db.settings.whatsappReceiptTemplate || 'Dear [Name], we received your payment of ₹[Amount] on [Date]. Thank you! - [MessName]'}
+                              onChange={(e) => saveDb({ ...db, settings: { ...db.settings, whatsappReceiptTemplate: e.target.value } })}
+                              style={{ resize: 'vertical', fontSize: '13px', WebkitUserSelect: 'text', userSelect: 'text', height: '60px' }}
+                            />
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                              Placeholder tokens: <code>[Name]</code>, <code>[Amount]</code>, <code>[Date]</code>, <code>[MessName]</code>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label className="form-label">{db.settings.lang === 'mr' ? 'थकीत रक्कम आठवण मेसेज साचा' : 'Dues Reminder Template'}</label>
+                            <textarea
+                              className="form-input"
+                              rows="2"
+                              value={db.settings.whatsappDuesTemplate || 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]'}
+                              onChange={(e) => saveDb({ ...db, settings: { ...db.settings, whatsappDuesTemplate: e.target.value } })}
+                              style={{ resize: 'vertical', fontSize: '13px', WebkitUserSelect: 'text', userSelect: 'text', height: '60px' }}
+                            />
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                              Placeholder tokens: <code>[Name]</code>, <code>[Dues]</code>, <code>[UpiLink]</code>, <code>[MessName]</code>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
+
+                      {/* PIN Settings Row */}
+                      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                        {/* Owner Admin PIN */}
+                        <div className="form-group" style={{ flex: 1, minWidth: '220px' }}>
+                          <label className="form-label">{t('ownerPin')}</label>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                              <input
+                                type={showSettingsPin ? "text" : "password"}
+                                className="form-input"
+                                maxLength="6"
+                                placeholder="••••••"
+                                value={newPinInput}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '');
+                                  setNewPinInput(val);
+                                }}
+                                style={{ width: '100%', paddingRight: '40px' }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowSettingsPin(!showSettingsPin)}
+                                style={{
+                                  position: 'absolute',
+                                  right: '12px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: 'var(--text-secondary)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0
+                                }}
+                              >
+                                {showSettingsPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => {
+                                if (newPinInput.length !== 6) {
+                                  showToast(db.settings.lang === 'mr' ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
+                                  return;
                                 }
-                              } catch (err) {
-                                alert('Error reading file: ' + err.message);
-                              }
-                            };
-                            reader.readAsText(file);
-                          }}
-                        />
-                      </label>
-                    </div>
-                  </div>
+                                saveDb({ ...db, settings: { ...db.settings, ownerPin: newPinInput } });
+                                showToast(db.settings.lang === 'mr' ? 'पिन यशस्वीरित्या बदलला आणि जतन केला!' : 'PIN changed and saved successfully!', 'success');
+                              }}
+                            >
+                              {db.settings.lang === 'mr' ? 'जतन करा' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Branch 1 Staff PIN */}
+                        <div className="form-group" style={{ flex: 1, minWidth: '220px' }}>
+                          <label className="form-label">{db.settings.lang === 'mr' ? 'शाखा १ लॉगिन पिन' : 'Branch 1 Login PIN'}</label>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input
+                              type="password"
+                              className="form-input"
+                              maxLength="6"
+                              placeholder="••••••"
+                              value={newBranch1PinInput}
+                              onChange={(e) => setNewBranch1PinInput(e.target.value.replace(/\D/g, ''))}
+                              style={{ flex: 1 }}
+                            />
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => {
+                                if (newBranch1PinInput.length !== 6) {
+                                  showToast(db.settings.lang === 'mr' ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
+                                  return;
+                                }
+                                saveDb({ ...db, settings: { ...db.settings, branch1Pin: newBranch1PinInput } });
+                                showToast(db.settings.lang === 'mr' ? 'शाखा १ पिन जतन केला!' : 'Branch 1 PIN saved successfully!', 'success');
+                              }}
+                            >
+                              {db.settings.lang === 'mr' ? 'जतन करा' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Branch 2 Staff PIN */}
+                        <div className="form-group" style={{ flex: 1, minWidth: '220px' }}>
+                          <label className="form-label">{db.settings.lang === 'mr' ? 'शाखा २ लॉगिन पिन' : 'Branch 2 Login PIN'}</label>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input
+                              type="password"
+                              className="form-input"
+                              maxLength="6"
+                              placeholder="••••••"
+                              value={newBranch2PinInput}
+                              onChange={(e) => setNewBranch2PinInput(e.target.value.replace(/\D/g, ''))}
+                              style={{ flex: 1 }}
+                            />
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => {
+                                if (newBranch2PinInput.length !== 6) {
+                                  showToast(db.settings.lang === 'mr' ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
+                                  return;
+                                }
+                                saveDb({ ...db, settings: { ...db.settings, branch2Pin: newBranch2PinInput } });
+                                showToast(db.settings.lang === 'mr' ? 'शाखा २ पिन जतन केला!' : 'Branch 2 PIN saved successfully!', 'success');
+                              }}
+                            >
+                              {db.settings.lang === 'mr' ? 'जतन करा' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
+                      
+                      <div className="form-group">
+                        <label className="form-label" style={{ fontWeight: '700', fontSize: '15px' }}>
+                          {db.settings.lang === 'mr' ? 'जुने ग्राहक आर्काइव्ह संकेतशब्द सेटिंग्ज' : 'Old Customers Archive Passcode settings'}
+                        </label>
+                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
+                          <div style={{ flex: 1, minWidth: '180px' }}>
+                            <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'डेव्हलपर मास्टर की' : 'Developer Master Key'}</label>
+                            <input
+                              type="password"
+                              className="form-input"
+                              placeholder="Developer Key"
+                              value={devKeyInput}
+                              onChange={(e) => setDevKeyInput(e.target.value)}
+                            />
+                          </div>
+                          <div style={{ flex: 1, minWidth: '180px' }}>
+                            <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}</label>
+                            <input
+                              type="password"
+                              className="form-input"
+                              maxLength="6"
+                              placeholder="New Passcode"
+                              value={newArchivePinInput}
+                              onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => {
+                                if (devKeyInput !== 'LKMESSDEV2026') {
+                                  showToast(db.settings.lang === 'mr' ? 'चुकीची डेव्हलपर मास्टर की!' : 'Invalid Developer Master Key!', 'error');
+                                  return;
+                                }
+                                if (newArchivePinInput.length < 4) {
+                                  showToast(db.settings.lang === 'mr' ? 'पासवर्ड किमान ४ अंकी असावा!' : 'Password must be at least 4 digits!', 'error');
+                                  return;
+                                }
+                                saveDb({ ...db, settings: { ...db.settings, archivePassword: newArchivePinInput } });
+                                setDevKeyInput('');
+                                setNewArchivePinInput('');
+                                showToast(db.settings.lang === 'mr' ? 'आर्काइव्ह पासवर्ड यशस्वीरित्या बदलला!' : 'Archive passcode updated successfully!', 'success');
+                              }}
+                            >
+                              {db.settings.lang === 'mr' ? 'अपडेट करा' : 'Update Passcode'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
+
+                      <div>
+                        <label className="form-label">Local Data & Backups</label>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                          <button className="btn" onClick={() => {
+                            const dbString = JSON.stringify(db, null, 2);
+                            const blob = new Blob([dbString], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.setAttribute("href", url);
+                            link.setAttribute("download", `lokmanya_db_backup_${todayStr()}.json`);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}>
+                            Download DB Backup file
+                          </button>
+                          <label className="btn" style={{ cursor: 'pointer' }}>
+                            Import DB Backup file
+                            <input
+                              type="file"
+                              accept=".json"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = async (evt) => {
+                                  try {
+                                    const parsed = JSON.parse(evt.target.result);
+                                    if (parsed.customers && parsed.settings) {
+                                      await saveDb(parsed);
+                                      alert('Database imported successfully!');
+                                      window.location.reload();
+                                    } else {
+                                      alert('Invalid database backup file format.');
+                                    }
+                                  } catch (err) {
+                                    alert('Error reading file: ' + err.message);
+                                  }
+                                };
+                                reader.readAsText(file);
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -3098,7 +3549,7 @@ export default function App() {
                 <button type="button" className="btn" onClick={() => setPayModalCustomer(null)}>
                   {db.settings.lang === 'mr' ? 'रद्द करा' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className="btn btn-success">
                   {db.settings.lang === 'mr' ? 'नोंदवा' : 'Record'}
                 </button>
               </div>
@@ -3266,9 +3717,14 @@ export default function App() {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. +919876543210"
+                    placeholder="e.g. 9876543210"
                     value={custForm.phone}
-                    onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })}
+                    inputMode="numeric"
+                    maxLength="10"
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setCustForm({ ...custForm, phone: digitsOnly });
+                    }}
                   />
                 </div>
                 <div className="form-group">
@@ -3400,6 +3856,261 @@ export default function App() {
         </div>
       )}
 
+
+      {/* PROFILE IMAGE PREVIEW OVERLAY */}
+      {previewImage && (
+        <div 
+          className="image-preview-overlay"
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(0,0,0,0.75)', 
+            zIndex: 3000, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backdropFilter: 'blur(5px)',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div 
+            style={{ 
+              position: 'relative', 
+              background: 'var(--card)', 
+              padding: '16px', 
+              borderRadius: '16px', 
+              boxShadow: 'var(--shadow-lg)', 
+              maxWidth: '90%', 
+              width: '420px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              animation: 'zoomIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              border: '1px solid rgba(255,255,255,0.1)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setPreviewImage(null)}
+              style={{
+                position: 'absolute',
+                top: '-16px',
+                right: '-16px',
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: 'var(--card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-md)',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                zIndex: 10
+              }}
+            >
+              ✕
+            </button>
+            <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#f0f0f0', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '1px solid var(--border)' }}>
+              <img 
+                src={previewImage.url} 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                alt={previewImage.name} 
+              />
+            </div>
+            <div style={{ marginTop: '14px', fontSize: '16px', fontWeight: '700', color: 'var(--text)', textAlign: 'center' }}>
+              {previewImage.name}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TRANSACTION RECEIPT MODAL */}
+      {receiptModalCustomer && receiptModalTxn && (
+        <div className="modal-overlay" style={{ zIndex: 2500 }}>
+          <div className="modal-card" style={{ maxWidth: '420px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--success)' }}>
+                ✓ {db.settings.lang === 'mr' ? 'पेमेंट नोंदवले गेले!' : 'Payment Receipt'}
+              </span>
+              <X className="modal-close" onClick={() => { setReceiptModalCustomer(null); setReceiptModalTxn(null); }} />
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '10px' }}>
+              <div style={{ backgroundColor: 'var(--success-light)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.5px' }}>
+                  {db.settings.lang === 'mr' ? 'प्राप्त रक्कम' : 'Amount Received'}
+                </span>
+                <span style={{ fontSize: '32px', fontWeight: '900', color: 'var(--success)', display: 'block', marginTop: '4px' }}>
+                  ₹{receiptModalTxn.amount}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'ग्राहक:' : 'Customer:'}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalCustomer.name}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'तारीख:' : 'Date:'}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalTxn.date}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'पेमेंट पद्धत:' : 'Payment Mode:'}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalTxn.paymentMode}</span>
+                </div>
+                {receiptModalTxn.note && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'टीप:' : 'Note:'}</span>
+                    <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalTxn.note}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons for Sharing */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    const template = db.settings.whatsappReceiptTemplate || 'Dear [Name], we received your payment of ₹[Amount] on [Date]. Thank you! - [MessName]';
+                    const formattedMsg = template
+                      .replace(/\[Name\]/g, receiptModalCustomer.name)
+                      .replace(/\[Amount\]/g, receiptModalTxn.amount)
+                      .replace(/\[Date\]/g, receiptModalTxn.date)
+                      .replace(/\[MessName\]/g, db.settings.messName || 'Lokmanya Mess');
+                    window.open(getWhatsAppShareUrl(receiptModalCustomer.phone, formattedMsg), 'whatsapp_share_tab');
+                  }}
+                  style={{ backgroundColor: '#22c55e', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '700', padding: '12px', borderRadius: '8px', cursor: 'pointer', width: '100%' }}
+                >
+                  💬 {db.settings.lang === 'mr' ? 'व्हॉट्सॲपवर पावती पाठवा' : 'Send WhatsApp Receipt'}
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ borderTop: 'none', paddingTop: 0 }}>
+              <button type="button" className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setReceiptModalCustomer(null); setReceiptModalTxn(null); }}>
+                {db.settings.lang === 'mr' ? 'बंद करा' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WHATSAPP BULK DUES ASSISTANT MODAL */}
+      {showBulkSmsModal && (
+        <div className="modal-overlay" style={{ zIndex: 2500 }}>
+          <div className="modal-card" style={{ maxWidth: '500px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                💬 {db.settings.lang === 'mr' ? 'व्हॉट्सॲप थकीत रक्कम सहाय्यक' : 'WhatsApp Dues Assistant'}
+              </span>
+              <X className="modal-close" onClick={() => setShowBulkSmsModal(false)} />
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Target Branch & Category info */}
+              <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', fontSize: '13px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'शाखा:' : 'Target Branch:'}</span>
+                  <span style={{ fontWeight: '700', color: 'var(--text)' }}>{activeBranch}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'ग्राहक गट (Category):' : 'Target Category:'}</span>
+                  <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
+                    {currentTab === 'tiffin' 
+                      ? (db.settings.lang === 'mr' ? 'टिफिन डिलीव्हरी' : 'Tiffin Delivery')
+                      : currentTab === 'shortterm'
+                      ? (db.settings.lang === 'mr' ? 'अल्पमुदतीचे ग्राहक' : 'Short-Term Members')
+                      : (db.settings.lang === 'mr' ? 'डाईन-इन ग्राहक' : 'Dine-in Members')}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'एकूण थकीत ग्राहक:' : 'Total Due Customers:'}</span>
+                  <span style={{ fontWeight: '700', color: 'var(--danger)' }}>
+                    {getBulkDueCustomers().length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Scrollable list of due customers to message */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)' }}>
+                  {db.settings.lang === 'mr' ? 'थकीत ग्राहक यादी (क्लिक करून पाठवा):' : 'Due Customers (Click to send):'}
+                </span>
+                
+                <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', backgroundColor: 'var(--bg)' }}>
+                  {getBulkDueCustomers().map(c => {
+                    const remaining = getCustomerDues(c);
+                    const isSent = sentCustomers.includes(c.id);
+                    return (
+                      <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid var(--border)', borderRadius: '6px', backgroundColor: isSent ? '#f1f5f9' : '#fff' }}>
+                        <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
+                          <div style={{ fontWeight: '700', fontSize: '13px', color: isSent ? 'var(--text-secondary)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📱 {c.phone} | Dues: <span style={{ fontWeight: '700', color: 'var(--danger)' }}>₹{remaining}</span></div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => {
+                            const template = db.settings.whatsappDuesTemplate || 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]';
+                            const formattedMsg = template
+                              .replace(/https?:\/\/\s*\[UpiLink\]/gi, '[UpiLink]')
+                              .replace(/\[Name\]/g, c.name)
+                              .replace(/\[Dues\]/g, remaining)
+                              .replace(/\[MessName\]/g, db.settings.messName || 'Lokmanya Mess')
+                              .replace(/\[UpiLink\]/g, getUpiRedirectUrl(remaining));
+                            
+                            window.open(getWhatsAppShareUrl(c.phone, formattedMsg), 'whatsapp_share_tab');
+                            setSentCustomers(prev => [...prev, c.id]);
+                          }}
+                          style={{ 
+                            height: '28px', 
+                            padding: '0 8px', 
+                            fontSize: '11px', 
+                            backgroundColor: isSent ? '#94a3b8' : '#22c55e', 
+                            borderColor: isSent ? '#94a3b8' : '#22c55e', 
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isSent ? '✓ Sent' : '💬 Send'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {getBulkDueCustomers().length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                      🎉 {db.settings.lang === 'mr' ? 'कोणतीही प्रलंबित देणी नाहीत!' : 'No pending dues found!'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Help tip */}
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                ℹ️ {db.settings.lang === 'mr' ? 'टिप: हे बटन दाबल्यावर त्या ग्राहकाचे चॅट उघडेल आणि मेसेजमध्ये रक्कम व UPI पेमेंट लिंक ऑटो-फिल होईल.' : 'Tip: Clicking Send opens WhatsApp with their custom amount and UPI payment link pre-filled.'}
+              </div>
+
+            </div>
+            <div className="modal-footer">
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                style={{ width: '100%' }}
+                onClick={() => setShowBulkSmsModal(false)}
+              >
+                {db.settings.lang === 'mr' ? 'बंद करा' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TOAST NOTIFICATION CONTAINER FOR MAIN APP */}
       {toast && (

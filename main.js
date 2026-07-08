@@ -33,6 +33,14 @@ function createWindow() {
     }
   });
 
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      require('electron').shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
   mainWindow.maximize();
   mainWindow.show();
   mainWindow.setMenuBarVisibility(false);
