@@ -1007,7 +1007,7 @@ export default function App() {
   const getUpiRedirectUrl = (amount) => {
     const upiId = db.settings.upiId || 'lokmanya@upi';
     const pn = encodeURIComponent(db.settings.messName || 'Lokmanya Mess');
-    return `https://atharva-kharapkar.github.io/LokmanyaMess/pay/index.html?pa=${upiId}&pn=${pn}&am=${amount}&tn=Mess%20Dues`;
+    return `https://atharva-kharapkar.github.io/LokmanyaMess/public/pay/index.html?pa=${upiId}&pn=${pn}&am=${amount}&tn=Mess%20Dues`;
   };
 
   const getBulkDueCount = () => {
