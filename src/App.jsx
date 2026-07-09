@@ -20,9 +20,7 @@ import {
   EyeOff,
   RotateCcw,
   Coins,
-  TrendingUp,
-  Menu,
-  ChevronLeft
+  TrendingUp
 } from 'lucide-react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, query, limit } from 'firebase/firestore';
 import { db as firestoreDb } from './firebase';
@@ -46,6 +44,57 @@ const toLocalYYYYMMDD = (d) => {
 };
 
 const PLAN_DAYS = { Monthly: 30, Weekly: 7, Daily: 1, Custom: 30 };
+const PIN_LENGTH = 6;
+const ARCHIVE_PIN_MIN_LENGTH = 4;
+const ARCHIVE_PIN_MAX_LENGTH = 6;
+
+const normalizeText = (value) => String(value ?? '').trim().replace(/\s+/g, ' ');
+const isBlank = (value) => normalizeText(value).length === 0;
+const isExactDigits = (value, length) => new RegExp(`^\\d{${length}}$`).test(String(value ?? ''));
+const isArchivePinValid = (value) => /^\d{4,6}$/.test(String(value ?? ''));
+const toAmountNumber = (value) => Number(String(value ?? '').trim());
+
+async function hashSecret(secret) {
+  const normalized = String(secret ?? '');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function secureSettings(inputSettings = {}) {
+  const nextSettings = { ...inputSettings };
+  const secretFields = [
+    ['ownerPin', 'ownerPinHash', (value) => isExactDigits(value, PIN_LENGTH)],
+    ['branch1Pin', 'branch1PinHash', (value) => isExactDigits(value, PIN_LENGTH)],
+    ['branch2Pin', 'branch2PinHash', (value) => isExactDigits(value, PIN_LENGTH)],
+    ['archivePassword', 'archivePasswordHash', isArchivePinValid],
+  ];
+
+  for (const [legacyKey, hashKey, validator] of secretFields) {
+    const rawValue = nextSettings[legacyKey];
+    if (validator(rawValue)) {
+      nextSettings[hashKey] = await hashSecret(rawValue);
+    }
+    delete nextSettings[legacyKey];
+  }
+
+  return nextSettings;
+}
+
+function hasLegacySecrets(settings = {}) {
+  return ['ownerPin', 'branch1Pin', 'branch2Pin', 'archivePassword'].some((key) => Boolean(settings[key]));
+}
+
+async function matchesSecret(candidate, storedHash, expectedLength) {
+  if (!isExactDigits(candidate, expectedLength)) return false;
+  if (!storedHash) return false;
+  return (await hashSecret(candidate)) === storedHash;
+}
+
+async function matchesArchiveSecret(candidate, storedHash) {
+  if (!isArchivePinValid(candidate)) return false;
+  if (!storedHash) return false;
+  return (await hashSecret(candidate)) === storedHash;
+}
 
 function parseLocalDate(dateStr) {
   if (!dateStr) return new Date();
@@ -190,6 +239,7 @@ const TRANSLATIONS = {
     joinDateLabel: "Joining Date *",
     addressLabel: "Address / Room Details",
     addressPlaceholder: "e.g. Room 104, B wing",
+    ownerAddress: "Mess Address",
     cancel: "Cancel",
     saveProfile: "Save Profile",
     takePhoto: "Take Photo",
@@ -278,6 +328,7 @@ const TRANSLATIONS = {
     joinDateLabel: "सुरू झालेली तारीख *",
     addressLabel: "पत्ता / रूम तपशील",
     addressPlaceholder: "उदा. रूम १०४, बी विंग",
+    ownerAddress: "मेसचा पत्ता",
     cancel: "रद्द करा",
     saveProfile: "प्रोफाइल जतन करा",
     takePhoto: "फोटो काढा",
@@ -380,32 +431,21 @@ export default function App() {
     settings: {
       lang: 'en',
       upiId: '',
-      ownerPin: '', // requires initial setup
+      ownerPinHash: '',
       messName: 'Lokmanya Mess',
       ownerName: 'Mess Owner',
-      whatsappReceiptTemplate: 'Dear [Name], we received your payment of ₹[Amount] on [Date]. Thank you! - [MessName]',
-      whatsappDuesTemplate: 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]'
+      ownerAddress: ''
     }
   });
-
-  // Authentication & Screen states
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('lokmanya_remember_pin') === 'true';
-  });
-  const [rememberPin, setRememberPin] = useState(() => {
-    return localStorage.getItem('lokmanya_remember_pin') === 'true';
-  });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [showPinPad, setShowPinPad] = useState(true);
   const [introPlayed, setIntroPlayed] = useState(true);
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [newPinInput, setNewPinInput] = useState('');
   const [showSettingsPin, setShowSettingsPin] = useState(false);
-  const [role, setRole] = useState(() => {
-    return localStorage.getItem('lokmanya_user_role') || 'owner';
-  });
+  const [role, setRole] = useState(null);
   const [newBranch1PinInput, setNewBranch1PinInput] = useState('');
   const [newBranch2PinInput, setNewBranch2PinInput] = useState('');
 
@@ -413,7 +453,8 @@ export default function App() {
   const [previewImage, setPreviewImage] = useState(null);
   const [messNameInput, setMessNameInput] = useState('');
   const [ownerNameInput, setOwnerNameInput] = useState('');
-  const [activeBranch, setActiveBranch] = useState(() => localStorage.getItem('lokmanya_active_branch') || 'Branch 1');
+  const [ownerAddressInput, setOwnerAddressInput] = useState('');
+  const [activeBranch, setActiveBranch] = useState('Branch 1');
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
   const [archivePinInput, setArchivePinInput] = useState('');
   const [devKeyInput, setDevKeyInput] = useState('');
@@ -463,6 +504,70 @@ export default function App() {
     setToast({ message, type });
   }, []);
 
+  const persistDb = useCallback(async (nextDb) => {
+    const securedSettings = await secureSettings(nextDb.settings || {});
+    return { ...nextDb, settings: securedSettings };
+  }, []);
+
+  const saveSettingField = useCallback(async (key, rawValue, options = {}) => {
+    const { required = false, label = key } = options;
+    const cleanedValue = normalizeText(rawValue);
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+
+    if (required && isBlank(cleanedValue)) {
+      showToast(
+        isMarathi ? `${label} रिकामे ठेवता येणार नाही.` : `${label} cannot be blank.`,
+        'error'
+      );
+      return false;
+    }
+
+    await saveDb({
+      ...db,
+      settings: {
+        ...db.settings,
+        [key]: cleanedValue
+      }
+    });
+    return true;
+  }, [db, showToast]);
+
+  const saveArchivePasscodeSetting = useCallback(async (value) => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    if (!isArchivePinValid(value)) {
+      showToast(isMarathi ? 'à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¥ª à¤¤à¥‡ à¥¬ à¤…à¤‚à¤•à¥€ à¤…à¤¸à¤¾à¤µà¤¾.' : 'Passcode must be 4 to 6 digits.', 'error');
+      return false;
+    }
+
+    await saveDb({
+      ...db,
+      settings: {
+        ...db.settings,
+        archivePasswordHash: await hashSecret(value)
+      }
+    });
+    showToast(isMarathi ? 'à¤†à¤°à¥à¤•à¤¾à¤‡à¤µà¥à¤¹ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤¯à¤¶à¤¸à¥à¤µà¥€à¤°à¤¿à¤¤à¥à¤¯à¤¾ à¤¬à¤¦à¤²à¤²à¤¾!' : 'Archive passcode updated successfully!', 'success');
+    return true;
+  }, [db, showToast]);
+
+  const savePinSetting = useCallback(async (hashField, value, successMessage) => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    if (!isExactDigits(value, PIN_LENGTH)) {
+      showToast(isMarathi ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
+      return false;
+    }
+
+    await saveDb({
+      ...db,
+      settings: {
+        ...db.settings,
+        [hashField]: await hashSecret(value)
+      }
+    });
+    showToast(successMessage, 'success');
+    return true;
+  }, [db, showToast]);
+
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => {
@@ -501,7 +606,7 @@ export default function App() {
     if (!settingsLoaded) return;
     if (firstRunPrompted) return;
     if (!db || !db.settings) return;
-    const ownerPin = db.settings.ownerPin;
+    const ownerPin = db.settings.ownerPinHash;
     const requireSetup = db.settings.requireSetup;
     if ((!ownerPin || ownerPin === '') && (requireSetup !== false)) {
       setFirstRunPrompted(true);
@@ -511,13 +616,14 @@ export default function App() {
 
   const handleFirstRunSave = async () => {
     const cleaned = String(firstRunPinInput).replace(/\D/g, '');
-    if (cleaned.length !== 6) {
+    if (!isExactDigits(cleaned, PIN_LENGTH)) {
       setFirstRunPinError('PIN must be exactly 6 digits');
       return;
     }
-    const newSettings = { ...db.settings, ownerPin: cleaned };
+    const newSettings = { ...db.settings, ownerPinHash: await hashSecret(cleaned) };
     if (newSettings.requireSetup) delete newSettings.requireSetup;
     await saveDb({ ...db, settings: newSettings });
+    setFirstRunPinInput('');
     setFirstRunModalVisible(false);
     showToast(db.settings.lang === 'mr' ? 'पिन सेट केला गेला!' : 'Owner PIN set successfully!', 'success');
   };
@@ -566,20 +672,25 @@ export default function App() {
       });
     });
 
-    const unsubSettings = onSnapshot(doc(firestoreDb, 'desktop_config', 'app_settings'), (snapshot) => {
+    const unsubSettings = onSnapshot(doc(firestoreDb, 'desktop_config', 'app_settings'), async (snapshot) => {
       if (snapshot.exists()) {
-        const settingsData = snapshot.data();
+        const rawSettings = snapshot.data();
+        const settingsData = await secureSettings(rawSettings);
         setDb(prev => {
           if (JSON.stringify(prev.settings) === JSON.stringify(settingsData)) return prev;
           return { ...prev, settings: settingsData };
         });
-        setNewPinInput(settingsData.ownerPin || '');
-        setNewBranch1PinInput(settingsData.branch1Pin || '');
-        setNewBranch2PinInput(settingsData.branch2Pin || '');
+        setNewPinInput('');
+        setNewBranch1PinInput('');
+        setNewBranch2PinInput('');
         setMessNameInput(settingsData.messName || 'Lokmanya Mess');
         setOwnerNameInput(settingsData.ownerName || 'Mess Owner');
-        setSettingsLoaded(true);
+        setOwnerAddressInput(settingsData.ownerAddress || '');
+        if (hasLegacySecrets(rawSettings)) {
+          await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), settingsData);
+        }
       }
+      setSettingsLoaded(true);
     });
 
     const unsubExpenses = onSnapshot(collection(firestoreDb, 'desktop_expenses'), (snapshot) => {
@@ -617,7 +728,7 @@ export default function App() {
             console.log('Cloud database is empty. Migrating local records to cloud in the background...');
             // Migrate settings
             if (localData.settings) {
-              await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), localData.settings);
+              await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), await secureSettings(localData.settings));
             }
             // Migrate customers
             for (const c of localData.customers) {
@@ -664,30 +775,31 @@ export default function App() {
   }, []);
 
   const saveDb = async (newDb) => {
+    const sanitizedDb = { ...newDb, settings: await secureSettings(newDb.settings || {}) };
     // 1. Update React state immediately for instant UI responsiveness
     const oldDb = db;
-    setDb(newDb);
+    setDb(sanitizedDb);
 
     // 2. Save local file backup
     if (isElectron) {
-      window.electronAPI.writeDatabase(newDb);
+      window.electronAPI.writeDatabase(sanitizedDb);
     } else {
-      localStorage.setItem('lokmanya_db', JSON.stringify(newDb));
+      localStorage.setItem('lokmanya_db', JSON.stringify(sanitizedDb));
     }
 
     // 3. Write individual differences to Firebase Firestore collections in the background
     try {
       // Sync settings / config
-      if (JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings)) {
-        await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), newDb.settings);
+      if (JSON.stringify(oldDb.settings) !== JSON.stringify(sanitizedDb.settings)) {
+        await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), sanitizedDb.settings);
       }
 
       // Sync customers array
-      if (JSON.stringify(oldDb.customers) !== JSON.stringify(newDb.customers)) {
+      if (JSON.stringify(oldDb.customers) !== JSON.stringify(sanitizedDb.customers)) {
         const oldMap = new Map(oldDb.customers.map(c => [c.id, c]));
-        const newMap = new Map(newDb.customers.map(c => [c.id, c]));
+        const newMap = new Map(sanitizedDb.customers.map(c => [c.id, c]));
         // Add or Update
-        for (const c of newDb.customers) {
+        for (const c of sanitizedDb.customers) {
           const oldC = oldMap.get(c.id);
           if (!oldC || JSON.stringify(oldC) !== JSON.stringify(c)) {
             await setDoc(doc(firestoreDb, 'desktop_customers', c.id), c);
@@ -702,11 +814,11 @@ export default function App() {
       }
 
       // Sync transactions array
-      if (JSON.stringify(oldDb.transactions) !== JSON.stringify(newDb.transactions)) {
+      if (JSON.stringify(oldDb.transactions) !== JSON.stringify(sanitizedDb.transactions)) {
         const oldMap = new Map(oldDb.transactions.map(t => [t.id, t]));
-        const newMap = new Map(newDb.transactions.map(t => [t.id, t]));
+        const newMap = new Map(sanitizedDb.transactions.map(t => [t.id, t]));
         // Add or Update
-        for (const t of newDb.transactions) {
+        for (const t of sanitizedDb.transactions) {
           const oldT = oldMap.get(t.id);
           if (!oldT || JSON.stringify(oldT) !== JSON.stringify(t)) {
             await setDoc(doc(firestoreDb, 'desktop_transactions', t.id), t);
@@ -721,11 +833,11 @@ export default function App() {
       }
 
       // Sync employees array
-      if (JSON.stringify(oldDb.employees) !== JSON.stringify(newDb.employees)) {
+      if (JSON.stringify(oldDb.employees) !== JSON.stringify(sanitizedDb.employees)) {
         const oldMap = new Map(oldDb.employees.map(e => [e.id, e]));
-        const newMap = new Map(newDb.employees.map(e => [e.id, e]));
+        const newMap = new Map(sanitizedDb.employees.map(e => [e.id, e]));
         // Add or Update
-        for (const e of newDb.employees) {
+        for (const e of sanitizedDb.employees) {
           const oldE = oldMap.get(e.id);
           if (!oldE || JSON.stringify(oldE) !== JSON.stringify(e)) {
             await setDoc(doc(firestoreDb, 'desktop_employees', e.id), e);
@@ -740,11 +852,11 @@ export default function App() {
       }
 
       // Sync salaries array
-      if (JSON.stringify(oldDb.salaries) !== JSON.stringify(newDb.salaries)) {
+      if (JSON.stringify(oldDb.salaries) !== JSON.stringify(sanitizedDb.salaries)) {
         const oldMap = new Map(oldDb.salaries.map(s => [s.id, s]));
-        const newMap = new Map(newDb.salaries.map(s => [s.id, s]));
+        const newMap = new Map(sanitizedDb.salaries.map(s => [s.id, s]));
         // Add or Update
-        for (const s of newDb.salaries) {
+        for (const s of sanitizedDb.salaries) {
           const oldS = oldMap.get(s.id);
           if (!oldS || JSON.stringify(oldS) !== JSON.stringify(s)) {
             await setDoc(doc(firestoreDb, 'desktop_salaries', s.id), s);
@@ -759,11 +871,11 @@ export default function App() {
       }
 
       // Sync expenses array
-      if (JSON.stringify(oldDb.expenses) !== JSON.stringify(newDb.expenses)) {
+      if (JSON.stringify(oldDb.expenses) !== JSON.stringify(sanitizedDb.expenses)) {
         const oldMap = new Map((oldDb.expenses || []).map(e => [e.id, e]));
-        const newMap = new Map((newDb.expenses || []).map(e => [e.id, e]));
+        const newMap = new Map((sanitizedDb.expenses || []).map(e => [e.id, e]));
         // Add or Update
-        for (const e of (newDb.expenses || [])) {
+        for (const e of (sanitizedDb.expenses || [])) {
           const oldE = oldMap.get(e.id);
           if (!oldE || JSON.stringify(oldE) !== JSON.stringify(e)) {
             await setDoc(doc(firestoreDb, 'desktop_expenses', e.id), e);
@@ -784,34 +896,33 @@ export default function App() {
 
 
   const handleLogout = () => {
-    localStorage.removeItem('lokmanya_remember_pin');
-    localStorage.removeItem('lokmanya_user_role');
-    setRememberPin(false);
     setIsLoggedIn(false);
+    setRole(null);
+    setPinError('');
     setPinInput('');
   };
 
-  const handlePinSubmit = (e) => {
+  const handlePinSubmit = async (e) => {
     if (e) e.preventDefault();
     const isMarathi = db.settings && db.settings.lang === 'mr';
+    const cleanedPin = String(pinInput).replace(/\D/g, '');
+    if (!isExactDigits(cleanedPin, PIN_LENGTH)) {
+      setPinError(isMarathi ? 'कृपया ६ अंकी पिन प्रविष्ट करा.' : 'Please enter a valid 6-digit PIN.');
+      setPinInput('');
+      return;
+    }
     
     // If owner PIN not configured, force the user to open settings and set it up first
-    if (!db.settings || !db.settings.ownerPin) {
+    if (!db.settings || !db.settings.ownerPinHash) {
       showToast(isMarathi ? 'कृपया प्रथम सेटिंग्जमध्ये मालक PIN सेट करा.' : 'Please set the Owner PIN in Settings before logging in.', 'error');
       setCurrentTab('settings');
       return;
     }
 
     // 1. Owner Master PIN Check
-    if (pinInput === db.settings.ownerPin) {
+    if (await matchesSecret(cleanedPin, db.settings.ownerPinHash, PIN_LENGTH)) {
       setIsLoggedIn(true);
       setRole('owner');
-      localStorage.setItem('lokmanya_user_role', 'owner');
-      if (rememberPin) {
-        localStorage.setItem('lokmanya_remember_pin', 'true');
-      } else {
-        localStorage.removeItem('lokmanya_remember_pin');
-      }
       setPinInput('');
       setPinError('');
       showToast(isMarathi ? 'मालक म्हणून यशस्वी लॉगिन!' : 'Logged in successfully as Owner!', 'success');
@@ -819,17 +930,10 @@ export default function App() {
     }
 
     // 2. Branch 1 PIN Check
-    if (db.settings.branch1Pin && pinInput === db.settings.branch1Pin) {
+    if (await matchesSecret(cleanedPin, db.settings.branch1PinHash, PIN_LENGTH)) {
       setIsLoggedIn(true);
       setRole('branch_staff');
-      localStorage.setItem('lokmanya_user_role', 'branch_staff');
       setActiveBranch('Branch 1');
-      localStorage.setItem('lokmanya_active_branch', 'Branch 1');
-      if (rememberPin) {
-        localStorage.setItem('lokmanya_remember_pin', 'true');
-      } else {
-        localStorage.removeItem('lokmanya_remember_pin');
-      }
       setPinInput('');
       setPinError('');
       showToast(isMarathi ? 'शाखा १ मध्ये यशस्वी लॉगिन!' : 'Logged in successfully to Branch 1!', 'success');
@@ -837,17 +941,10 @@ export default function App() {
     }
 
     // 3. Branch 2 PIN Check
-    if (db.settings.branch2Pin && pinInput === db.settings.branch2Pin) {
+    if (await matchesSecret(cleanedPin, db.settings.branch2PinHash, PIN_LENGTH)) {
       setIsLoggedIn(true);
       setRole('branch_staff');
-      localStorage.setItem('lokmanya_user_role', 'branch_staff');
       setActiveBranch('Branch 2');
-      localStorage.setItem('lokmanya_active_branch', 'Branch 2');
-      if (rememberPin) {
-        localStorage.setItem('lokmanya_remember_pin', 'true');
-      } else {
-        localStorage.removeItem('lokmanya_remember_pin');
-      }
       setPinInput('');
       setPinError('');
       showToast(isMarathi ? 'शाखा २ मध्ये यशस्वी लॉगिन!' : 'Logged in successfully to Branch 2!', 'success');
@@ -1000,62 +1097,6 @@ export default function App() {
   const [payMode, setPayMode] = useState('Cash');
   const [payNote, setPayNote] = useState('');
   const [historyModalCustomer, setHistoryModalCustomer] = useState(null);
-  const [receiptModalCustomer, setReceiptModalCustomer] = useState(null);
-  const [receiptModalTxn, setReceiptModalTxn] = useState(null);
-
-  // Bulk WhatsApp Alert states
-  const [showBulkSmsModal, setShowBulkSmsModal] = useState(false);
-  const [sentCustomers, setSentCustomers] = useState([]);
-
-  const getUpiRedirectUrl = (amount) => {
-    const upiId = db.settings.upiId || 'lokmanya@upi';
-    const pn = encodeURIComponent(db.settings.messName || 'Lokmanya Mess');
-    return `https://atharva-kharapkar.github.io/LokmanyaMess/public/pay/index.html?pa=${upiId}&pn=${pn}&am=${amount}&tn=Mess%20Dues`;
-  };
-
-  const getBulkDueCount = () => {
-    let targetCategory = 'dinein';
-    if (currentTab === 'tiffin') targetCategory = 'tiffin';
-    else if (currentTab === 'shortterm') targetCategory = 'shortterm';
-
-    return db.customers.filter(c => {
-      const matchesBranch = (c.branch || 'Branch 1') === activeBranch;
-      const matchesStatus = c.status !== 'old';
-      const itemCat = c.category || 'dinein';
-      const matchesCategory = itemCat === targetCategory;
-      const hasDues = getCustomerDues(c) > 0;
-      return matchesBranch && matchesStatus && matchesCategory && hasDues;
-    }).length;
-  };
-
-  const getBulkDueCustomers = () => {
-    let targetCategory = 'dinein';
-    if (currentTab === 'tiffin') targetCategory = 'tiffin';
-    else if (currentTab === 'shortterm') targetCategory = 'shortterm';
-
-    return db.customers.filter(c => {
-      const matchesBranch = (c.branch || 'Branch 1') === activeBranch;
-      const matchesStatus = c.status !== 'old';
-      const itemCat = c.category || 'dinein';
-      const matchesCategory = itemCat === targetCategory;
-      const hasDues = getCustomerDues(c) > 0;
-      return matchesBranch && matchesStatus && matchesCategory && hasDues;
-    });
-  };
-
-
-
-  const getWhatsAppShareUrl = (phone, message) => {
-    let cleanNum = phone.replace(/\D/g, '');
-    if (cleanNum.startsWith('91') && cleanNum.length > 10) {
-      // already has country code
-    } else if (cleanNum.length === 10) {
-      cleanNum = '91' + cleanNum;
-    }
-    return `whatsapp://send?phone=${cleanNum}&text=${encodeURIComponent(message)}`;
-  };
-
-
 
   const openPayModal = (customer) => {
     setPayModalCustomer(customer);
@@ -1114,12 +1155,6 @@ export default function App() {
     });
 
     showToast(db.settings.lang === 'mr' ? 'पेमेंट यशस्वीरित्या नोंदवले गेले!' : 'Payment recorded successfully!');
-
-
-
-    setReceiptModalCustomer(payModalCustomer);
-    setReceiptModalTxn(newTxn);
-
     setPayAmount('');
     setPayDate('');
     setPayMode('Cash');
@@ -1178,7 +1213,7 @@ export default function App() {
 
   const saveCustomer = () => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
-    if (!custForm.name.trim() || !custForm.phone.trim()) {
+    if (isBlank(custForm.name) || isBlank(custForm.phone)) {
       showToast(isMarathi ? 'नाव आणि फोन नंबर आवश्यक आहेत.' : 'Name and Phone are required.', 'error');
       return;
     }
@@ -1252,7 +1287,23 @@ export default function App() {
       return;
     }
 
-    const finalForm = { ...custForm, phone: cleanPhone };
+    if (isBlank(custForm.addr)) {
+      showToast(isMarathi ? 'à¤•à¥ƒà¤ªà¤¯à¤¾ à¤µà¥ˆà¤§ à¤ªà¤¤à¥à¤¤à¤¾ à¤ªà¥à¤°à¤µà¤¿à¤·à¥à¤Ÿ à¤•à¤°à¤¾.' : 'Address cannot be blank.', 'error');
+      return;
+    }
+
+    const amount = toAmountNumber(custForm.amount);
+    const deposited = toAmountNumber(custForm.deposited);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast(isMarathi ? 'à¤•à¥ƒà¤ªà¤¯à¤¾ à¤µà¥ˆà¤§ à¤°à¤•à¥à¤•à¤® à¤ªà¥à¤°à¤µà¤¿à¤·à¥à¤Ÿ à¤•à¤°à¤¾.' : 'Please enter a valid amount.', 'error');
+      return;
+    }
+    if (!Number.isFinite(deposited) || deposited < 0) {
+      showToast(isMarathi ? 'à¤œà¤®à¤¾ à¤°à¤•à¥à¤•à¤® à¤µà¥ˆà¤§ à¤…à¤¸à¤£à¥‡ à¤†à¤µà¤¶à¥à¤¯à¤• à¤†à¤¹à¥‡.' : 'Deposited amount must be a valid number.', 'error');
+      return;
+    }
+
+    const finalForm = { ...custForm, name: normalizeText(custForm.name), addr: normalizeText(custForm.addr), phone: cleanPhone, amount: String(amount), deposited: String(deposited) };
 
     let updatedCustomers;
     let updatedTxns = [...(db.transactions || [])];
@@ -1283,9 +1334,9 @@ export default function App() {
     }
 
     if (editCustId) {
-      updatedCustomers = db.customers.map(c => c.id === editCustId ? { ...c, ...finalForm, amount: Number(finalForm.amount), deposited: Number(finalForm.deposited) || 0, category: targetCat } : c);
+      updatedCustomers = db.customers.map(c => c.id === editCustId ? { ...c, ...finalForm, amount, deposited, category: targetCat } : c);
     } else {
-      const newCust = { ...finalForm, id: 'cust_' + Date.now(), amount: Number(finalForm.amount), deposited: Number(finalForm.deposited) || 0, category: targetCat, branch: activeBranch };
+      const newCust = { ...finalForm, id: 'cust_' + Date.now(), amount, deposited, category: targetCat, branch: activeBranch };
       updatedCustomers = [...db.customers, newCust];
       if (newCust.deposited > 0) {
         const initialTxn = {
@@ -1821,17 +1872,8 @@ export default function App() {
                 />
               </div>
               
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', color: 'rgba(255, 255, 255, 0.7)', fontSize: '13px', margin: '4px 0' }}>
-                <input
-                  type="checkbox"
-                  id="rememberPin"
-                  checked={rememberPin}
-                  onChange={(e) => setRememberPin(e.target.checked)}
-                  style={{ cursor: 'pointer', accentColor: 'var(--primary)' }}
-                />
-                <label htmlFor="rememberPin" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                  {db.settings.lang === 'mr' ? 'पिन लक्षात ठेवा (Remember PIN)' : 'Remember PIN'}
-                </label>
+              <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.7)', fontSize: '13px', margin: '4px 0' }}>
+                {db.settings.lang === 'mr' ? '???? ???? ?? ???? ?????? ?????? ?????.' : 'The session stays active only while the app is open.'}
               </div>
 
               <button 
@@ -1930,7 +1972,7 @@ export default function App() {
       )}
 
       {/* Sidebar */}
-      <div className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+      <div className="sidebar">
         <div className="sidebar-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <img 
             src="./assets/icon.jpg" 
@@ -1948,7 +1990,7 @@ export default function App() {
             }}
           >
             <LayoutDashboard size={18} />
-            <span>{t('dashboard')}</span>
+            {t('dashboard')}
           </div>
           <div
             className={`sidebar-item ${currentTab === 'customers' ? 'active' : ''}`}
@@ -1958,7 +2000,7 @@ export default function App() {
             }}
           >
             <Users size={18} />
-            <span>{t('customers')}</span>
+            {t('customers')}
           </div>
           <div
             className={`sidebar-item ${currentTab === 'tiffin' ? 'active' : ''}`}
@@ -1968,7 +2010,7 @@ export default function App() {
             }}
           >
             <ClipboardList size={18} />
-            <span>{t('tiffin')}</span>
+            {t('tiffin')}
           </div>
           <div
             className={`sidebar-item ${currentTab === 'shortterm' ? 'active' : ''}`}
@@ -1978,7 +2020,7 @@ export default function App() {
             }}
           >
             <DollarSign size={18} />
-            <span>{t('shortterm')}</span>
+            {t('shortterm')}
           </div>
           <div
             className={`sidebar-item ${currentTab === 'collections' ? 'active' : ''}`}
@@ -1988,7 +2030,7 @@ export default function App() {
             }}
           >
             <Coins size={18} />
-            <span>{t('collections')}</span>
+            {t('collections')}
           </div>
           <div
             className={`sidebar-item ${currentTab === 'expenses' ? 'active' : ''}`}
@@ -1998,7 +2040,7 @@ export default function App() {
             }}
           >
             <TrendingUp size={18} />
-            <span>{t('expenses')}</span>
+            {t('expenses')}
           </div>
           <div
             className={`sidebar-item ${currentTab === 'oldcustomers' ? 'active' : ''}`}
@@ -2007,7 +2049,7 @@ export default function App() {
             }}
           >
             <History size={18} />
-            <span>{t('oldcustomers')}</span>
+            {t('oldcustomers')}
           </div>
 
 
@@ -2016,44 +2058,21 @@ export default function App() {
             onClick={() => setCurrentTab('settings')}
           >
             <Settings size={18} />
-            <span>{t('settings')}</span>
+            {t('settings')}
           </div>
         </div>
         <div className="sidebar-footer">
           <button className="logout-btn" onClick={handleLogout}>
             <LogOut size={16} />
-            <span>{t('logout')}</span>
+            {t('logout')}
           </button>
         </div>
       </div>
 
       {/* Main Panel */}
       <div className="main-content">
-        <header className="main-header" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button 
-            type="button"
-            className="toggle-sidebar-btn" 
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            title={isSidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
-            style={{
-              background: 'none',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              border: '1px solid var(--border)',
-              transition: 'all 0.2s ease',
-              marginRight: '8px'
-            }}
-          >
-            <Menu size={18} />
-          </button>
-
-          <h2 className="header-title" style={{ margin: 0, flex: 1 }}>
+        <header className="main-header">
+          <h2 className="header-title">
             {currentTab === 'dashboard' && t('businessDashboard')}
             {currentTab === 'customers' && t('manageCustomers')}
             {currentTab === 'tiffin' && t('manageTiffin')}
@@ -2100,7 +2119,6 @@ export default function App() {
                   value={activeBranch}
                   onChange={(e) => {
                     setActiveBranch(e.target.value);
-                    localStorage.setItem('lokmanya_active_branch', e.target.value);
                     showToast(db.settings.lang === 'mr' ? 'शाखा बदलली!' : 'Active branch updated!', 'success');
                   }}
                   style={{ padding: '4px 8px', fontSize: '13px', width: '120px', height: '32px' }}
@@ -2129,6 +2147,9 @@ export default function App() {
             <div className="profile-text">
               <div className="profile-name">{db.settings.ownerName}</div>
               <div className="profile-mess">{db.settings.messName}</div>
+              {db.settings.ownerAddress && (
+                <div className="profile-address">{db.settings.ownerAddress}</div>
+              )}
             </div>
             <div className="avatar">{db.settings.ownerName.charAt(0)}</div>
           </div>
@@ -2380,9 +2401,12 @@ export default function App() {
                   <button
                     className="btn btn-primary"
                     style={{ width: '100%', padding: '12px' }}
-                    onClick={() => {
-                      const correctPin = db.settings.archivePassword || '2001';
-                      if (archivePinInput === correctPin) {
+                    onClick={async () => {
+                      if (!db.settings.archivePasswordHash) {
+                        showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये आर्काइव्ह पासकोड सेट करा.' : 'Please set an archive passcode in Settings first.', 'error');
+                        return;
+                      }
+                      if (await matchesArchiveSecret(archivePinInput, db.settings.archivePasswordHash)) {
                         setIsArchiveUnlocked(true);
                         setArchivePinInput('');
                         showToast(db.settings.lang === 'mr' ? 'प्रवेश मंजूर!' : 'Access Granted!', 'success');
@@ -2418,18 +2442,6 @@ export default function App() {
                     <button className="btn" onClick={handleExportCustomers}>
                       <Download size={16} /> {t('exportCsv')}
                     </button>
-                     {currentTab !== 'oldcustomers' && role === 'owner' && (
-                       <button 
-                         className="btn" 
-                         onClick={() => {
-                           setSentCustomers([]);
-                           setShowBulkSmsModal(true);
-                         }}
-                         style={{ backgroundColor: '#22c55e', color: '#fff', borderColor: '#22c55e', fontWeight: '600' }}
-                       >
-                         💬 {db.settings.lang === 'mr' ? 'एकत्रित व्हॉट्सॲप पाठवा' : 'Send Bulk WhatsApp'}
-                       </button>
-                     )}
                   </div>
 
                   <div className="customer-bars-list">
@@ -2488,7 +2500,7 @@ export default function App() {
                             {c.name} {isNameRed && (db.settings.lang === 'mr' ? ` (${warningDays} दिवस थकीत!)` : ` (Due pending for ${warningDays} days)`)}
                           </div>
                           <div className="customer-bar-subinfo">📞 {c.phone}</div>
-                          {c.addr && <div className="customer-bar-subinfo">📍 {c.addr}</div>}
+                          {c.addr ? <div className="customer-bar-subinfo">📍 {c.addr}</div> : <div className="customer-bar-subinfo" style={{ color: '#ef4444', fontWeight: '600' }}>📍 No Address</div>}
                           {c.aadhar && <div className="customer-bar-subinfo">🪪 {t('aadharCard')}: {c.aadhar}</div>}
                         </div>
 
@@ -2563,26 +2575,6 @@ export default function App() {
                               >
                                 <span style={{ marginRight: '2px', fontSize: '14px', fontWeight: '700' }}>₹</span>
                                 {db.settings.lang === 'mr' ? 'भरा' : 'Pay'}
-                              </button>
-                            )}
-                            {hasDues && c.status !== 'old' && (
-                              <button
-                                className="btn btn-sm btn-success"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const template = db.settings.whatsappDuesTemplate || 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]';
-                                  const formattedMsg = template
-                                    .replace(/https?:\/\/\s*\[UpiLink\]/gi, '[UpiLink]')
-                                    .replace(/\[Name\]/g, c.name)
-                                    .replace(/\[Dues\]/g, remaining)
-                                    .replace(/\[MessName\]/g, db.settings.messName || 'Lokmanya Mess')
-                                    .replace(/\[UpiLink\]/g, getUpiRedirectUrl(remaining));
-                                  window.open(getWhatsAppShareUrl(c.phone, formattedMsg), 'whatsapp_share_tab');
-                                }}
-                                style={{ height: '32px', padding: '0 10px', fontSize: '12px', backgroundColor: '#22c55e', borderColor: '#22c55e', color: '#fff' }}
-                                title="Send Dues Reminder via WhatsApp"
-                              >
-                                💬 {db.settings.lang === 'mr' ? 'व्हाट्सएप' : 'WhatsApp'}
                               </button>
                             )}
                             <button
@@ -2766,40 +2758,6 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="card-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <h3 className="section-title">
-                    📅 {db.settings.lang === 'mr' ? 'दैनिक जमा वर्गीकरण' : 'Daily Collection Grouping'}
-                  </h3>
-                  <div style={{ flex: 1, maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px', backgroundColor: '#f8f9fc', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {dailyCollections.map(day => (
-                      <div key={day.date} style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
-                          <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text)' }}>
-                            📅 {day.date}
-                          </span>
-                          <span style={{ fontWeight: '800', color: 'var(--success)', fontSize: '13px' }}>
-                            ₹{day.total}
-                          </span>
-                        </div>
-                        <div style={{ padding: '6px', backgroundColor: '#fff' }}>
-                          {day.items.map(item => (
-                            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', fontSize: '12px', borderBottom: '1px dotted var(--border)' }}>
-                              <span style={{ color: 'var(--text)', fontWeight: '500' }}>{item.custName} ({item.paymentMode})</span>
-                              <span style={{ color: 'var(--success)', fontWeight: '700' }}>₹{item.amount}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    {dailyCollections.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                        {db.settings.lang === 'mr' ? 'कोणतेही दैनिक रेकॉर्ड नाही.' : 'No daily collection summaries.'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
               {/* Past Months' Collections Archive Area */}
               <div className="card-section" style={{ marginTop: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -2832,9 +2790,12 @@ export default function App() {
                       />
                       <button 
                         className="btn btn-primary"
-                        onClick={() => {
-                          const correctPin = db.settings.archivePassword || '2001';
-                          if (collectionArchivePinInput === correctPin) {
+                        onClick={async () => {
+                          if (!db.settings.archivePasswordHash) {
+                            showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये आर्काइव्ह पासकोड सेट करा.' : 'Please set an archive passcode in Settings first.', 'error');
+                            return;
+                          }
+                          if (await matchesArchiveSecret(collectionArchivePinInput, db.settings.archivePasswordHash)) {
                             setIsCollectionArchiveUnlocked(true);
                             setCollectionArchivePinInput('');
                           } else {
@@ -2886,43 +2847,39 @@ export default function App() {
                 )}
               </div>
             </div>
+            </div>
           )}
-
-          {/* EXPENSES TAB */}
           {currentTab === 'expenses' && (
             <div className="tab-panel animate-fade">
-              {/* Header Summary Cards */}
               <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginBottom: '20px' }}>
                 <div className="stat-card">
-                  <div className="stat-icon" style={{ backgroundColor: 'rgba(226, 75, 74, 0.1)', color: 'var(--danger)' }}>
-                    <TrendingUp size={24} />
+                  <div className="stat-icon" style={{ backgroundColor: '#fff1f2', color: 'var(--danger)' }}>
+                    <DollarSign size={24} />
                   </div>
                   <div className="stat-info">
-                    <div className="stat-label">{db.settings.lang === 'mr' ? 'आजचा एकूण खर्च' : "Today's Total"}</div>
+                    <div className="stat-label">{db.settings.lang === 'mr' ? 'आजचा एकूण खर्च' : "Today's Expenses"}</div>
                     <div className="stat-value" style={{ color: 'var(--danger)' }}>₹{todayExpenseTotal}</div>
                   </div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-icon" style={{ backgroundColor: 'rgba(226, 75, 74, 0.15)', color: 'var(--danger)' }}>
-                    <TrendingUp size={24} />
+                  <div className="stat-icon" style={{ backgroundColor: '#fff1f2', color: 'var(--danger)' }}>
+                    <DollarSign size={24} />
                   </div>
                   <div className="stat-info">
-                    <div className="stat-label">{db.settings.lang === 'mr' ? 'चालू महिन्याचा खर्च' : "Current Month's Total"}</div>
+                    <div className="stat-label">{db.settings.lang === 'mr' ? 'चालू महिन्याचा एकूण खर्च' : "Current Month's Expenses"}</div>
                     <div className="stat-value" style={{ color: 'var(--danger)' }}>₹{currentMonthExpenseTotal}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Main Content Layout */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
-                {/* Left Panel: Add Expense */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
                 <div className="card-section">
-                  <h3 className="section-title" style={{ marginBottom: '20px' }}>
-                    {db.settings.lang === 'mr' ? 'नवीन खर्च नोंदवा' : 'Record New Expense'}
-                  </h3>
+                  <div className="section-header">
+                    <span className="section-title">{db.settings.lang === 'mr' ? 'नवीन खर्च जोडा' : 'Add New Expense'}</span>
+                  </div>
                   <form onSubmit={saveExpense}>
                     <div className="form-group">
-                      <label className="form-label">{db.settings.lang === 'mr' ? 'रक्कम (₹) *' : 'Amount (Rs) *'}</label>
+                      <label className="form-label">{db.settings.lang === 'mr' ? 'रक्कम *' : 'Amount *'}</label>
                       <input
                         type="number"
                         className="form-input"
@@ -3083,9 +3040,12 @@ export default function App() {
                       />
                       <button 
                         className="btn btn-primary"
-                        onClick={() => {
-                          const correctPin = db.settings.archivePassword || '2001';
-                          if (expenseArchivePinInput === correctPin) {
+                        onClick={async () => {
+                          if (!db.settings.archivePasswordHash) {
+                            showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये आर्काइव्ह पासकोड सेट करा.' : 'Please set an archive passcode in Settings first.', 'error');
+                            return;
+                          }
+                          if (await matchesArchiveSecret(expenseArchivePinInput, db.settings.archivePasswordHash)) {
                             setIsExpenseArchiveUnlocked(true);
                             setExpenseArchivePinInput('');
                           } else {
@@ -3178,7 +3138,7 @@ export default function App() {
                             className="form-input"
                             value={messNameInput}
                             onChange={(e) => setMessNameInput(e.target.value)}
-                            onBlur={() => saveDb({ ...db, settings: { ...db.settings, messName: messNameInput } })}
+                            onBlur={() => saveSettingField('messName', messNameInput, { required: true, label: 'Mess name' })}
                           />
                         </div>
                         <div className="form-group">
@@ -3188,21 +3148,20 @@ export default function App() {
                             className="form-input"
                             value={ownerNameInput}
                             onChange={(e) => setOwnerNameInput(e.target.value)}
-                            onBlur={() => saveDb({ ...db, settings: { ...db.settings, ownerName: ownerNameInput } })}
+                            onBlur={() => saveSettingField('ownerName', ownerNameInput, { required: true, label: 'Owner name' })}
                           />
                         </div>
                       </div>
 
                       <div className="form-row">
-                        <div className="form-group">
-                          <label className="form-label">{db.settings.lang === 'mr' ? 'मालकाचा UPI आयडी (उदा. name@upi)' : 'Owner UPI ID (e.g. name@upi)'}</label>
+                        <div className="form-group" style={{ width: '100%' }}>
+                          <label className="form-label">{t('ownerAddress')}</label>
                           <input
                             type="text"
                             className="form-input"
-                            value={db.settings.upiId || ''}
-                            onChange={(e) => saveDb({ ...db, settings: { ...db.settings, upiId: e.target.value.trim() } })}
-                            placeholder="Enter UPI VPA ID"
-                            style={{ WebkitUserSelect: 'text', userSelect: 'text' }}
+                            value={ownerAddressInput}
+                            onChange={(e) => setOwnerAddressInput(e.target.value)}
+                            onBlur={() => saveSettingField('ownerAddress', ownerAddressInput, { required: true, label: 'Address' })}
                           />
                         </div>
                       </div>
@@ -3227,7 +3186,6 @@ export default function App() {
                             value={activeBranch}
                             onChange={(e) => {
                               setActiveBranch(e.target.value);
-                              localStorage.setItem('lokmanya_active_branch', e.target.value);
                               showToast(db.settings.lang === 'mr' ? 'शाखा बदलली!' : 'Active branch updated!', 'success');
                             }}
                           >
@@ -3239,50 +3197,8 @@ export default function App() {
 
                       <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
 
-                      {/* WhatsApp Message Templates Section */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <h3 className="section-title" style={{ fontSize: '15px', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          💬 {db.settings.lang === 'mr' ? 'व्हॉट्सॲप मेसेज साचे (Templates)' : 'WhatsApp Message Templates'}
-                        </h3>
-
-                        <div className="form-row">
-                          <div className="form-group">
-                            <label className="form-label">{db.settings.lang === 'mr' ? 'पेमेंट पावती मेसेज साचा' : 'Payment Receipt Template'}</label>
-                            <textarea
-                              className="form-input"
-                              rows="2"
-                              value={db.settings.whatsappReceiptTemplate || 'Dear [Name], we received your payment of ₹[Amount] on [Date]. Thank you! - [MessName]'}
-                              onChange={(e) => saveDb({ ...db, settings: { ...db.settings, whatsappReceiptTemplate: e.target.value } })}
-                              style={{ resize: 'vertical', fontSize: '13px', WebkitUserSelect: 'text', userSelect: 'text', height: '60px' }}
-                            />
-                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                              Placeholder tokens: <code>[Name]</code>, <code>[Amount]</code>, <code>[Date]</code>, <code>[MessName]</code>
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="form-row">
-                          <div className="form-group">
-                            <label className="form-label">{db.settings.lang === 'mr' ? 'थकीत रक्कम आठवण मेसेज साचा' : 'Dues Reminder Template'}</label>
-                            <textarea
-                              className="form-input"
-                              rows="2"
-                              value={db.settings.whatsappDuesTemplate || 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]'}
-                              onChange={(e) => saveDb({ ...db, settings: { ...db.settings, whatsappDuesTemplate: e.target.value } })}
-                              style={{ resize: 'vertical', fontSize: '13px', WebkitUserSelect: 'text', userSelect: 'text', height: '60px' }}
-                            />
-                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                              Placeholder tokens: <code>[Name]</code>, <code>[Dues]</code>, <code>[UpiLink]</code>, <code>[MessName]</code>
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
-
                       {/* PIN Settings Row */}
                       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                        {/* Owner Admin PIN */}
                         <div className="form-group" style={{ flex: 1, minWidth: '220px' }}>
                           <label className="form-label">{t('ownerPin')}</label>
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -3291,12 +3207,9 @@ export default function App() {
                                 type={showSettingsPin ? "text" : "password"}
                                 className="form-input"
                                 maxLength="6"
-                                placeholder="••••••"
+                                placeholder="******"
                                 value={newPinInput}
-                                onChange={(e) => {
-                                  const val = e.target.value.replace(/\D/g, '');
-                                  setNewPinInput(val);
-                                }}
+                                onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, ''))}
                                 style={{ width: '100%', paddingRight: '40px' }}
                               />
                               <button
@@ -3322,13 +3235,9 @@ export default function App() {
                             </div>
                             <button
                               className="btn btn-primary"
-                              onClick={() => {
-                                if (newPinInput.length !== 6) {
-                                  showToast(db.settings.lang === 'mr' ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
-                                  return;
-                                }
-                                saveDb({ ...db, settings: { ...db.settings, ownerPin: newPinInput } });
-                                showToast(db.settings.lang === 'mr' ? 'पिन यशस्वीरित्या बदलला आणि जतन केला!' : 'PIN changed and saved successfully!', 'success');
+                              onClick={async () => {
+                                const saved = await savePinSetting('ownerPinHash', newPinInput, 'PIN changed and saved successfully!');
+                                if (saved) setNewPinInput('');
                               }}
                             >
                               {db.settings.lang === 'mr' ? 'जतन करा' : 'Save'}
@@ -3336,7 +3245,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Branch 1 Staff PIN */}
                         <div className="form-group" style={{ flex: 1, minWidth: '220px' }}>
                           <label className="form-label">{db.settings.lang === 'mr' ? 'शाखा १ लॉगिन पिन' : 'Branch 1 Login PIN'}</label>
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -3344,20 +3252,16 @@ export default function App() {
                               type="password"
                               className="form-input"
                               maxLength="6"
-                              placeholder="••••••"
+                              placeholder="******"
                               value={newBranch1PinInput}
                               onChange={(e) => setNewBranch1PinInput(e.target.value.replace(/\D/g, ''))}
                               style={{ flex: 1 }}
                             />
                             <button
                               className="btn btn-primary"
-                              onClick={() => {
-                                if (newBranch1PinInput.length !== 6) {
-                                  showToast(db.settings.lang === 'mr' ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
-                                  return;
-                                }
-                                saveDb({ ...db, settings: { ...db.settings, branch1Pin: newBranch1PinInput } });
-                                showToast(db.settings.lang === 'mr' ? 'शाखा १ पिन जतन केला!' : 'Branch 1 PIN saved successfully!', 'success');
+                              onClick={async () => {
+                                const saved = await savePinSetting('branch1PinHash', newBranch1PinInput, 'Branch 1 PIN saved successfully!');
+                                if (saved) setNewBranch1PinInput('');
                               }}
                             >
                               {db.settings.lang === 'mr' ? 'जतन करा' : 'Save'}
@@ -3365,7 +3269,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Branch 2 Staff PIN */}
                         <div className="form-group" style={{ flex: 1, minWidth: '220px' }}>
                           <label className="form-label">{db.settings.lang === 'mr' ? 'शाखा २ लॉगिन पिन' : 'Branch 2 Login PIN'}</label>
                           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -3373,20 +3276,16 @@ export default function App() {
                               type="password"
                               className="form-input"
                               maxLength="6"
-                              placeholder="••••••"
+                              placeholder="******"
                               value={newBranch2PinInput}
                               onChange={(e) => setNewBranch2PinInput(e.target.value.replace(/\D/g, ''))}
                               style={{ flex: 1 }}
                             />
                             <button
                               className="btn btn-primary"
-                              onClick={() => {
-                                if (newBranch2PinInput.length !== 6) {
-                                  showToast(db.settings.lang === 'mr' ? 'पिन अचूक ६ अंकी असणे आवश्यक आहे.' : 'PIN must be exactly 6 digits.', 'error');
-                                  return;
-                                }
-                                saveDb({ ...db, settings: { ...db.settings, branch2Pin: newBranch2PinInput } });
-                                showToast(db.settings.lang === 'mr' ? 'शाखा २ पिन जतन केला!' : 'Branch 2 PIN saved successfully!', 'success');
+                              onClick={async () => {
+                                const saved = await savePinSetting('branch2PinHash', newBranch2PinInput, 'Branch 2 PIN saved successfully!');
+                                if (saved) setNewBranch2PinInput('');
                               }}
                             >
                               {db.settings.lang === 'mr' ? 'जतन करा' : 'Save'}
@@ -3396,7 +3295,7 @@ export default function App() {
                       </div>
 
                       <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
-                      
+
                       <div className="form-group">
                         <label className="form-label" style={{ fontWeight: '700', fontSize: '15px' }}>
                           {db.settings.lang === 'mr' ? 'जुने ग्राहक आर्काइव्ह संकेतशब्द सेटिंग्ज' : 'Old Customers Archive Passcode settings'}
@@ -3426,19 +3325,16 @@ export default function App() {
                           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                             <button
                               className="btn btn-primary"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (devKeyInput !== 'LKMESSDEV2026') {
                                   showToast(db.settings.lang === 'mr' ? 'चुकीची डेव्हलपर मास्टर की!' : 'Invalid Developer Master Key!', 'error');
                                   return;
                                 }
-                                if (newArchivePinInput.length < 4) {
-                                  showToast(db.settings.lang === 'mr' ? 'पासवर्ड किमान ४ अंकी असावा!' : 'Password must be at least 4 digits!', 'error');
-                                  return;
+                                const saved = await saveArchivePasscodeSetting(newArchivePinInput);
+                                if (saved) {
+                                  setDevKeyInput('');
+                                  setNewArchivePinInput('');
                                 }
-                                saveDb({ ...db, settings: { ...db.settings, archivePassword: newArchivePinInput } });
-                                setDevKeyInput('');
-                                setNewArchivePinInput('');
-                                showToast(db.settings.lang === 'mr' ? 'आर्काइव्ह पासवर्ड यशस्वीरित्या बदलला!' : 'Archive passcode updated successfully!', 'success');
                               }}
                             >
                               {db.settings.lang === 'mr' ? 'अपडेट करा' : 'Update Passcode'}
@@ -3446,8 +3342,6 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-
-                      <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
 
                       <div>
                         <label className="form-label">Local Data & Backups</label>
@@ -3955,189 +3849,6 @@ export default function App() {
         </div>
       )}
 
-      {/* TRANSACTION RECEIPT MODAL */}
-      {receiptModalCustomer && receiptModalTxn && (
-        <div className="modal-overlay" style={{ zIndex: 2500 }}>
-          <div className="modal-card" style={{ maxWidth: '420px', borderRadius: '16px', border: '1px solid var(--border)' }}>
-            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--success)' }}>
-                ✓ {db.settings.lang === 'mr' ? 'पेमेंट नोंदवले गेले!' : 'Payment Receipt'}
-              </span>
-              <X className="modal-close" onClick={() => { setReceiptModalCustomer(null); setReceiptModalTxn(null); }} />
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '10px' }}>
-              <div style={{ backgroundColor: 'var(--success-light)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.5px' }}>
-                  {db.settings.lang === 'mr' ? 'प्राप्त रक्कम' : 'Amount Received'}
-                </span>
-                <span style={{ fontSize: '32px', fontWeight: '900', color: 'var(--success)', display: 'block', marginTop: '4px' }}>
-                  ₹{receiptModalTxn.amount}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'ग्राहक:' : 'Customer:'}</span>
-                  <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalCustomer.name}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'तारीख:' : 'Date:'}</span>
-                  <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalTxn.date}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'पेमेंट पद्धत:' : 'Payment Mode:'}</span>
-                  <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalTxn.paymentMode}</span>
-                </div>
-                {receiptModalTxn.note && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '6px' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontWeight: '600' }}>{db.settings.lang === 'mr' ? 'टीप:' : 'Note:'}</span>
-                    <span style={{ color: 'var(--text)', fontWeight: '700' }}>{receiptModalTxn.note}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons for Sharing */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    const template = db.settings.whatsappReceiptTemplate || 'Dear [Name], we received your payment of ₹[Amount] on [Date]. Thank you! - [MessName]';
-                    const formattedMsg = template
-                      .replace(/\[Name\]/g, receiptModalCustomer.name)
-                      .replace(/\[Amount\]/g, receiptModalTxn.amount)
-                      .replace(/\[Date\]/g, receiptModalTxn.date)
-                      .replace(/\[MessName\]/g, db.settings.messName || 'Lokmanya Mess');
-                    window.open(getWhatsAppShareUrl(receiptModalCustomer.phone, formattedMsg), 'whatsapp_share_tab');
-                  }}
-                  style={{ backgroundColor: '#22c55e', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '700', padding: '12px', borderRadius: '8px', cursor: 'pointer', width: '100%' }}
-                >
-                  💬 {db.settings.lang === 'mr' ? 'व्हॉट्सॲपवर पावती पाठवा' : 'Send WhatsApp Receipt'}
-                </button>
-              </div>
-            </div>
-            <div className="modal-footer" style={{ borderTop: 'none', paddingTop: 0 }}>
-              <button type="button" className="btn btn-secondary" style={{ width: '100%' }} onClick={() => { setReceiptModalCustomer(null); setReceiptModalTxn(null); }}>
-                {db.settings.lang === 'mr' ? 'बंद करा' : 'Close'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* WHATSAPP BULK DUES ASSISTANT MODAL */}
-      {showBulkSmsModal && (
-        <div className="modal-overlay" style={{ zIndex: 2500 }}>
-          <div className="modal-card" style={{ maxWidth: '500px', borderRadius: '16px', border: '1px solid var(--border)' }}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                💬 {db.settings.lang === 'mr' ? 'व्हॉट्सॲप थकीत रक्कम सहाय्यक' : 'WhatsApp Dues Assistant'}
-              </span>
-              <X className="modal-close" onClick={() => setShowBulkSmsModal(false)} />
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              
-              {/* Target Branch & Category info */}
-              <div style={{ padding: '12px', borderRadius: '10px', backgroundColor: 'var(--bg)', border: '1px solid var(--border)', fontSize: '13px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'शाखा:' : 'Target Branch:'}</span>
-                  <span style={{ fontWeight: '700', color: 'var(--text)' }}>{activeBranch}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'ग्राहक गट (Category):' : 'Target Category:'}</span>
-                  <span style={{ fontWeight: '700', color: 'var(--primary)' }}>
-                    {currentTab === 'tiffin' 
-                      ? (db.settings.lang === 'mr' ? 'टिफिन डिलीव्हरी' : 'Tiffin Delivery')
-                      : currentTab === 'shortterm'
-                      ? (db.settings.lang === 'mr' ? 'अल्पमुदतीचे ग्राहक' : 'Short-Term Members')
-                      : (db.settings.lang === 'mr' ? 'डाईन-इन ग्राहक' : 'Dine-in Members')}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'एकूण थकीत ग्राहक:' : 'Total Due Customers:'}</span>
-                  <span style={{ fontWeight: '700', color: 'var(--danger)' }}>
-                    {getBulkDueCustomers().length}
-                  </span>
-                </div>
-              </div>
-
-              {/* Scrollable list of due customers to message */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)' }}>
-                  {db.settings.lang === 'mr' ? 'थकीत ग्राहक यादी (क्लिक करून पाठवा):' : 'Due Customers (Click to send):'}
-                </span>
-                
-                <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', backgroundColor: 'var(--bg)' }}>
-                  {getBulkDueCustomers().map(c => {
-                    const remaining = getCustomerDues(c);
-                    const isSent = sentCustomers.includes(c.id);
-                    return (
-                      <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid var(--border)', borderRadius: '6px', backgroundColor: isSent ? '#f1f5f9' : '#fff' }}>
-                        <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
-                          <div style={{ fontWeight: '700', fontSize: '13px', color: isSent ? 'var(--text-secondary)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📱 {c.phone} | Dues: <span style={{ fontWeight: '700', color: 'var(--danger)' }}>₹{remaining}</span></div>
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={() => {
-                            const template = db.settings.whatsappDuesTemplate || 'Dear [Name], your plan is expiring soon. Pending dues: ₹[Dues]. Please pay: [UpiLink] - [MessName]';
-                            const formattedMsg = template
-                              .replace(/https?:\/\/\s*\[UpiLink\]/gi, '[UpiLink]')
-                              .replace(/\[Name\]/g, c.name)
-                              .replace(/\[Dues\]/g, remaining)
-                              .replace(/\[MessName\]/g, db.settings.messName || 'Lokmanya Mess')
-                              .replace(/\[UpiLink\]/g, getUpiRedirectUrl(remaining));
-                            
-                            window.open(getWhatsAppShareUrl(c.phone, formattedMsg), 'whatsapp_share_tab');
-                            setSentCustomers(prev => [...prev, c.id]);
-                          }}
-                          style={{ 
-                            height: '28px', 
-                            padding: '0 8px', 
-                            fontSize: '11px', 
-                            backgroundColor: isSent ? '#94a3b8' : '#22c55e', 
-                            borderColor: isSent ? '#94a3b8' : '#22c55e', 
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {isSent ? '✓ Sent' : '💬 Send'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {getBulkDueCustomers().length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                      🎉 {db.settings.lang === 'mr' ? 'कोणतीही प्रलंबित देणी नाहीत!' : 'No pending dues found!'}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Help tip */}
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', gap: '4px', alignItems: 'center' }}>
-                ℹ️ {db.settings.lang === 'mr' ? 'टिप: हे बटन दाबल्यावर त्या ग्राहकाचे चॅट उघडेल आणि मेसेजमध्ये रक्कम व UPI पेमेंट लिंक ऑटो-फिल होईल.' : 'Tip: Clicking Send opens WhatsApp with their custom amount and UPI payment link pre-filled.'}
-              </div>
-
-            </div>
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                style={{ width: '100%' }}
-                onClick={() => setShowBulkSmsModal(false)}
-              >
-                {db.settings.lang === 'mr' ? 'बंद करा' : 'Close'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* TOAST NOTIFICATION CONTAINER FOR MAIN APP */}
       {toast && (
         <div className="toast-notification" style={{
@@ -4164,3 +3875,5 @@ export default function App() {
     </div>
   );
 }
+
+

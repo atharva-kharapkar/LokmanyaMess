@@ -330,6 +330,16 @@ body {
   font-weight:500
 }
 
+.profile-address {
+  font-size:11px;
+  color:var(--text-secondary);
+  font-weight:500;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .avatar {
   width:38px;
   height:38px;
