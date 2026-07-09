@@ -20,7 +20,9 @@ import {
   EyeOff,
   RotateCcw,
   Coins,
-  TrendingUp
+  TrendingUp,
+  Menu,
+  ChevronLeft
 } from 'lucide-react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, query, limit } from 'firebase/firestore';
 import { db as firestoreDb } from './firebase';
@@ -398,6 +400,7 @@ export default function App() {
   const [showPinPad, setShowPinPad] = useState(true);
   const [introPlayed, setIntroPlayed] = useState(true);
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [newPinInput, setNewPinInput] = useState('');
   const [showSettingsPin, setShowSettingsPin] = useState(false);
   const [role, setRole] = useState(() => {
@@ -1927,7 +1930,7 @@ export default function App() {
       )}
 
       {/* Sidebar */}
-      <div className="sidebar">
+      <div className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <img 
             src="./assets/icon.jpg" 
@@ -2026,8 +2029,31 @@ export default function App() {
 
       {/* Main Panel */}
       <div className="main-content">
-        <header className="main-header">
-          <h2 className="header-title">
+        <header className="main-header" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button 
+            type="button"
+            className="toggle-sidebar-btn" 
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            title={isSidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}
+            style={{
+              background: 'none',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--border)',
+              transition: 'all 0.2s ease',
+              marginRight: '8px'
+            }}
+          >
+            <Menu size={18} />
+          </button>
+
+          <h2 className="header-title" style={{ margin: 0, flex: 1 }}>
             {currentTab === 'dashboard' && t('businessDashboard')}
             {currentTab === 'customers' && t('manageCustomers')}
             {currentTab === 'tiffin' && t('manageTiffin')}

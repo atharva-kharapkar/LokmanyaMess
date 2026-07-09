@@ -1240,3 +1240,18 @@ input, textarea, [contenteditable="true"] {
   }
 }
 
+/* Sidebar transition and collapse styles */
+.sidebar {
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s, border-color 0.25s !important;
+  overflow-x: hidden !important;
+}
+
+.sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  border-right: none !important;
+  overflow: hidden !important;
+}
+
