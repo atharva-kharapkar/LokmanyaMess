@@ -1127,3 +1127,61 @@ input, textarea, [contenteditable="true"] {
 .first-run-modal-input { width:100%; padding:10px 12px; font-size:18px; border-radius:8px; border:1px solid var(--border) }
 .first-run-modal-error { color:var(--danger); margin-top:8px }
 
+/* Responsive Screen Overrides for Split Screen & Narrow Views */
+@media (max-width: 800px) {
+  .sidebar {
+    width: 72px !important;
+  }
+  .sidebar-header {
+    padding: 12px 6px !important;
+  }
+  .sidebar-header img {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 8px !important;
+  }
+  .sidebar-logo-text {
+    display: none !important;
+  }
+  .sidebar-menu {
+    padding: 12px 6px !important;
+    gap: 8px !important;
+  }
+  .sidebar-item {
+    padding: 12px !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+  .sidebar-item span {
+    display: none !important;
+  }
+  .sidebar-footer {
+    padding: 12px 6px !important;
+  }
+  .logout-btn {
+    padding: 10px !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+  .logout-btn span {
+    display: none !important;
+  }
+  
+  /* Make main layout spacing tighter for split screen */
+  .main-header {
+    padding: 16px 20px !important;
+  }
+  .header-title {
+    font-size: 18px !important;
+  }
+  .main-content {
+    padding: 16px !important;
+  }
+  
+  /* Auto-wrapping layout cards in dashboard/customer listing when squeezed */
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+

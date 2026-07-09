@@ -1945,7 +1945,7 @@ export default function App() {
             }}
           >
             <LayoutDashboard size={18} />
-            {t('dashboard')}
+            <span>{t('dashboard')}</span>
           </div>
           <div
             className={`sidebar-item ${currentTab === 'customers' ? 'active' : ''}`}
@@ -1955,7 +1955,7 @@ export default function App() {
             }}
           >
             <Users size={18} />
-            {t('customers')}
+            <span>{t('customers')}</span>
           </div>
           <div
             className={`sidebar-item ${currentTab === 'tiffin' ? 'active' : ''}`}
@@ -1965,7 +1965,7 @@ export default function App() {
             }}
           >
             <ClipboardList size={18} />
-            {t('tiffin')}
+            <span>{t('tiffin')}</span>
           </div>
           <div
             className={`sidebar-item ${currentTab === 'shortterm' ? 'active' : ''}`}
@@ -1975,7 +1975,7 @@ export default function App() {
             }}
           >
             <DollarSign size={18} />
-            {t('shortterm')}
+            <span>{t('shortterm')}</span>
           </div>
           <div
             className={`sidebar-item ${currentTab === 'collections' ? 'active' : ''}`}
@@ -1985,7 +1985,7 @@ export default function App() {
             }}
           >
             <Coins size={18} />
-            {t('collections')}
+            <span>{t('collections')}</span>
           </div>
           <div
             className={`sidebar-item ${currentTab === 'expenses' ? 'active' : ''}`}
@@ -1995,7 +1995,7 @@ export default function App() {
             }}
           >
             <TrendingUp size={18} />
-            {t('expenses')}
+            <span>{t('expenses')}</span>
           </div>
           <div
             className={`sidebar-item ${currentTab === 'oldcustomers' ? 'active' : ''}`}
@@ -2004,7 +2004,7 @@ export default function App() {
             }}
           >
             <History size={18} />
-            {t('oldcustomers')}
+            <span>{t('oldcustomers')}</span>
           </div>
 
 
@@ -2013,13 +2013,13 @@ export default function App() {
             onClick={() => setCurrentTab('settings')}
           >
             <Settings size={18} />
-            {t('settings')}
+            <span>{t('settings')}</span>
           </div>
         </div>
         <div className="sidebar-footer">
           <button className="logout-btn" onClick={handleLogout}>
             <LogOut size={16} />
-            {t('logout')}
+            <span>{t('logout')}</span>
           </button>
         </div>
       </div>
