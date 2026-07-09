@@ -1188,7 +1188,7 @@ input, textarea, [contenteditable="true"] {
 /* Responsive customer card wrapping for split screen and small widths */
 @media (max-width: 992px) {
   .customer-bar {
-    grid-template-columns: 50px 1fr !important;
+    grid-template-columns: 60px 1fr !important;
     gap: 8px 12px !important;
     padding: 12px !important;
   }
@@ -1200,14 +1200,14 @@ input, textarea, [contenteditable="true"] {
   }
   
   .customer-bar-avatar {
-    width: 44px !important;
-    height: 44px !important;
+    width: 54px !important;
+    height: 54px !important;
   }
   
   .customer-bar-avatar-placeholder {
-    width: 44px !important;
-    height: 44px !important;
-    font-size: 16px !important;
+    width: 54px !important;
+    height: 54px !important;
+    font-size: 18px !important;
   }
   
   .customer-bar-info {
@@ -1252,9 +1252,9 @@ input, textarea, [contenteditable="true"] {
   .customer-bar-plan .customer-bar-subval {
     display: inline-block !important;
     font-size: 11px !important;
-    color: var(--text-secondary) !important;
+    color: #0f172a !important;
     margin: 0 !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
   }
   
   .customer-bar-financials {
