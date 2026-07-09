@@ -1227,16 +1227,16 @@ input, textarea, [contenteditable="true"] {
   .customer-bar-plan {
     grid-column: 2 !important;
     grid-row: 2 !important;
-    flex-direction: row !important;
-    gap: 6px !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
     align-items: center !important;
     margin: 0 !important;
     border-top: none !important;
     padding-top: 0 !important;
   }
   
-  .customer-bar-plan .customer-bar-label,
-  .customer-bar-plan .customer-bar-subval {
+  .customer-bar-plan .customer-bar-label {
     display: none !important;
   }
   
@@ -1246,6 +1246,15 @@ input, textarea, [contenteditable="true"] {
     padding: 2px 6px !important;
     border-radius: 4px !important;
     font-weight: 700 !important;
+    display: inline-block !important;
+  }
+  
+  .customer-bar-plan .customer-bar-subval {
+    display: inline-block !important;
+    font-size: 11px !important;
+    color: var(--text-secondary) !important;
+    margin: 0 !important;
+    font-weight: 600 !important;
   }
   
   .customer-bar-financials {
