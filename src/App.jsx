@@ -1049,7 +1049,7 @@ export default function App() {
     } else if (cleanNum.length === 10) {
       cleanNum = '91' + cleanNum;
     }
-    return `https://api.whatsapp.com/send?phone=${cleanNum}&text=${encodeURIComponent(message)}`;
+    return `whatsapp://send?phone=${cleanNum}&text=${encodeURIComponent(message)}`;
   };
 
 

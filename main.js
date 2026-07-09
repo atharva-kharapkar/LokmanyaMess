@@ -16,6 +16,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 let mainWindow;
+let whatsappWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -33,7 +34,35 @@ function createWindow() {
     }
   });
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    if (url.startsWith('whatsapp://')) {
+      require('electron').shell.openExternal(url);
+      return { action: 'deny' };
+    }
+
+    if (frameName === 'whatsapp_share_tab') {
+      if (whatsappWindow && !whatsappWindow.isDestroyed()) {
+        whatsappWindow.loadURL(url);
+        whatsappWindow.focus();
+      } else {
+        whatsappWindow = new BrowserWindow({
+          width: 1000,
+          height: 750,
+          title: "WhatsApp Web - Lokmanya Mess",
+          icon: path.join(__dirname, 'assets', 'transparent_icon.png'),
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true
+          }
+        });
+        // WhatsApp Web check requires standard modern user agent
+        whatsappWindow.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+        whatsappWindow.loadURL(url);
+        whatsappWindow.setMenuBarVisibility(false);
+      }
+      return { action: 'deny' };
+    }
+
     if (url.startsWith('http:') || url.startsWith('https:')) {
       require('electron').shell.openExternal(url);
       return { action: 'deny' };
