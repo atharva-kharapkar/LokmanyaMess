@@ -362,7 +362,7 @@ body {
 
 .dashboard-grid {
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(6,1fr);
   gap:20px;
   margin-bottom:28px
 }
@@ -1189,14 +1189,19 @@ input, textarea, [contenteditable="true"] {
   }
   
   /* Auto-wrapping layout cards in dashboard/customer listing when squeezed */
-  .stats-grid {
-    grid-template-columns: 1fr !important;
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
     gap: 12px !important;
   }
 }
 
 /* Responsive customer card wrapping for split screen and small widths */
 @media (max-width: 992px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 12px !important;
+  }
+
   .customer-bar {
     grid-template-columns: 60px 1fr !important;
     gap: 8px 12px !important;
