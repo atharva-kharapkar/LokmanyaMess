@@ -1228,10 +1228,12 @@ input, textarea, [contenteditable="true"] {
     grid-column: 2 !important;
     grid-row: 2 !important;
     display: flex !important;
+    flex-direction: row !important;
     flex-wrap: wrap !important;
-    gap: 8px !important;
+    gap: 4px 10px !important;
+    justify-content: flex-start !important;
     align-items: center !important;
-    margin: 0 !important;
+    margin: 4px 0 !important;
     border-top: none !important;
     padding-top: 0 !important;
   }
@@ -1263,9 +1265,11 @@ input, textarea, [contenteditable="true"] {
     background: none !important;
     border: none !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 6px 0 !important;
     justify-content: flex-start !important;
     gap: 12px !important;
+    display: flex !important;
+    flex-direction: row !important;
   }
   
   .financial-col {
