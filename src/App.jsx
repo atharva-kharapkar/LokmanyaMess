@@ -2088,6 +2088,41 @@ export default function App() {
     return [intro, dueLine, planLine, ...paymentLines, closing].filter(Boolean).join('\n');
   }, [db.settings]);
 
+  const openWhatsAppWithTypedMessage = useCallback(({ phoneDigits, message, customer, messName }) => {
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappDesktopDeepLink = `whatsapp://send?phone=${phoneDigits}&text=${encodedMessage}`;
+    const whatsappWebUrl = `https://wa.me/${phoneDigits}?text=${encodedMessage}`;
+
+    // Do not auto-send. We rely on WhatsApp UI to keep text typed and user clicks Send.
+    if (isElectron) {
+      try {
+        const timer = setTimeout(() => {
+          // Fallback to WhatsApp Web if desktop deep-link cannot be handled.
+          try {
+            window.open(whatsappWebUrl, 'whatsapp_share_tab');
+          } catch (e) {
+            console.error('WhatsApp Web fallback failed:', e);
+          }
+        }, 1500);
+
+        // Attempt desktop first.
+        // NOTE: electron will route whatsapp:// via shell.openExternal in main.js.
+        window.open(whatsappDesktopDeepLink, '_blank');
+
+        return () => clearTimeout(timer);
+      } catch (e) {
+        console.error('WhatsApp Desktop deep-link failed:', e);
+      }
+
+      // Immediate fallback if desktop attempt throws.
+      window.open(whatsappWebUrl, 'whatsapp_share_tab');
+      return;
+    }
+
+    // Browser/Electron renderer (non-desktop): go directly to WhatsApp Web.
+    window.open(whatsappWebUrl, 'whatsapp_share_tab');
+  }, []);
+
   const sendWhatsAppReminder = useCallback((customer) => {
     const phoneDigits = normalizeWhatsAppPhone(customer?.phone);
     if (phoneDigits.length < 10) {
@@ -2101,15 +2136,14 @@ export default function App() {
     }
 
     const message = buildCustomerReminderMessage(customer);
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappDesktopUrl = `whatsapp://send?phone=${phoneDigits}&text=${encodedMessage}`;
-    const whatsappWebUrl = `https://wa.me/${phoneDigits}?text=${encodedMessage}`;
-    if (isElectron) {
-      window.open(whatsappDesktopUrl, '_blank');
-      return;
-    }
-    window.open(whatsappWebUrl, 'whatsapp_share_tab');
-  }, [buildCustomerReminderMessage, db.settings, showToast]);
+    openWhatsAppWithTypedMessage({
+      phoneDigits,
+      message,
+      customer,
+      messName: db.settings?.messName
+    });
+  }, [buildCustomerReminderMessage, db.settings, showToast, openWhatsAppWithTypedMessage]);
+
 
   // Calculations for Dashboard Metrics (filtered by branch)
   const metrics = useMemo(() => {
