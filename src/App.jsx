@@ -23,9 +23,10 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, query, limit } from 'firebase/firestore';
-import { db as firestoreDb } from './firebase';
+import { db as firestoreDb, firebaseBootError } from './firebase';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI;
+const isCloudSyncAvailable = Boolean(firestoreDb);
 
 // Utility functions
 const todayStr = () => {
@@ -54,10 +55,121 @@ const isExactDigits = (value, length) => new RegExp(`^\\d{${length}}$`).test(Str
 const isArchivePinValid = (value) => /^\d{4,6}$/.test(String(value ?? ''));
 const toAmountNumber = (value) => Number(String(value ?? '').trim());
 
+function sha256Pure(ascii) {
+  function rightRotate(value, amount) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  
+  const mathPow = Math.pow;
+  const maxWord = mathPow(2, 32);
+  const lengthProperty = 'length';
+  let i, j;
+  let result = '';
+
+  const words = [];
+  const asciiLength = ascii[lengthProperty] * 8;
+  
+  const hash = [];
+  const k = [];
+  let primeCounter = 0;
+
+  const getPrime = (candidate) => {
+    for (let factor = 2; factor * factor <= candidate; factor++) {
+      if (candidate % factor === 0) return false;
+    }
+    return true;
+  };
+
+  let candidate = 2;
+  while (primeCounter < 64) {
+    if (getPrime(candidate)) {
+      if (primeCounter < 8) {
+        hash[primeCounter] = (mathPow(candidate, 1 / 2) * maxWord) | 0;
+      }
+      k[primeCounter] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+      primeCounter++;
+    }
+    candidate++;
+  }
+  
+  ascii += '\x80';
+  while (ascii[lengthProperty] % 64 - 56) {
+    ascii += '\x00';
+  }
+  
+  for (i = 0; i < ascii[lengthProperty]; i++) {
+    j = ascii.charCodeAt(i);
+    if (j >> 8) return; // ASCII only
+    words[i >> 2] |= j << ((3 - i % 4) * 8);
+  }
+  words[words[lengthProperty]] = ((asciiLength / maxWord) | 0);
+  words[words[lengthProperty]] = (asciiLength | 0);
+  
+  let hash0 = hash[0], hash1 = hash[1], hash2 = hash[2], hash3 = hash[3],
+      hash4 = hash[4], hash5 = hash[5], hash6 = hash[6], hash7 = hash[7];
+
+  for (i = 0; i < words[lengthProperty]; i += 16) {
+    const w = words.slice(i, i + 16);
+    let oldHash0 = hash0, oldHash1 = hash1, oldHash2 = hash2, oldHash3 = hash3,
+        oldHash4 = hash4, oldHash5 = hash5, oldHash6 = hash6, oldHash7 = hash7;
+
+    for (j = 0; j < 64; j++) {
+      if (j >= 16) {
+        const w15 = w[j - 15], w2 = w[j - 2];
+        const s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
+        const s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
+        w[j] = (w[j - 16] + s0 + w[j - 7] + s1) | 0;
+      }
+
+      const ch = (hash4 & hash5) ^ (~hash4 & hash6);
+      const maj = (hash0 & hash1) ^ (hash0 & hash2) ^ (hash1 & hash2);
+      const s0 = rightRotate(hash0, 2) ^ rightRotate(hash0, 13) ^ rightRotate(hash0, 22);
+      const s1 = rightRotate(hash4, 6) ^ rightRotate(hash4, 11) ^ rightRotate(hash4, 25);
+      const temp1 = (hash7 + s1 + ch + k[j] + w[j]) | 0;
+      const temp2 = (s0 + maj) | 0;
+
+      hash7 = hash6;
+      hash6 = hash5;
+      hash5 = hash4;
+      hash4 = (hash3 + temp1) | 0;
+      hash3 = hash2;
+      hash2 = hash1;
+      hash1 = hash0;
+      hash0 = (temp1 + temp2) | 0;
+    }
+
+    hash0 = (hash0 + oldHash0) | 0;
+    hash1 = (hash1 + oldHash1) | 0;
+    hash2 = (hash2 + oldHash2) | 0;
+    hash3 = (hash3 + oldHash3) | 0;
+    hash4 = (hash4 + oldHash4) | 0;
+    hash5 = (hash5 + oldHash5) | 0;
+    hash6 = (hash6 + oldHash6) | 0;
+    hash7 = (hash7 + oldHash7) | 0;
+  }
+
+  const h = [hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7];
+  for (i = 0; i < 8; i++) {
+    const val = h[i];
+    result += ((val >>> 24) & 0xff).toString(16).padStart(2, '0') +
+              ((val >>> 16) & 0xff).toString(16).padStart(2, '0') +
+              ((val >>> 8) & 0xff).toString(16).padStart(2, '0') +
+              (val & 0xff).toString(16).padStart(2, '0');
+  }
+  return result;
+}
+
 async function hashSecret(secret) {
   const normalized = String(secret ?? '');
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
-  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    try {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+      return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+      console.warn('crypto.subtle failed, falling back to pure JS hash:', e);
+    }
+  }
+  return sha256Pure(normalized);
 }
 
 async function secureSettings(inputSettings = {}) {
@@ -420,6 +532,86 @@ function getDueWarningDays(c) {
   return cycleDay >= 6 ? cycleDay : 0;
 }
 
+function sanitizeImportedDb(rawDb) {
+  if (!rawDb || typeof rawDb !== 'object' || Array.isArray(rawDb)) {
+    throw new Error('Backup file must contain a valid database object.');
+  }
+
+  const ensureArray = (value, label) => {
+    if (value == null) return [];
+    if (!Array.isArray(value)) {
+      throw new Error(`${label} must be an array.`);
+    }
+    return value;
+  };
+
+  const ensureObject = (value, label) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(`${label} must be an object.`);
+    }
+    return value;
+  };
+
+  const customers = ensureArray(rawDb.customers, 'customers').map((item, index) => {
+    const customer = ensureObject(item, `customers[${index}]`);
+    if (typeof customer.id !== 'string' || customer.id.trim() === '') {
+      throw new Error(`customers[${index}] is missing a valid id.`);
+    }
+    return customer;
+  });
+
+  const transactions = ensureArray(rawDb.transactions, 'transactions').map((item, index) => {
+    const txn = ensureObject(item, `transactions[${index}]`);
+    if (typeof txn.id !== 'string' || txn.id.trim() === '') {
+      throw new Error(`transactions[${index}] is missing a valid id.`);
+    }
+    return txn;
+  });
+
+  const employees = ensureArray(rawDb.employees, 'employees').map((item, index) => {
+    const employee = ensureObject(item, `employees[${index}]`);
+    if (typeof employee.id !== 'string' || employee.id.trim() === '') {
+      throw new Error(`employees[${index}] is missing a valid id.`);
+    }
+    return employee;
+  });
+
+  const salaries = ensureArray(rawDb.salaries, 'salaries').map((item, index) => {
+    const salary = ensureObject(item, `salaries[${index}]`);
+    if (typeof salary.id !== 'string' || salary.id.trim() === '') {
+      throw new Error(`salaries[${index}] is missing a valid id.`);
+    }
+    return salary;
+  });
+
+  const expenses = ensureArray(rawDb.expenses, 'expenses').map((item, index) => {
+    const expense = ensureObject(item, `expenses[${index}]`);
+    if (typeof expense.id !== 'string' || expense.id.trim() === '') {
+      throw new Error(`expenses[${index}] is missing a valid id.`);
+    }
+    return expense;
+  });
+
+  const settings = ensureObject(rawDb.settings, 'settings');
+
+  return {
+    customers,
+    transactions,
+    employees,
+    salaries,
+    expenses,
+    settings
+  };
+}
+
+function isOwnerRole(role) {
+  return role === 'owner';
+}
+
+function normalizeWhatsAppPhone(phone) {
+  return String(phone || '').replace(/\D/g, '');
+}
+
 export default function App() {
   // Database states
   const [db, setDb] = useState({
@@ -431,6 +623,7 @@ export default function App() {
     settings: {
       lang: 'en',
       upiId: '',
+      whatsappDuesTemplate: '',
       ownerPinHash: '',
       messName: 'Lokmanya Mess',
       ownerName: 'Mess Owner',
@@ -454,10 +647,12 @@ export default function App() {
   const [messNameInput, setMessNameInput] = useState('');
   const [ownerNameInput, setOwnerNameInput] = useState('');
   const [ownerAddressInput, setOwnerAddressInput] = useState('');
+  const [upiIdInput, setUpiIdInput] = useState('');
+  const [whatsappDuesTemplateInput, setWhatsappDuesTemplateInput] = useState('');
   const [activeBranch, setActiveBranch] = useState('Branch 1');
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
   const [archivePinInput, setArchivePinInput] = useState('');
-  const [devKeyInput, setDevKeyInput] = useState('');
+  const [archivePinOwnerAuthInput, setArchivePinOwnerAuthInput] = useState('');
   const [newArchivePinInput, setNewArchivePinInput] = useState('');
   const [shortTermDays, setShortTermDays] = useState('10');
   const [shortTermMeals, setShortTermMeals] = useState('2');
@@ -491,6 +686,22 @@ export default function App() {
 
   const currentTabRef = useRef(currentTab);
   const showCalculatorRef = useRef(showCalculator);
+  const dbRef = useRef(db);
+  const saveQueueRef = useRef(Promise.resolve());
+  const savePendingCountRef = useRef(0);
+  const lastSaveRequestRef = useRef(null);
+  const [saveHealth, setSaveHealth] = useState({
+    status: 'idle',
+    pending: 0,
+    lastSavedAt: '',
+    lastLocalSaveAt: '',
+    lastCloudSyncAt: '',
+    lastError: ''
+  });
+
+  useEffect(() => {
+    dbRef.current = db;
+  }, [db]);
 
   useEffect(() => {
     currentTabRef.current = currentTab;
@@ -504,10 +715,85 @@ export default function App() {
     setToast({ message, type });
   }, []);
 
+  const applyLoadedSettings = useCallback((settings = {}) => {
+    setNewPinInput('');
+    setNewBranch1PinInput('');
+    setNewBranch2PinInput('');
+    setMessNameInput(settings.messName || 'Lokmanya Mess');
+    setOwnerNameInput(settings.ownerName || 'Mess Owner');
+    setOwnerAddressInput(settings.ownerAddress || '');
+    setUpiIdInput(settings.upiId || '');
+    setWhatsappDuesTemplateInput(settings.whatsappDuesTemplate || '');
+  }, []);
+
   const persistDb = useCallback(async (nextDb) => {
     const securedSettings = await secureSettings(nextDb.settings || {});
     return { ...nextDb, settings: securedSettings };
   }, []);
+
+  const writeLocalBackup = useCallback(async (sanitizedDb) => {
+    if (isElectron) {
+      const writeResult = await window.electronAPI.writeDatabase(sanitizedDb);
+      if (!writeResult || !writeResult.success) {
+        throw new Error(writeResult?.error || 'Local backup write failed.');
+      }
+
+      const persistedDb = await window.electronAPI.readDatabase();
+      if (JSON.stringify(persistedDb) !== JSON.stringify(sanitizedDb)) {
+        throw new Error('Local backup verification failed.');
+      }
+      return;
+    }
+
+    const serialized = JSON.stringify(sanitizedDb);
+    localStorage.setItem('lokmanya_db', serialized);
+    if (localStorage.getItem('lokmanya_db') !== serialized) {
+      throw new Error('Browser backup verification failed.');
+    }
+  }, []);
+
+  const syncCollectionDiff = useCallback(async (collectionName, oldList = [], newList = []) => {
+    if (!isCloudSyncAvailable) {
+      return;
+    }
+
+    if (JSON.stringify(oldList) === JSON.stringify(newList)) {
+      return;
+    }
+
+    const oldMap = new Map(oldList.map((item) => [item.id, item]));
+    const newMap = new Map(newList.map((item) => [item.id, item]));
+
+    for (const item of newList) {
+      const oldItem = oldMap.get(item.id);
+      if (!oldItem || JSON.stringify(oldItem) !== JSON.stringify(item)) {
+        await setDoc(doc(firestoreDb, collectionName, item.id), item);
+      }
+    }
+
+    for (const item of oldList) {
+      if (!newMap.has(item.id)) {
+        await deleteDoc(doc(firestoreDb, collectionName, item.id));
+      }
+    }
+  }, []);
+
+  const syncDbToCloud = useCallback(async (oldDb, sanitizedDb) => {
+    if (!isCloudSyncAvailable) {
+      return false;
+    }
+
+    if (JSON.stringify(oldDb.settings) !== JSON.stringify(sanitizedDb.settings)) {
+      await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), sanitizedDb.settings);
+    }
+
+    await syncCollectionDiff('desktop_customers', oldDb.customers || [], sanitizedDb.customers || []);
+    await syncCollectionDiff('desktop_transactions', oldDb.transactions || [], sanitizedDb.transactions || []);
+    await syncCollectionDiff('desktop_employees', oldDb.employees || [], sanitizedDb.employees || []);
+    await syncCollectionDiff('desktop_salaries', oldDb.salaries || [], sanitizedDb.salaries || []);
+    await syncCollectionDiff('desktop_expenses', oldDb.expenses || [], sanitizedDb.expenses || []);
+    return true;
+  }, [syncCollectionDiff]);
 
   const saveSettingField = useCallback(async (key, rawValue, options = {}) => {
     const { required = false, label = key } = options;
@@ -522,15 +808,15 @@ export default function App() {
       return false;
     }
 
-    await saveDb({
-      ...db,
+    await saveDb((currentDb) => ({
+      ...currentDb,
       settings: {
-        ...db.settings,
+        ...currentDb.settings,
         [key]: cleanedValue
       }
-    });
+    }));
     return true;
-  }, [db, showToast]);
+  }, [db.settings, showToast]);
 
   const saveArchivePasscodeSetting = useCallback(async (value) => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
@@ -539,16 +825,16 @@ export default function App() {
       return false;
     }
 
-    await saveDb({
-      ...db,
+    await saveDb(async (currentDb) => ({
+      ...currentDb,
       settings: {
-        ...db.settings,
+        ...currentDb.settings,
         archivePasswordHash: await hashSecret(value)
       }
-    });
+    }));
     showToast(isMarathi ? 'à¤†à¤°à¥à¤•à¤¾à¤‡à¤µà¥à¤¹ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤¯à¤¶à¤¸à¥à¤µà¥€à¤°à¤¿à¤¤à¥à¤¯à¤¾ à¤¬à¤¦à¤²à¤²à¤¾!' : 'Archive passcode updated successfully!', 'success');
     return true;
-  }, [db, showToast]);
+  }, [db.settings, showToast]);
 
   const savePinSetting = useCallback(async (hashField, value, successMessage) => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
@@ -557,16 +843,48 @@ export default function App() {
       return false;
     }
 
-    await saveDb({
-      ...db,
+    await saveDb(async (currentDb) => ({
+      ...currentDb,
       settings: {
-        ...db.settings,
+        ...currentDb.settings,
         [hashField]: await hashSecret(value)
       }
-    });
+    }));
     showToast(successMessage, 'success');
     return true;
-  }, [db, showToast]);
+  }, [db.settings, showToast]);
+
+  const updateArchivePasscodeWithOwnerPin = useCallback(async () => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    const cleanedOwnerPin = String(archivePinOwnerAuthInput).replace(/\D/g, '');
+
+    if (!db.settings?.ownerPinHash) {
+      showToast(
+        isMarathi
+          ? 'कृपया प्रथम मालक PIN सेट करा.'
+          : 'Please set the owner PIN first.',
+        'error'
+      );
+      return false;
+    }
+
+    if (!await matchesSecret(cleanedOwnerPin, db.settings.ownerPinHash, PIN_LENGTH)) {
+      showToast(
+        isMarathi
+          ? 'मालक PIN चुकीचा आहे.'
+          : 'Owner PIN is incorrect.',
+        'error'
+      );
+      return false;
+    }
+
+    const saved = await saveArchivePasscodeSetting(newArchivePinInput);
+    if (!saved) return false;
+
+    setArchivePinOwnerAuthInput('');
+    setNewArchivePinInput('');
+    return true;
+  }, [archivePinOwnerAuthInput, db.settings, newArchivePinInput, saveArchivePasscodeSetting, showToast]);
 
   useEffect(() => {
     if (toast) {
@@ -622,7 +940,7 @@ export default function App() {
     }
     const newSettings = { ...db.settings, ownerPinHash: await hashSecret(cleaned) };
     if (newSettings.requireSetup) delete newSettings.requireSetup;
-    await saveDb({ ...db, settings: newSettings });
+    await saveDb((currentDb) => ({ ...currentDb, settings: newSettings }));
     setFirstRunPinInput('');
     setFirstRunModalVisible(false);
     showToast(db.settings.lang === 'mr' ? 'पिन सेट केला गेला!' : 'Owner PIN set successfully!', 'success');
@@ -639,8 +957,65 @@ export default function App() {
 
   // Load database and setup Firebase real-time listeners on mount
   useEffect(() => {
+    let isMounted = true;
+    let unsubCustomers = () => {};
+    let unsubTxns = () => {};
+    let unsubEmployees = () => {};
+    let unsubSalaries = () => {};
+    let unsubSettings = () => {};
+    let unsubExpenses = () => {};
+
+    const loadLocalData = async () => {
+      try {
+        let localData = null;
+        if (isElectron) {
+          localData = await window.electronAPI.readDatabase();
+        } else {
+          const local = localStorage.getItem('lokmanya_db');
+          if (local) localData = JSON.parse(local);
+        }
+
+        if (!isMounted || !localData || typeof localData !== 'object') {
+          return;
+        }
+
+        const mergedDb = {
+          customers: Array.isArray(localData.customers) ? localData.customers : [],
+          employees: Array.isArray(localData.employees) ? localData.employees : [],
+          transactions: Array.isArray(localData.transactions) ? localData.transactions : [],
+          salaries: Array.isArray(localData.salaries) ? localData.salaries : [],
+          expenses: Array.isArray(localData.expenses) ? localData.expenses : [],
+          settings: {
+            ...dbRef.current.settings,
+            ...(localData.settings || {})
+          }
+        };
+
+        setDb((prev) => ({ ...prev, ...mergedDb }));
+        dbRef.current = { ...dbRef.current, ...mergedDb };
+        applyLoadedSettings(mergedDb.settings);
+      } catch (err) {
+        console.error('Error loading local backup during startup:', err);
+      } finally {
+        if (isMounted) {
+          setSettingsLoaded(true);
+        }
+      }
+    };
+
+    loadLocalData();
+
+    if (!isCloudSyncAvailable) {
+      if (firebaseBootError) {
+        console.error('Cloud sync disabled during startup:', firebaseBootError);
+      }
+      return () => {
+        isMounted = false;
+      };
+    }
+
     // 1. Setup real-time listeners immediately for instant UI load (offline-first)
-    const unsubCustomers = onSnapshot(collection(firestoreDb, 'desktop_customers'), (snapshot) => {
+    unsubCustomers = onSnapshot(collection(firestoreDb, 'desktop_customers'), (snapshot) => {
       const list = snapshot.docs.map(d => d.data());
       setDb(prev => {
         if (JSON.stringify(prev.customers) === JSON.stringify(list)) return prev;
@@ -648,7 +1023,7 @@ export default function App() {
       });
     });
 
-    const unsubTxns = onSnapshot(collection(firestoreDb, 'desktop_transactions'), (snapshot) => {
+    unsubTxns = onSnapshot(collection(firestoreDb, 'desktop_transactions'), (snapshot) => {
       const list = snapshot.docs.map(d => d.data());
       setDb(prev => {
         if (JSON.stringify(prev.transactions) === JSON.stringify(list)) return prev;
@@ -656,7 +1031,7 @@ export default function App() {
       });
     });
 
-    const unsubEmployees = onSnapshot(collection(firestoreDb, 'desktop_employees'), (snapshot) => {
+    unsubEmployees = onSnapshot(collection(firestoreDb, 'desktop_employees'), (snapshot) => {
       const list = snapshot.docs.map(d => d.data());
       setDb(prev => {
         if (JSON.stringify(prev.employees) === JSON.stringify(list)) return prev;
@@ -664,7 +1039,7 @@ export default function App() {
       });
     });
 
-    const unsubSalaries = onSnapshot(collection(firestoreDb, 'desktop_salaries'), (snapshot) => {
+    unsubSalaries = onSnapshot(collection(firestoreDb, 'desktop_salaries'), (snapshot) => {
       const list = snapshot.docs.map(d => d.data());
       setDb(prev => {
         if (JSON.stringify(prev.salaries) === JSON.stringify(list)) return prev;
@@ -672,7 +1047,7 @@ export default function App() {
       });
     });
 
-    const unsubSettings = onSnapshot(doc(firestoreDb, 'desktop_config', 'app_settings'), async (snapshot) => {
+    unsubSettings = onSnapshot(doc(firestoreDb, 'desktop_config', 'app_settings'), async (snapshot) => {
       if (snapshot.exists()) {
         const rawSettings = snapshot.data();
         const settingsData = await secureSettings(rawSettings);
@@ -680,12 +1055,7 @@ export default function App() {
           if (JSON.stringify(prev.settings) === JSON.stringify(settingsData)) return prev;
           return { ...prev, settings: settingsData };
         });
-        setNewPinInput('');
-        setNewBranch1PinInput('');
-        setNewBranch2PinInput('');
-        setMessNameInput(settingsData.messName || 'Lokmanya Mess');
-        setOwnerNameInput(settingsData.ownerName || 'Mess Owner');
-        setOwnerAddressInput(settingsData.ownerAddress || '');
+        applyLoadedSettings(settingsData);
         if (hasLegacySecrets(rawSettings)) {
           await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), settingsData);
         }
@@ -693,7 +1063,7 @@ export default function App() {
       setSettingsLoaded(true);
     });
 
-    const unsubExpenses = onSnapshot(collection(firestoreDb, 'desktop_expenses'), (snapshot) => {
+    unsubExpenses = onSnapshot(collection(firestoreDb, 'desktop_expenses'), (snapshot) => {
       const list = snapshot.docs.map(d => d.data());
       setDb(prev => {
         if (JSON.stringify(prev.expenses) === JSON.stringify(list)) return prev;
@@ -703,6 +1073,10 @@ export default function App() {
 
     // 2. Perform local-to-cloud data migration asynchronously in the background (only if online & not done yet)
     async function migrateLocalToCloudIfNeeded() {
+      if (!isCloudSyncAvailable) {
+        return;
+      }
+
       if (!navigator.onLine) {
         console.log('Device is offline. Skipping cloud migration checks.');
         return;
@@ -765,6 +1139,7 @@ export default function App() {
 
     // Clean up real-time snapshot listeners on unmount
     return () => {
+      isMounted = false;
       unsubCustomers();
       unsubTxns();
       unsubEmployees();
@@ -772,126 +1147,176 @@ export default function App() {
       unsubSettings();
       unsubExpenses();
     };
-  }, []);
+  }, [applyLoadedSettings]);
 
-  const saveDb = async (newDb) => {
-    const sanitizedDb = { ...newDb, settings: await secureSettings(newDb.settings || {}) };
-    // 1. Update React state immediately for instant UI responsiveness
-    const oldDb = db;
-    setDb(sanitizedDb);
+  const saveDb = useCallback(async (nextDbOrUpdater) => {
+    lastSaveRequestRef.current = nextDbOrUpdater;
 
-    // 2. Save local file backup
-    if (isElectron) {
-      window.electronAPI.writeDatabase(sanitizedDb);
-    } else {
-      localStorage.setItem('lokmanya_db', JSON.stringify(sanitizedDb));
-    }
+    const runSave = async () => {
+      savePendingCountRef.current += 1;
+      setSaveHealth((prev) => ({
+        ...prev,
+        status: 'saving',
+        pending: savePendingCountRef.current,
+        lastError: ''
+      }));
 
-    // 3. Write individual differences to Firebase Firestore collections in the background
+      const oldDb = dbRef.current;
+      const candidateDb = typeof nextDbOrUpdater === 'function'
+        ? await nextDbOrUpdater(oldDb)
+        : nextDbOrUpdater;
+      const sanitizedDb = await persistDb(candidateDb);
+
+      setDb(sanitizedDb);
+      dbRef.current = sanitizedDb;
+
+      const nowIso = new Date().toISOString();
+      let cloudSyncOk = !isCloudSyncAvailable;
+
+      try {
+        await writeLocalBackup(sanitizedDb);
+        setSaveHealth((prev) => ({
+          ...prev,
+          status: 'saving',
+          pending: savePendingCountRef.current,
+          lastLocalSaveAt: nowIso,
+          lastError: ''
+        }));
+      } catch (err) {
+        console.error('Error saving local backup:', err);
+        setDb(oldDb);
+        dbRef.current = oldDb;
+        const isMarathi = oldDb.settings && oldDb.settings.lang === 'mr';
+        const errorMessage = err?.message || 'Local backup write failed.';
+        setSaveHealth((prev) => ({
+          ...prev,
+          status: 'error',
+          lastError: errorMessage
+        }));
+        showToast(
+          isMarathi
+            ? 'डेटा स्थानिक बॅकअपमध्ये सेव्ह झाला नाही. कृपया पुन्हा प्रयत्न करा.'
+            : 'Changes were not saved to the local backup. Please try again.',
+          'error'
+        );
+        throw err;
+      }
+
+      try {
+        cloudSyncOk = await syncDbToCloud(oldDb, sanitizedDb);
+      } catch (err) {
+        console.error('Error syncing changes to Firebase Firestore:', err);
+        const isMarathi = sanitizedDb.settings && sanitizedDb.settings.lang === 'mr';
+        const errorMessage = err?.message || 'Cloud sync failed.';
+        setSaveHealth((prev) => ({
+          ...prev,
+          status: 'degraded',
+          lastError: errorMessage,
+          lastSavedAt: nowIso,
+          lastCloudSyncAt: prev.lastCloudSyncAt
+        }));
+        showToast(
+          isMarathi
+            ? 'डेटा स्थानिक पातळीवर सेव्ह झाला, पण क्लाउड सिंक अयशस्वी झाले.'
+            : 'Changes were saved locally, but cloud sync failed.',
+          'error'
+        );
+      }
+
+      setSaveHealth((prev) => ({
+        ...prev,
+        status: cloudSyncOk ? 'healthy' : 'degraded',
+        lastSavedAt: nowIso,
+        lastCloudSyncAt: cloudSyncOk ? nowIso : prev.lastCloudSyncAt,
+        lastError: cloudSyncOk ? '' : prev.lastError
+      }));
+
+      return {
+        success: true,
+        localSaved: true,
+        cloudSyncOk,
+        savedAt: nowIso,
+        db: sanitizedDb
+      };
+    };
+
+    const queuedSave = saveQueueRef.current.then(runSave, runSave);
+    saveQueueRef.current = queuedSave.catch(() => {});
+
     try {
-      // Sync settings / config
-      if (JSON.stringify(oldDb.settings) !== JSON.stringify(sanitizedDb.settings)) {
-        await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), sanitizedDb.settings);
-      }
-
-      // Sync customers array
-      if (JSON.stringify(oldDb.customers) !== JSON.stringify(sanitizedDb.customers)) {
-        const oldMap = new Map(oldDb.customers.map(c => [c.id, c]));
-        const newMap = new Map(sanitizedDb.customers.map(c => [c.id, c]));
-        // Add or Update
-        for (const c of sanitizedDb.customers) {
-          const oldC = oldMap.get(c.id);
-          if (!oldC || JSON.stringify(oldC) !== JSON.stringify(c)) {
-            await setDoc(doc(firestoreDb, 'desktop_customers', c.id), c);
-          }
-        }
-        // Delete
-        for (const c of oldDb.customers) {
-          if (!newMap.has(c.id)) {
-            await deleteDoc(doc(firestoreDb, 'desktop_customers', c.id));
-          }
-        }
-      }
-
-      // Sync transactions array
-      if (JSON.stringify(oldDb.transactions) !== JSON.stringify(sanitizedDb.transactions)) {
-        const oldMap = new Map(oldDb.transactions.map(t => [t.id, t]));
-        const newMap = new Map(sanitizedDb.transactions.map(t => [t.id, t]));
-        // Add or Update
-        for (const t of sanitizedDb.transactions) {
-          const oldT = oldMap.get(t.id);
-          if (!oldT || JSON.stringify(oldT) !== JSON.stringify(t)) {
-            await setDoc(doc(firestoreDb, 'desktop_transactions', t.id), t);
-          }
-        }
-        // Delete
-        for (const t of oldDb.transactions) {
-          if (!newMap.has(t.id)) {
-            await deleteDoc(doc(firestoreDb, 'desktop_transactions', t.id));
-          }
-        }
-      }
-
-      // Sync employees array
-      if (JSON.stringify(oldDb.employees) !== JSON.stringify(sanitizedDb.employees)) {
-        const oldMap = new Map(oldDb.employees.map(e => [e.id, e]));
-        const newMap = new Map(sanitizedDb.employees.map(e => [e.id, e]));
-        // Add or Update
-        for (const e of sanitizedDb.employees) {
-          const oldE = oldMap.get(e.id);
-          if (!oldE || JSON.stringify(oldE) !== JSON.stringify(e)) {
-            await setDoc(doc(firestoreDb, 'desktop_employees', e.id), e);
-          }
-        }
-        // Delete
-        for (const e of oldDb.employees) {
-          if (!newMap.has(e.id)) {
-            await deleteDoc(doc(firestoreDb, 'desktop_employees', e.id));
-          }
-        }
-      }
-
-      // Sync salaries array
-      if (JSON.stringify(oldDb.salaries) !== JSON.stringify(sanitizedDb.salaries)) {
-        const oldMap = new Map(oldDb.salaries.map(s => [s.id, s]));
-        const newMap = new Map(sanitizedDb.salaries.map(s => [s.id, s]));
-        // Add or Update
-        for (const s of sanitizedDb.salaries) {
-          const oldS = oldMap.get(s.id);
-          if (!oldS || JSON.stringify(oldS) !== JSON.stringify(s)) {
-            await setDoc(doc(firestoreDb, 'desktop_salaries', s.id), s);
-          }
-        }
-        // Delete
-        for (const s of oldDb.salaries) {
-          if (!newMap.has(s.id)) {
-            await deleteDoc(doc(firestoreDb, 'desktop_salaries', s.id));
-          }
-        }
-      }
-
-      // Sync expenses array
-      if (JSON.stringify(oldDb.expenses) !== JSON.stringify(sanitizedDb.expenses)) {
-        const oldMap = new Map((oldDb.expenses || []).map(e => [e.id, e]));
-        const newMap = new Map((sanitizedDb.expenses || []).map(e => [e.id, e]));
-        // Add or Update
-        for (const e of (sanitizedDb.expenses || [])) {
-          const oldE = oldMap.get(e.id);
-          if (!oldE || JSON.stringify(oldE) !== JSON.stringify(e)) {
-            await setDoc(doc(firestoreDb, 'desktop_expenses', e.id), e);
-          }
-        }
-        // Delete
-        for (const e of (oldDb.expenses || [])) {
-          if (!newMap.has(e.id)) {
-            await deleteDoc(doc(firestoreDb, 'desktop_expenses', e.id));
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error syncing changes to Firebase Firestore:', err);
+      return await queuedSave;
+    } finally {
+      savePendingCountRef.current = Math.max(0, savePendingCountRef.current - 1);
+      setSaveHealth((prev) => ({
+        ...prev,
+        pending: savePendingCountRef.current,
+        status:
+          prev.status === 'error' || prev.status === 'degraded'
+            ? prev.status
+            : savePendingCountRef.current > 0
+              ? 'saving'
+              : prev.lastSavedAt
+                ? 'healthy'
+                : 'idle'
+      }));
     }
-  };
+  }, [persistDb, showToast, syncDbToCloud, writeLocalBackup]);
+
+  const retryLastSave = useCallback(async () => {
+    if (!lastSaveRequestRef.current) return;
+    await saveDb(lastSaveRequestRef.current);
+  }, [saveDb]);
+
+  const saveHealthUi = useMemo(() => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    switch (saveHealth.status) {
+      case 'saving':
+        return {
+          color: 'var(--warning)',
+          label: isMarathi ? 'डेटा सेव्ह होत आहे...' : 'Saving data...',
+          details: isMarathi
+            ? 'बदल रांगेत आहेत आणि जतन केले जात आहेत.'
+            : 'Changes are queued and being persisted.'
+        };
+      case 'degraded':
+        return {
+          color: 'var(--warning)',
+          label: isMarathi ? 'स्थानिक सेव्ह ठीक, क्लाउड सिंक प्रलंबित' : 'Local save OK, cloud sync pending',
+          details: isMarathi
+            ? 'तुमचा डेटा या संगणकावर सुरक्षित आहे, पण क्लाउड अपडेट पूर्ण झालेले नाही.'
+            : 'Your data is safe on this computer, but cloud sync has not completed.'
+        };
+      case 'error':
+        return {
+          color: 'var(--danger)',
+          label: isMarathi ? 'सेव्ह अयशस्वी' : 'Save failed',
+          details: isMarathi
+            ? 'स्थानिक बॅकअप लिहिता आला नाही. पुन्हा प्रयत्न करा.'
+            : 'The local backup could not be written. Please retry.'
+        };
+      case 'healthy':
+        return {
+          color: 'var(--success)',
+          label: isMarathi ? 'सर्व डेटा सुरक्षित आहे' : 'All data is healthy',
+          details: isMarathi
+            ? 'स्थानिक बॅकअप आणि क्लाउड सिंक दोन्ही पूर्ण झाले.'
+            : 'Both local backup and cloud sync completed successfully.'
+        };
+      default:
+        return {
+          color: 'var(--text-secondary)',
+          label: isMarathi ? 'अद्याप कोणतेही सेव्ह नाही' : 'No saves yet',
+          details: isMarathi
+            ? 'पहिली नोंद जतन झाल्यावर स्थिती येथे दिसेल.'
+            : 'Status will appear here after the first saved change.'
+        };
+    }
+  }, [db.settings, saveHealth.status]);
+
+  const formatHealthTimestamp = useCallback((value) => {
+    if (!value) return '-';
+    return new Date(value).toLocaleString('en-IN');
+  }, []);
 
 
 
@@ -1139,20 +1564,15 @@ export default function App() {
       note: payNote.trim()
     };
 
-    const updatedCustomers = db.customers.map(c => {
-      if (c.id === payModalCustomer.id) {
-        return { ...c, deposited: (c.deposited || 0) + amt };
-      }
-      return c;
-    });
-
-    const updatedTxns = [...(db.transactions || []), newTxn];
-
-    await saveDb({
-      ...db,
-      customers: updatedCustomers,
-      transactions: updatedTxns
-    });
+    await saveDb((currentDb) => ({
+      ...currentDb,
+      customers: currentDb.customers.map((c) => (
+        c.id === payModalCustomer.id
+          ? { ...c, deposited: (c.deposited || 0) + amt }
+          : c
+      )),
+      transactions: [...(currentDb.transactions || []), newTxn]
+    }));
 
     showToast(db.settings.lang === 'mr' ? 'पेमेंट यशस्वीरित्या नोंदवले गेले!' : 'Payment recorded successfully!');
     setPayAmount('');
@@ -1163,6 +1583,15 @@ export default function App() {
   };
 
   const handleDeleteTxn = async (txnId, custId, amount) => {
+    if (!isOwnerRole(role)) {
+      showToast(
+        db.settings.lang === 'mr'
+          ? 'हा व्यवहार हटवण्यासाठी मालक प्रवेश आवश्यक आहे.'
+          : 'Owner access is required to delete this transaction.',
+        'error'
+      );
+      return;
+    }
     const confirmDelete = window.confirm(
       db.settings.lang === 'mr' 
         ? 'तुम्हाला नक्की हे पेमेंट रेकॉर्ड डिलीट करायचे आहे का? यामुळे जमा रक्कम कमी होईल.' 
@@ -1170,20 +1599,15 @@ export default function App() {
     );
     if (!confirmDelete) return;
 
-    const updatedTxns = db.transactions.filter(t => t.id !== txnId);
-
-    const updatedCustomers = db.customers.map(c => {
-      if (c.id === custId) {
-        return { ...c, deposited: Math.max(0, (c.deposited || 0) - Number(amount || 0)) };
-      }
-      return c;
-    });
-
-    await saveDb({
-      ...db,
-      customers: updatedCustomers,
-      transactions: updatedTxns
-    });
+    await saveDb((currentDb) => ({
+      ...currentDb,
+      customers: currentDb.customers.map((c) => (
+        c.id === custId
+          ? { ...c, deposited: Math.max(0, (c.deposited || 0) - Number(amount || 0)) }
+          : c
+      )),
+      transactions: currentDb.transactions.filter((t) => t.id !== txnId)
+    }));
   };
 
   // Customers handlers
@@ -1211,7 +1635,7 @@ export default function App() {
     setCustModal(true);
   };
 
-  const saveCustomer = () => {
+  const saveCustomer = async () => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
     if (isBlank(custForm.name) || isBlank(custForm.phone)) {
       showToast(isMarathi ? 'नाव आणि फोन नंबर आवश्यक आहेत.' : 'Name and Phone are required.', 'error');
@@ -1305,9 +1729,6 @@ export default function App() {
 
     const finalForm = { ...custForm, name: normalizeText(custForm.name), addr: normalizeText(custForm.addr), phone: cleanPhone, amount: String(amount), deposited: String(deposited) };
 
-    let updatedCustomers;
-    let updatedTxns = [...(db.transactions || [])];
-
     if (!editCustId) {
       const activeBranchCount = (db.customers || []).filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old').length;
       if (activeBranchCount >= 320) {
@@ -1333,29 +1754,63 @@ export default function App() {
       }
     }
 
-    if (editCustId) {
-      updatedCustomers = db.customers.map(c => c.id === editCustId ? { ...c, ...finalForm, amount, deposited, category: targetCat } : c);
-    } else {
-      const newCust = { ...finalForm, id: 'cust_' + Date.now(), amount, deposited, category: targetCat, branch: activeBranch };
-      updatedCustomers = [...db.customers, newCust];
+    await saveDb((currentDb) => {
+      let nextTargetCat = targetCat;
+      if (!nextTargetCat && editCustId) {
+        const originalCustomer = currentDb.customers.find((c) => c.id === editCustId);
+        nextTargetCat = originalCustomer ? (originalCustomer.category || 'dinein') : 'dinein';
+      }
+
+      if (editCustId) {
+        return {
+          ...currentDb,
+          customers: currentDb.customers.map((c) => (
+            c.id === editCustId
+              ? { ...c, ...finalForm, amount, deposited, category: nextTargetCat }
+              : c
+          ))
+        };
+      }
+
+      const newCust = {
+        ...finalForm,
+        id: 'cust_' + Date.now(),
+        amount,
+        deposited,
+        category: nextTargetCat,
+        branch: activeBranch
+      };
+      const nextTransactions = [...(currentDb.transactions || [])];
       if (newCust.deposited > 0) {
-        const initialTxn = {
+        nextTransactions.push({
           id: 'txn_' + Date.now() + '_init',
           custId: newCust.id,
           amount: newCust.deposited,
           date: newCust.joinDate,
           paymentMode: 'Cash'
-        };
-        updatedTxns.push(initialTxn);
+        });
       }
-    }
 
-    saveDb({ ...db, customers: updatedCustomers, transactions: updatedTxns });
+      return {
+        ...currentDb,
+        customers: [...currentDb.customers, newCust],
+        transactions: nextTransactions
+      };
+    });
     setCustSearch(''); // Clear search query to show the new customer immediately
     setCustModal(false);
   };
 
-  const deleteCustomer = (id) => {
+  const deleteCustomer = async (id) => {
+    if (!isOwnerRole(role)) {
+      showToast(
+        db.settings.lang === 'mr'
+          ? 'ग्राहक बदलण्यासाठी मालक प्रवेश आवश्यक आहे.'
+          : 'Owner access is required to modify customers.',
+        'error'
+      );
+      return;
+    }
     const customer = db.customers.find(c => c.id === id);
     if (!customer) return;
 
@@ -1365,9 +1820,11 @@ export default function App() {
         : 'Are you sure you want to permanently delete this customer? This cannot be undone.';
       if (!confirm(confirmMsg)) return;
 
-      const updated = db.customers.filter(c => c.id !== id);
-      const updatedTxns = db.transactions.filter(t => t.custId !== id);
-      saveDb({ ...db, customers: updated, transactions: updatedTxns });
+      await saveDb((currentDb) => ({
+        ...currentDb,
+        customers: currentDb.customers.filter((c) => c.id !== id),
+        transactions: currentDb.transactions.filter((t) => t.custId !== id)
+      }));
       showToast(
         db.settings.lang === 'mr' ? 'ग्राहक कायमचा हटवला गेला!' : 'Customer permanently deleted!',
         'success'
@@ -1378,8 +1835,10 @@ export default function App() {
         : 'Are you sure you want to archive this customer? They will be moved to the Old Customers Archive.';
       if (!confirm(confirmMsg)) return;
 
-      const updated = db.customers.map(c => c.id === id ? { ...c, status: 'old' } : c);
-      saveDb({ ...db, customers: updated });
+      await saveDb((currentDb) => ({
+        ...currentDb,
+        customers: currentDb.customers.map((c) => (c.id === id ? { ...c, status: 'old' } : c))
+      }));
       showToast(
         db.settings.lang === 'mr' ? 'ग्राहक संग्रहित केला गेला!' : 'Customer archived successfully!',
         'success'
@@ -1387,21 +1846,32 @@ export default function App() {
     }
   };
 
-  const restoreCustomer = (id) => {
+  const restoreCustomer = async (id) => {
+    if (!isOwnerRole(role)) {
+      showToast(
+        db.settings.lang === 'mr'
+          ? 'ग्राहक पुनर्संचयित करण्यासाठी मालक प्रवेश आवश्यक आहे.'
+          : 'Owner access is required to restore customers.',
+        'error'
+      );
+      return;
+    }
     const confirmMsg = db.settings.lang === 'mr'
       ? 'आपण या ग्राहकाला पुनर्संचयित करू इच्छिता?'
       : 'Are you sure you want to restore this customer back to active lists?';
     if (!confirm(confirmMsg)) return;
 
-    const updated = db.customers.map(c => c.id === id ? { ...c, status: undefined } : c);
-    saveDb({ ...db, customers: updated });
+    await saveDb((currentDb) => ({
+      ...currentDb,
+      customers: currentDb.customers.map((c) => (c.id === id ? { ...c, status: undefined } : c))
+    }));
     showToast(
       db.settings.lang === 'mr' ? 'ग्राहक यशस्वीरित्या पुनर्संचयित केला गेला!' : 'Customer successfully restored!',
       'success'
     );
   };
 
-  const saveExpense = (e) => {
+  const saveExpense = async (e) => {
     if (e) e.preventDefault();
     const amt = parseFloat(expenseForm.amount);
     if (isNaN(amt) || amt <= 0) {
@@ -1422,13 +1892,21 @@ export default function App() {
       branch: activeBranch
     };
 
-    const updatedExpenses = [newExpense, ...(db.expenses || [])];
-    saveDb({ ...db, expenses: updatedExpenses });
+    await saveDb((currentDb) => ({ ...currentDb, expenses: [newExpense, ...(currentDb.expenses || [])] }));
     setExpenseForm({ amount: '', note: '' });
     showToast(db.settings.lang === 'mr' ? 'खर्च यशस्वीरित्या जोडला गेला!' : 'Expense added successfully!');
   };
 
-  const deleteExpense = (id) => {
+  const deleteExpense = async (id) => {
+    if (!isOwnerRole(role)) {
+      showToast(
+        db.settings.lang === 'mr'
+          ? 'खर्च हटवण्यासाठी मालक प्रवेश आवश्यक आहे.'
+          : 'Owner access is required to delete expenses.',
+        'error'
+      );
+      return;
+    }
     const confirmDelete = window.confirm(
       db.settings.lang === 'mr'
         ? 'तुम्हाला नक्की हा खर्च हटवायचा आहे का?'
@@ -1436,8 +1914,7 @@ export default function App() {
     );
     if (!confirmDelete) return;
 
-    const updated = (db.expenses || []).filter(e => e.id !== id);
-    saveDb({ ...db, expenses: updated });
+    await saveDb((currentDb) => ({ ...currentDb, expenses: (currentDb.expenses || []).filter((e) => e.id !== id) }));
     showToast(db.settings.lang === 'mr' ? 'खर्च हटवला गेला!' : 'Expense deleted successfully!');
   };
 
@@ -1542,6 +2019,97 @@ export default function App() {
       document.body.removeChild(link);
     }
   };
+
+  const buildCustomerReminderMessage = useCallback((customer) => {
+    const remaining = getCustomerDues(customer);
+    const status = computeStatus(customer);
+    const expiry = customer?.joinDate ? expiryStr(customer.joinDate, customer.plan) : '';
+    const messName = db.settings?.messName || 'Lokmanya Mess';
+    const upiId = String(db.settings?.upiId || '').trim();
+    const paymentAmount = remaining > 0 ? remaining : 0;
+    const customerName = customer?.name || 'Customer';
+    const upiLink =
+  upiId && paymentAmount > 0
+    ? `https://atharva-kharapkar.github.io/LokmanyaMess/pay/?pa=${encodeURIComponent(
+        upiId
+      )}&pn=${encodeURIComponent(
+        messName
+      )}&am=${encodeURIComponent(
+        paymentAmount
+      )}&tn=${encodeURIComponent(
+        `${messName} reminder for ${customerName}`
+      )}`
+    : '';
+    const defaultTemplate = db.settings?.lang === 'mr'
+      ? 'नमस्कार [Name], तुमची थकीत रक्कम ₹[Dues] आहे. कृपया पेमेंट करा: [UpiLink] - [MessName]'
+      : 'Dear [Name], your pending dues are Rs [Dues]. Please pay here: [UpiLink] - [MessName]';
+    const template = String(db.settings?.whatsappDuesTemplate || defaultTemplate);
+
+    if (template.trim()) {
+      return template
+        .replace(/\[Name\]/g, customerName)
+        .replace(/\[Dues\]/g, String(paymentAmount))
+        .replace(/\[Amount\]/g, String(paymentAmount))
+        .replace(/\[Date\]/g, expiry || '')
+        .replace(/\[MessName\]/g, messName)
+        .replace(/\[UpiLink\]/g, upiLink || (upiId || ''))
+        .trim();
+    }
+
+    const intro = db.settings?.lang === 'mr'
+      ? `नमस्कार ${customerName}, ${messName} कडून स्मरणपत्र.`
+      : `Hello ${customerName}, this is a reminder from ${messName}.`;
+
+    const dueLine = remaining > 0
+      ? (db.settings?.lang === 'mr'
+          ? `तुमची थकीत रक्कम ₹${remaining} आहे.`
+          : `Your due payment is Rs ${remaining}.`)
+      : (db.settings?.lang === 'mr'
+          ? `तुमचा प्लॅन ${expiry ? `${expiry} पर्यंत` : 'लवकरच'} नूतनीकरणासाठी येत आहे.`
+          : `Your plan is ${status === 'expired' ? 'expired' : 'due for renewal soon'}${expiry ? ` on ${expiry}` : ''}.`);
+
+    const planLine = db.settings?.lang === 'mr'
+      ? `विभाग: ${customer.category || 'dinein'} | प्लॅन: ${customer.plan} | जमा: ₹${customer.deposited || 0}`
+      : `Section: ${customer.category || 'dinein'} | Plan: ${customer.plan} | Paid: Rs ${customer.deposited || 0}`;
+
+    const paymentLines = upiId && paymentAmount > 0
+      ? [
+          db.settings?.lang === 'mr'
+            ? `पेमेंट UPI: ${upiId}`
+            : `UPI payment ID: ${upiId}`,
+          upiLink
+        ]
+      : [];
+
+    const closing = db.settings?.lang === 'mr'
+      ? 'कृपया WhatsApp वरूनच पेमेंट पाठवून स्क्रीनशॉट शेअर करा. धन्यवाद.'
+      : 'Please send the payment and share the screenshot on WhatsApp. Thank you.';
+
+    return [intro, dueLine, planLine, ...paymentLines, closing].filter(Boolean).join('\n');
+  }, [db.settings]);
+
+  const sendWhatsAppReminder = useCallback((customer) => {
+    const phoneDigits = normalizeWhatsAppPhone(customer?.phone);
+    if (phoneDigits.length < 10) {
+      showToast(
+        db.settings?.lang === 'mr'
+          ? 'या ग्राहकासाठी वैध WhatsApp नंबर उपलब्ध नाही.'
+          : 'A valid WhatsApp number is not available for this customer.',
+        'error'
+      );
+      return;
+    }
+
+    const message = buildCustomerReminderMessage(customer);
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappDesktopUrl = `whatsapp://send?phone=${phoneDigits}&text=${encodedMessage}`;
+    const whatsappWebUrl = `https://wa.me/${phoneDigits}?text=${encodedMessage}`;
+    if (isElectron) {
+      window.open(whatsappDesktopUrl, '_blank');
+      return;
+    }
+    window.open(whatsappWebUrl, 'whatsapp_share_tab');
+  }, [buildCustomerReminderMessage, db.settings, showToast]);
 
   // Calculations for Dashboard Metrics (filtered by branch)
   const metrics = useMemo(() => {
@@ -1757,6 +2325,49 @@ export default function App() {
   const currentMonthNetProfit = useMemo(() => {
     return currentMonthCollectionTotal - currentMonthExpenseTotal;
   }, [currentMonthCollectionTotal, currentMonthExpenseTotal]);
+
+  const ownerBranchDashboardData = useMemo(() => {
+    const today = todayStr();
+    const currentMonth = today.slice(0, 7);
+    const branches = ['Branch 1', 'Branch 2'];
+
+    return branches.map((branchName) => {
+      const branchCustomers = (db.customers || []).filter((customer) => (customer.branch || 'Branch 1') === branchName && customer.status !== 'old');
+      const branchTransactions = (db.transactions || [])
+        .filter((tx) => (tx.branch || 'Branch 1') === branchName)
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+      const branchExpensesList = (db.expenses || [])
+        .filter((expense) => (expense.branch || 'Branch 1') === branchName)
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+      const todayCollections = branchTransactions
+        .filter((tx) => tx.date === today)
+        .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+      const monthCollections = branchTransactions
+        .filter((tx) => String(tx.date || '').slice(0, 7) === currentMonth)
+        .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+
+      const todayExpenses = branchExpensesList
+        .filter((expense) => expense.date === today)
+        .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+      const monthExpenses = branchExpensesList
+        .filter((expense) => String(expense.date || '').slice(0, 7) === currentMonth)
+        .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+
+      return {
+        name: branchName,
+        activeCustomers: branchCustomers.length,
+        pendingDues: branchCustomers.reduce((sum, customer) => sum + getCustomerDues(customer), 0),
+        todayCollections,
+        monthCollections,
+        todayExpenses,
+        monthExpenses,
+        monthNet: monthCollections - monthExpenses,
+        recentCollections: branchTransactions.slice(0, 5),
+        recentExpenses: branchExpensesList.slice(0, 5)
+      };
+    });
+  }, [db.customers, db.transactions, db.expenses]);
 
   // Filtered customer list (sorted with pending dues first, filtered by category/branch)
   const filteredCustomers = useMemo(() => {
@@ -2159,6 +2770,98 @@ export default function App() {
           {/* DASHBOARD TAB */}
           {currentTab === 'dashboard' && (
             <div className="tab-panel animate-fade">
+              {!isElectron && role === 'owner' && (
+                <div className="card-section" style={{ marginBottom: '4px' }}>
+                  <div className="section-header">
+                    <span className="section-title">{db.settings.lang === 'mr' ? 'वेब मालक डॅशबोर्ड - दोन्ही शाखा' : 'Owner Web Dashboard - Both Branches'}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                    {ownerBranchDashboardData.map((branch) => (
+                      <div key={branch.name} className="card-section" style={{ padding: '20px', margin: 0, background: 'linear-gradient(180deg, #fffaf6 0%, #ffffff 100%)' }}>
+                        <div className="section-header" style={{ marginBottom: '14px' }}>
+                          <span className="section-title" style={{ fontSize: '15px' }}>{branch.name}</span>
+                          <span className="badge badge-active">{branch.activeCustomers} {db.settings.lang === 'mr' ? 'सक्रिय' : 'active'}</span>
+                        </div>
+                        <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                          <div className="stat-card" style={{ padding: '14px' }}>
+                            <div className="stat-info">
+                              <div className="stat-label">{db.settings.lang === 'mr' ? 'आजची जमा' : "Today's Collections"}</div>
+                              <div className="stat-value" style={{ color: 'var(--success)', fontSize: '22px' }}>₹{branch.todayCollections.toLocaleString('en-IN')}</div>
+                            </div>
+                          </div>
+                          <div className="stat-card" style={{ padding: '14px' }}>
+                            <div className="stat-info">
+                              <div className="stat-label">{db.settings.lang === 'mr' ? 'आजचा खर्च' : "Today's Expenses"}</div>
+                              <div className="stat-value" style={{ color: 'var(--danger)', fontSize: '22px' }}>₹{branch.todayExpenses.toLocaleString('en-IN')}</div>
+                            </div>
+                          </div>
+                          <div className="stat-card" style={{ padding: '14px' }}>
+                            <div className="stat-info">
+                              <div className="stat-label">{db.settings.lang === 'mr' ? 'महिन्याची जमा' : "Month's Collections"}</div>
+                              <div className="stat-value" style={{ color: 'var(--success)', fontSize: '22px' }}>₹{branch.monthCollections.toLocaleString('en-IN')}</div>
+                            </div>
+                          </div>
+                          <div className="stat-card" style={{ padding: '14px' }}>
+                            <div className="stat-info">
+                              <div className="stat-label">{db.settings.lang === 'mr' ? 'महिन्याचा खर्च' : "Month's Expenses"}</div>
+                              <div className="stat-value" style={{ color: 'var(--danger)', fontSize: '22px' }}>₹{branch.monthExpenses.toLocaleString('en-IN')}</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                          <div style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', backgroundColor: '#fff' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase' }}>{db.settings.lang === 'mr' ? 'महिन्याचा नफा' : 'Month Net'}</div>
+                            <div style={{ fontSize: '24px', fontWeight: '800', color: branch.monthNet >= 0 ? 'var(--success)' : 'var(--danger)' }}>₹{branch.monthNet.toLocaleString('en-IN')}</div>
+                          </div>
+                          <div style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', backgroundColor: '#fff' }}>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase' }}>{db.settings.lang === 'mr' ? 'बाकी रक्कम' : 'Pending Dues'}</div>
+                            <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--warning)' }}>₹{branch.pendingDues.toLocaleString('en-IN')}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                          <div style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', backgroundColor: '#fff' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '800', marginBottom: '10px', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+                              {db.settings.lang === 'mr' ? 'अलीकडील जमा' : 'Recent Collections'}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {branch.recentCollections.length > 0 ? branch.recentCollections.map((tx) => (
+                                <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+                                  <div>
+                                    <div style={{ fontWeight: '700', color: 'var(--text)' }}>{tx.custName}</div>
+                                    <div style={{ color: 'var(--text-secondary)' }}>{tx.date}</div>
+                                  </div>
+                                  <div style={{ fontWeight: '800', color: 'var(--success)' }}>₹{Number(tx.amount || 0).toLocaleString('en-IN')}</div>
+                                </div>
+                              )) : (
+                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'रेकॉर्ड नाही' : 'No records'}</div>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', backgroundColor: '#fff' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '800', marginBottom: '10px', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+                              {db.settings.lang === 'mr' ? 'अलीकडील खर्च' : 'Recent Expenses'}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {branch.recentExpenses.length > 0 ? branch.recentExpenses.map((expense) => (
+                                <div key={expense.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+                                  <div>
+                                    <div style={{ fontWeight: '700', color: 'var(--text)' }}>{expense.note || (db.settings.lang === 'mr' ? 'खर्च' : 'Expense')}</div>
+                                    <div style={{ color: 'var(--text-secondary)' }}>{expense.date}</div>
+                                  </div>
+                                  <div style={{ fontWeight: '800', color: 'var(--danger)' }}>₹{Number(expense.amount || 0).toLocaleString('en-IN')}</div>
+                                </div>
+                              )) : (
+                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{db.settings.lang === 'mr' ? 'रेकॉर्ड नाही' : 'No records'}</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="dashboard-grid">
                 <div className="stat-card">
                   <div className="stat-icon" style={{ backgroundColor: 'rgba(79, 70, 229, 0.1)', color: 'var(--primary)' }}>
@@ -2585,6 +3288,16 @@ export default function App() {
                             >
                               <History size={12} style={{ marginRight: '2px' }} />
                               {db.settings.lang === 'mr' ? 'इतिहास' : 'History'}
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              title={db.settings.lang === 'mr' ? 'WhatsApp वर थकीत रक्कम आठवण पाठवा' : 'Send Dues Reminder via WhatsApp'}
+                              onClick={() => sendWhatsAppReminder(c)}
+                              style={{ height: '32px', padding: '0 10px', fontSize: '12px', backgroundColor: '#22c55e', borderColor: '#22c55e', color: '#fff' }}
+                              aria-label={db.settings.lang === 'mr' ? 'WhatsApp Reminder' : 'Send WhatsApp reminder'}
+                            >
+                              <Bell size={12} style={{ marginRight: '4px' }} />
+                              {db.settings.lang === 'mr' ? 'व्हाट्सएप' : 'WhatsApp'}
                             </button>
                             <button
                               className="btn btn-sm btn-icon"
@@ -3120,7 +3833,7 @@ export default function App() {
                         <select
                           className="form-select"
                           value={db.settings.lang || 'en'}
-                          onChange={(e) => saveDb({ ...db, settings: { ...db.settings, lang: e.target.value } })}
+                          onChange={(e) => saveDb((currentDb) => ({ ...currentDb, settings: { ...currentDb.settings, lang: e.target.value } }))}
                         >
                           <option value="en">English</option>
                           <option value="mr">मराठी (Marathi)</option>
@@ -3167,12 +3880,51 @@ export default function App() {
                       </div>
 
                       <div className="form-row">
+                        <div className="form-group" style={{ width: '100%' }}>
+                          <label className="form-label">{db.settings.lang === 'mr' ? 'UPI आयडी' : 'UPI ID'}</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={upiIdInput}
+                            onChange={(e) => setUpiIdInput(e.target.value)}
+                            onBlur={() => saveSettingField('upiId', upiIdInput.trim(), { label: 'UPI ID' })}
+                            placeholder={db.settings.lang === 'mr' ? 'उदा. name@bank' : 'Example: name@bank'}
+                          />
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                            {db.settings.lang === 'mr'
+                              ? 'ही आयडी WhatsApp रिमाइंडरमध्ये पेमेंट लिंकसाठी वापरली जाईल.'
+                              : 'This is used to add a payment link in WhatsApp reminders.'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group" style={{ width: '100%' }}>
+                          <label className="form-label">{db.settings.lang === 'mr' ? 'थकीत रक्कम आठवण मेसेज साचा' : 'Dues Reminder Template'}</label>
+                          <textarea
+                            className="form-input"
+                            rows="2"
+                            value={whatsappDuesTemplateInput}
+                            onChange={(e) => setWhatsappDuesTemplateInput(e.target.value)}
+                            onBlur={() => saveSettingField('whatsappDuesTemplate', whatsappDuesTemplateInput, { label: 'Dues reminder template' })}
+                            style={{ resize: 'vertical', fontSize: '13px', WebkitUserSelect: 'text', userSelect: 'text', minHeight: '60px' }}
+                            placeholder={db.settings.lang === 'mr'
+                              ? 'नमस्कार [Name], तुमची थकीत रक्कम ₹[Dues] आहे. कृपया पेमेंट करा: [UpiLink] - [MessName]'
+                              : 'Dear [Name], your pending dues are Rs [Dues]. Please pay here: [UpiLink] - [MessName]'}
+                          />
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            Placeholder tokens: <code>[Name]</code>, <code>[Dues]</code>, <code>[Amount]</code>, <code>[Date]</code>, <code>[UpiLink]</code>, <code>[MessName]</code>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="form-row">
                         <div className="form-group" style={{ maxWidth: '50%' }}>
                           <label className="form-label">{t('langPreference')}</label>
                           <select
                             className="form-select"
                             value={db.settings.lang || 'en'}
-                            onChange={(e) => saveDb({ ...db, settings: { ...db.settings, lang: e.target.value } })}
+                            onChange={(e) => saveDb((currentDb) => ({ ...currentDb, settings: { ...currentDb.settings, lang: e.target.value } }))}
                           >
                             <option value="en">English</option>
                             <option value="mr">मराठी (Marathi)</option>
@@ -3302,13 +4054,14 @@ export default function App() {
                         </label>
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
                           <div style={{ flex: 1, minWidth: '180px' }}>
-                            <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'डेव्हलपर मास्टर की' : 'Developer Master Key'}</label>
+                            <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'मालक PIN पुष्टीकरण' : 'Owner PIN confirmation'}</label>
                             <input
                               type="password"
                               className="form-input"
-                              placeholder="Developer Key"
-                              value={devKeyInput}
-                              onChange={(e) => setDevKeyInput(e.target.value)}
+                              maxLength="6"
+                              placeholder="Owner PIN"
+                              value={archivePinOwnerAuthInput}
+                              onChange={(e) => setArchivePinOwnerAuthInput(e.target.value.replace(/\D/g, ''))}
                             />
                           </div>
                           <div style={{ flex: 1, minWidth: '180px' }}>
@@ -3325,17 +4078,7 @@ export default function App() {
                           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                             <button
                               className="btn btn-primary"
-                              onClick={async () => {
-                                if (devKeyInput !== 'LKMESSDEV2026') {
-                                  showToast(db.settings.lang === 'mr' ? 'चुकीची डेव्हलपर मास्टर की!' : 'Invalid Developer Master Key!', 'error');
-                                  return;
-                                }
-                                const saved = await saveArchivePasscodeSetting(newArchivePinInput);
-                                if (saved) {
-                                  setDevKeyInput('');
-                                  setNewArchivePinInput('');
-                                }
-                              }}
+                              onClick={updateArchivePasscodeWithOwnerPin}
                             >
                               {db.settings.lang === 'mr' ? 'अपडेट करा' : 'Update Passcode'}
                             </button>
@@ -3345,6 +4088,50 @@ export default function App() {
 
                       <div>
                         <label className="form-label">Local Data & Backups</label>
+                        <div style={{
+                          marginTop: '10px',
+                          padding: '14px',
+                          borderRadius: '12px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--bg)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            <span style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              background: saveHealthUi.color,
+                              display: 'inline-block'
+                            }} />
+                            <strong style={{ color: 'var(--text)' }}>{saveHealthUi.label}</strong>
+                            {saveHealth.pending > 0 && (
+                              <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                                {saveHealth.pending} queued
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                            {saveHealthUi.details}
+                          </div>
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '12px', display: 'grid', gap: '4px' }}>
+                            <span>Last local save: {formatHealthTimestamp(saveHealth.lastLocalSaveAt)}</span>
+                            <span>Last cloud sync: {formatHealthTimestamp(saveHealth.lastCloudSyncAt)}</span>
+                            <span>Last completed save: {formatHealthTimestamp(saveHealth.lastSavedAt)}</span>
+                            {saveHealth.lastError && (
+                              <span style={{ color: 'var(--danger)' }}>Latest issue: {saveHealth.lastError}</span>
+                            )}
+                          </div>
+                          {(saveHealth.status === 'error' || saveHealth.status === 'degraded') && (
+                            <div>
+                              <button className="btn btn-sm" onClick={retryLastSave}>
+                                Retry Last Save
+                              </button>
+                            </div>
+                          )}
+                        </div>
                         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                           <button className="btn" onClick={() => {
                             const dbString = JSON.stringify(db, null, 2);
@@ -3365,22 +4152,33 @@ export default function App() {
                               type="file"
                               accept=".json"
                               style={{ display: 'none' }}
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files[0];
                                 if (!file) return;
+                                if (file.size > 5 * 1024 * 1024) {
+                                  alert('Backup file is too large. Please use a file under 5 MB.');
+                                  e.target.value = '';
+                                  return;
+                                }
                                 const reader = new FileReader();
                                 reader.onload = async (evt) => {
                                   try {
                                     const parsed = JSON.parse(evt.target.result);
-                                    if (parsed.customers && parsed.settings) {
-                                      await saveDb(parsed);
-                                      alert('Database imported successfully!');
-                                      window.location.reload();
-                                    } else {
-                                      alert('Invalid database backup file format.');
+                                    const sanitizedImport = sanitizeImportedDb(parsed);
+                                    const confirmImport = window.confirm(
+                                      'Importing a backup will replace current in-memory data. Continue?'
+                                    );
+                                    if (!confirmImport) {
+                                      e.target.value = '';
+                                      return;
                                     }
+                                    await saveDb(sanitizedImport);
+                                    alert('Database imported successfully!');
+                                    window.location.reload();
                                   } catch (err) {
                                     alert('Error reading file: ' + err.message);
+                                  } finally {
+                                    e.target.value = '';
                                   }
                                 };
                                 reader.readAsText(file);

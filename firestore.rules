@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasOnlyKeys(allowedKeys) {
+      return request.resource.data.keys().hasOnly(allowedKeys);
+    }
+
+    function isString(value) {
+      return value is string;
+    }
+
+    function isOptionalString(value) {
+      return !(value in [null]) ? value is string : true;
+    }
+
+    function isNumber(value) {
+      return value is int || value is float;
+    }
+
+    function isCustomer() {
+      return hasOnlyKeys([
+        'id', 'name', 'phone', 'aadhar', 'plan', 'amount', 'deposited', 'joinDate',
+        'addr', 'photo', 'category', 'branch', 'status', 'shortTermDays', 'shortTermMeals'
+      ]) &&
+      isString(request.resource.data.id) &&
+      isString(request.resource.data.name) &&
+      isString(request.resource.data.phone) &&
+      isNumber(request.resource.data.amount) &&
+      isNumber(request.resource.data.deposited) &&
+      isString(request.resource.data.joinDate);
+    }
+
+    function isTransaction() {
+      return hasOnlyKeys(['id', 'custId', 'amount', 'date', 'paymentMode', 'note']) &&
+      isString(request.resource.data.id) &&
+      isString(request.resource.data.custId) &&
+      isNumber(request.resource.data.amount) &&
+      isString(request.resource.data.date) &&
+      isString(request.resource.data.paymentMode);
+    }
+
+    function isEmployee() {
+      return hasOnlyKeys([
+        'id', 'name', 'phone', 'role', 'salary', 'joinDate', 'branch', 'paid', 'paidDate'
+      ]) &&
+      isString(request.resource.data.id) &&
+      isString(request.resource.data.name);
+    }
+
+    function isSalary() {
+      return hasOnlyKeys(['id', 'empId', 'amount', 'paidDate', 'month', 'branch']) &&
+      isString(request.resource.data.id) &&
+      isString(request.resource.data.empId) &&
+      isNumber(request.resource.data.amount);
+    }
+
+    function isExpense() {
+      return hasOnlyKeys(['id', 'amount', 'note', 'date', 'createdAt', 'branch']) &&
+      isString(request.resource.data.id) &&
+      isNumber(request.resource.data.amount) &&
+      isString(request.resource.data.note) &&
+      isString(request.resource.data.date);
+    }
+
+    function isSettings() {
+      return hasOnlyKeys([
+        'lang', 'upiId', 'ownerPinHash', 'branch1PinHash', 'branch2PinHash',
+        'archivePasswordHash', 'messName', 'ownerName', 'ownerAddress', 'requireSetup'
+      ]);
+    }
+
+    match /desktop_customers/{docId} {
+      allow read, write: if false;
+      // Zero-cost safety default:
+      // keep cloud access blocked until you intentionally enable a real auth model.
+      // Example future rule:
+      // allow read, write: if isSignedIn() && isCustomer();
+    }
+
+    match /desktop_transactions/{docId} {
+      allow read, write: if false;
+      // Example future rule:
+      // allow read, write: if isSignedIn() && isTransaction();
+    }
+
+    match /desktop_employees/{docId} {
+      allow read, write: if false;
+      // Example future rule:
+      // allow read, write: if isSignedIn() && isEmployee();
+    }
+
+    match /desktop_salaries/{docId} {
+      allow read, write: if false;
+      // Example future rule:
+      // allow read, write: if isSignedIn() && isSalary();
+    }
+
+    match /desktop_expenses/{docId} {
+      allow read, write: if false;
+      // Example future rule:
+      // allow read, write: if isSignedIn() && isExpense();
+    }
+
+    match /desktop_config/{docId} {
+      allow read, write: if false;
+      // Example future rule:
+      // allow read, write: if isSignedIn() && isSettings();
+    }
+  }
+}

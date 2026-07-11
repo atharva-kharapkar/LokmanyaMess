@@ -18,6 +18,27 @@ process.on('unhandledRejection', (reason) => {
 let mainWindow;
 let whatsappWindow = null;
 
+function isSafeExternalUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return ['https:', 'http:', 'whatsapp:'].includes(parsed.protocol);
+  } catch (error) {
+    return false;
+  }
+}
+
+function isAllowedWhatsAppUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return (
+      parsed.protocol === 'https:' &&
+      ['web.whatsapp.com', 'api.whatsapp.com', 'wa.me'].includes(parsed.hostname)
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -34,13 +55,21 @@ function createWindow() {
     }
   });
 
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.maximize();
+      mainWindow.show();
+    }
+  });
+
+
   mainWindow.webContents.setWindowOpenHandler(({ url, frameName }) => {
-    if (url.startsWith('whatsapp://')) {
+    if (url.startsWith('whatsapp://') && isSafeExternalUrl(url)) {
       require('electron').shell.openExternal(url);
       return { action: 'deny' };
     }
 
-    if (frameName === 'whatsapp_share_tab') {
+    if (frameName === 'whatsapp_share_tab' && isAllowedWhatsAppUrl(url)) {
       if (whatsappWindow && !whatsappWindow.isDestroyed()) {
         whatsappWindow.loadURL(url);
         whatsappWindow.focus();
@@ -63,26 +92,84 @@ function createWindow() {
       return { action: 'deny' };
     }
 
-    if (url.startsWith('http:') || url.startsWith('https:')) {
+    if (isSafeExternalUrl(url) && (url.startsWith('http:') || url.startsWith('https:'))) {
       require('electron').shell.openExternal(url);
       return { action: 'deny' };
     }
-    return { action: 'allow' };
+
+    return { action: 'deny' };
   });
 
-  mainWindow.maximize();
-  mainWindow.show();
-  mainWindow.setMenuBarVisibility(false);
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const currentUrl = mainWindow.webContents.getURL();
+    if (url !== currentUrl) {
+      event.preventDefault();
+      if (isSafeExternalUrl(url) && (url.startsWith('http:') || url.startsWith('https:'))) {
+        require('electron').shell.openExternal(url);
+      }
+    }
+  });
 
-  const isDev = !app.isPackaged;
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
-  } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
-  }
+mainWindow.setMenuBarVisibility(false);
+
+// Debug listeners
+mainWindow.webContents.on("did-start-loading", () => {
+  console.log("Loading started...");
+});
+
+mainWindow.webContents.on("did-finish-load", () => {
+  console.log("Loading finished.");
+});
+
+mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
+  console.error("did-fail-load:");
+  console.error({
+    errorCode,
+    errorDescription,
+    validatedURL
+  });
+});
+
+mainWindow.webContents.on("render-process-gone", (event, details) => {
+  console.error("Renderer process crashed:", details);
+});
+
+mainWindow.webContents.on("console-message", (event, level, message) => {
+  console.log("[Renderer]", message);
+});
+
+// Load application
+if (isDev) {
+  console.log("========== DEV MODE ==========");
+  mainWindow.loadURL("http://localhost:5173");
+} else {
+  const indexPath = path.join(__dirname, "dist", "index.html");
+
+  console.log("========== PRODUCTION MODE ==========");
+  console.log("Loading:", indexPath);
+  console.log("File Exists:", fs.existsSync(indexPath));
+
+  mainWindow.loadFile(indexPath)
+    .then(() => {
+      console.log("✅ index.html loaded successfully");
+    })
+    .catch((err) => {
+      console.error("❌ loadFile failed:", err);
+    });
 }
-
+}
 app.whenReady().then(() => {
+  if (!isDev) {
+    session.defaultSession.clearCache().catch((error) => {
+      console.error('Failed to clear HTTP cache on startup:', error);
+    });
+    session.defaultSession.clearStorageData({
+      storages: ['serviceworkers', 'cachestorage']
+    }).catch((error) => {
+      console.error('Failed to clear stale offline shell data on startup:', error);
+    });
+  }
+
   // Permission handler: only allow camera/microphone for trusted origins (dev server or packaged file://)
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     try {
@@ -126,6 +213,7 @@ ipcMain.handle('read-database', async () => {
     employees: [],
     transactions: [],
     salaries: [],
+    expenses: [],
     settings: {
       lang: 'en',
       upiId: '',
@@ -145,6 +233,7 @@ ipcMain.handle('read-database', async () => {
     // Basic validation: ensure parsed is an object with settings
     if (!parsed || typeof parsed !== 'object') return defaultDb;
     if (!parsed.settings || typeof parsed.settings !== 'object') parsed.settings = defaultDb.settings;
+    if (!parsed.expenses) parsed.expenses = [];
     return parsed;
   } catch (e) {
     console.error("Error reading database:", e);
@@ -167,6 +256,7 @@ ipcMain.handle('write-database', async (event, data) => {
       employees: Array.isArray(data.employees) ? data.employees : [],
       transactions: Array.isArray(data.transactions) ? data.transactions : [],
       salaries: Array.isArray(data.salaries) ? data.salaries : [],
+      expenses: Array.isArray(data.expenses) ? data.expenses : [],
       settings: (data.settings && typeof data.settings === 'object') ? data.settings : { lang: 'en' }
     };
     fs.writeFileSync(dbPath, JSON.stringify(safeData, null, 2), 'utf8');

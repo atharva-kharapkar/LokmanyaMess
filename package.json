@@ -11,7 +11,9 @@
     "dist": "vite build && electron-builder",
     "check:secrets": "node scripts/check-secrets.js",
     "check:ipc": "node scripts/check-ipc.js",
-    "check:all": "npm run check:secrets && npm run check:ipc",
+    "check:stability": "node scripts/check-stability.js",
+    "check:security": "node scripts/check-security.js",
+    "check:all": "npm run check:secrets && npm run check:ipc && npm run check:stability && npm run check:security",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run"
   },

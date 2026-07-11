@@ -17,3 +17,17 @@ Rotation steps (manual):
 3. Revoke the old key in Firebase console once new builds are verified.
 
 If you want, the guardian can prepare a PR with a .env.example and CI instructions to automate replacement.
+
+Firestore rules guidance
+
+- This repo now includes a `firestore.rules` file and `firebase.json`.
+- The checked-in rules are intentionally deny-by-default for zero-cost safety until you choose a real cloud auth model.
+- If you deploy those rules as-is, the app's Firestore sync will be blocked. Local Electron backup mode will still protect local data, but cloud sync will show as degraded.
+- That is safer than leaving permissive cloud rules active when you do not want to pay for a full auth setup yet.
+
+Suggested free rollout order
+
+1. Keep using the app locally with the hardened backup flow.
+2. Review `firestore.rules` before deploying anything to Firebase.
+3. Only deploy cloud rules when you are ready to accept stricter cloud access behavior.
+4. When you later choose an auth model, replace the deny-by-default rules with authenticated schema-checked rules.

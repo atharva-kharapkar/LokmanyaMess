@@ -10,6 +10,7 @@ function walk(dir, filelist = []) {
       if (['node_modules', '.git', 'release', 'dist', 'coverage'].includes(file)) continue;
       walk(full, filelist);
     } else {
+      if (file.startsWith('.env')) continue;
       filelist.push(full);
     }
   }
