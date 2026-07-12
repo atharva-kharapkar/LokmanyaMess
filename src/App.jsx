@@ -2088,38 +2088,36 @@ export default function App() {
     return [intro, dueLine, planLine, ...paymentLines, closing].filter(Boolean).join('\n');
   }, [db.settings]);
 
-  const openWhatsAppWithTypedMessage = useCallback(({ phoneDigits, message, customer, messName }) => {
-    const encodedMessage = encodeURIComponent(message);
+  const openWhatsAppWithTypedMessage = useCallback(({ phoneDigits, message }) => {
+    const encodedMessage = encodeURIComponent(String(message ?? ''));
+
+    // Desktop deep link (pre-fills message; user must press Send)
     const whatsappDesktopDeepLink = `whatsapp://send?phone=${phoneDigits}&text=${encodedMessage}`;
+    // Web fallback (pre-fills message)
     const whatsappWebUrl = `https://wa.me/${phoneDigits}?text=${encodedMessage}`;
 
-    // Do not auto-send. We rely on WhatsApp UI to keep text typed and user clicks Send.
     if (isElectron) {
       try {
+        // If desktop deep-link fails/doesn't open, fall back to WhatsApp Web.
+        // (Renderer can't reliably detect success; timeout keeps behavior robust.)
         const timer = setTimeout(() => {
-          // Fallback to WhatsApp Web if desktop deep-link cannot be handled.
           try {
             window.open(whatsappWebUrl, 'whatsapp_share_tab');
           } catch (e) {
             console.error('WhatsApp Web fallback failed:', e);
           }
-        }, 1500);
+        }, 1200);
 
-        // Attempt desktop first.
-        // NOTE: electron will route whatsapp:// via shell.openExternal in main.js.
         window.open(whatsappDesktopDeepLink, '_blank');
-
         return () => clearTimeout(timer);
       } catch (e) {
         console.error('WhatsApp Desktop deep-link failed:', e);
+        window.open(whatsappWebUrl, 'whatsapp_share_tab');
+        return;
       }
-
-      // Immediate fallback if desktop attempt throws.
-      window.open(whatsappWebUrl, 'whatsapp_share_tab');
-      return;
     }
 
-    // Browser/Electron renderer (non-desktop): go directly to WhatsApp Web.
+    // Browser: go directly to WhatsApp Web.
     window.open(whatsappWebUrl, 'whatsapp_share_tab');
   }, []);
 
@@ -2143,6 +2141,63 @@ export default function App() {
       messName: db.settings?.messName
     });
   }, [buildCustomerReminderMessage, db.settings, showToast, openWhatsAppWithTypedMessage]);
+
+  // ===== WhatsApp Bulk Reminder (single entry button + multi-select) =====
+  const [selectedWhatsAppCustomerIds, setSelectedWhatsAppCustomerIds] = useState([]);
+
+  const toggleWhatsAppCustomer = useCallback((custId) => {
+    setSelectedWhatsAppCustomerIds((prev) => {
+      if (prev.includes(custId)) return prev.filter((id) => id !== custId);
+      return [...prev, custId];
+    });
+  }, []);
+
+  const clearWhatsAppSelection = useCallback(() => {
+    setSelectedWhatsAppCustomerIds([]);
+  }, []);
+
+  const isWhatsAppSelected = useCallback((custId) => selectedWhatsAppCustomerIds.includes(custId), [selectedWhatsAppCustomerIds]);
+
+  const sendBulkWhatsAppReminders = useCallback(() => {
+    const selectedCustomers = db.customers.filter((c) => selectedWhatsAppCustomerIds.includes(c.id));
+
+    if (!selectedCustomers.length) {
+      showToast(
+        db.settings?.lang === 'mr'
+          ? 'कृपया WhatsApp साठी ग्राहक निवडा.'
+          : 'Select at least one customer for WhatsApp reminder.',
+        'error'
+      );
+      return;
+    }
+
+    // Skip ₹0 pending dues
+    const dueCustomers = selectedCustomers
+      .map((c) => ({ c, due: getCustomerDues(c) }))
+      .filter(({ due }) => due > 0);
+
+    if (!dueCustomers.length) {
+      showToast(
+        db.settings?.lang === 'mr'
+          ? 'निवडलेल्या ग्राहकांपैकी कोणाच्याही थकीत रकमेचा शिल्लक नाही (₹0).'
+          : 'Selected customers have no pending dues (₹0).',
+        'error'
+      );
+      return;
+    }
+
+    // Open WhatsApp chats one-by-one; user will manually press Send in each chat.
+    // Keep text pre-typed and do NOT auto-send.
+    dueCustomers.forEach(({ c }, idx) => {
+      const delayMs = idx * 600;
+      setTimeout(() => {
+        sendWhatsAppReminder(c);
+      }, delayMs);
+    });
+
+    clearWhatsAppSelection();
+  }, [db.customers, selectedWhatsAppCustomerIds, db.settings, showToast, sendWhatsAppReminder, clearWhatsAppSelection]);
+
 
 
   // Calculations for Dashboard Metrics (filtered by branch)
@@ -3170,12 +3225,40 @@ export default function App() {
                         onChange={(e) => setCustSearch(e.target.value)}
                       />
                     </div>
+
                     {/* Hide Add Customer button in Old Customers Archive */}
                     {currentTab !== 'oldcustomers' && (
                       <button className="btn btn-primary" onClick={openAddCust}>
                         <Plus size={16} /> {t('addCustomer')}
                       </button>
                     )}
+
+                    {/* Bulk WhatsApp Reminder */}
+                    <button
+                      className="btn btn-sm btn-success"
+                      onClick={sendBulkWhatsAppReminders}
+                      disabled={!selectedWhatsAppCustomerIds.length}
+                      style={{ opacity: selectedWhatsAppCustomerIds.length ? 1 : 0.6 }}
+                      title={
+                        selectedWhatsAppCustomerIds.length
+                          ? (db.settings.lang === 'mr' ? 'निवडलेल्या ग्राहकांना WhatsApp आठवण पाठवा' : 'Send WhatsApp reminders to selected customers')
+                          : (db.settings.lang === 'mr' ? 'प्रथम ग्राहक निवडा' : 'Select customers first')
+                      }
+                    >
+                      <Bell size={16} style={{ marginRight: '6px' }} />
+                      {db.settings.lang === 'mr' ? 'बुल्क WhatsApp आठवण' : 'Bulk WhatsApp Reminder'}
+                    </button>
+
+                    <button
+                      className="btn"
+                      onClick={clearWhatsAppSelection}
+                      disabled={!selectedWhatsAppCustomerIds.length}
+                      style={{ opacity: selectedWhatsAppCustomerIds.length ? 1 : 0.6 }}
+                      title={db.settings.lang === 'mr' ? 'निवड साफ करा' : 'Clear selection'}
+                    >
+                      {db.settings.lang === 'mr' ? 'निवड साफ करा' : 'Clear'}
+                    </button>
+
                     <button className="btn" onClick={handleExportCustomers}>
                       <Download size={16} /> {t('exportCsv')}
                     </button>
@@ -3207,6 +3290,36 @@ export default function App() {
                       
                       return (
                         <div key={c.id} className={`customer-bar status-${status} ${hasDues ? 'has-dues' : 'no-dues'}`}>
+                        {/* WhatsApp Bulk Selection Checkbox */}
+                        {currentTab !== 'oldcustomers' && (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gridRow: '1 / span 2',
+                              cursor: 'pointer'
+                            }}
+                            onClick={(e) => { e.stopPropagation(); toggleWhatsAppCustomer(c.id); }}
+                            title={isWhatsAppSelected(c.id)
+                              ? (db.settings.lang === 'mr' ? 'निवड काढा' : 'Deselect')
+                              : (db.settings.lang === 'mr' ? 'WhatsApp साठी निवडा' : 'Select for WhatsApp reminder')
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isWhatsAppSelected(c.id)}
+                              onChange={() => toggleWhatsAppCustomer(c.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                width: '18px',
+                                height: '18px',
+                                cursor: 'pointer',
+                                accentColor: 'var(--success)'
+                              }}
+                            />
+                          </div>
+                        )}
                         {/* Left: Profile Photo */}
                         <div className="customer-bar-avatar-container">
                           {c.photo ? (
@@ -3323,16 +3436,17 @@ export default function App() {
                               <History size={12} style={{ marginRight: '2px' }} />
                               {db.settings.lang === 'mr' ? 'इतिहास' : 'History'}
                             </button>
+                            {/* WhatsApp Reminder (single) */}
                             <button
                               className="btn btn-sm"
-                              title={db.settings.lang === 'mr' ? 'WhatsApp वर थकीत रक्कम आठवण पाठवा' : 'Send Dues Reminder via WhatsApp'}
+                              title={db.settings.lang === 'mr' ? 'WhatsApp आठवण' : 'WhatsApp Reminder'}
                               onClick={() => sendWhatsAppReminder(c)}
-                              style={{ height: '32px', padding: '0 10px', fontSize: '12px', backgroundColor: '#22c55e', borderColor: '#22c55e', color: '#fff' }}
-                              aria-label={db.settings.lang === 'mr' ? 'WhatsApp Reminder' : 'Send WhatsApp reminder'}
+                              style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
                             >
                               <Bell size={12} style={{ marginRight: '4px' }} />
                               {db.settings.lang === 'mr' ? 'व्हाट्सएप' : 'WhatsApp'}
                             </button>
+
                             <button
                               className="btn btn-sm btn-icon"
                               title={t('editProfile')}
