@@ -4988,37 +4988,56 @@ export default function App() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            padding: '10px 12px',
+                            padding: '12px 14px',
                             backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.04)' : 'var(--card)',
-                            border: isSelected ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid var(--border)',
-                            borderRadius: '8px',
+                            border: isSelected ? '1.5px solid var(--success)' : '1.5px solid var(--border)',
+                            borderRadius: '12px',
                             cursor: 'pointer',
-                            transition: 'all 0.15s ease'
+                            transition: 'all 0.15s ease',
+                            gap: '12px'
                           }}
                           onClick={() => toggleWhatsAppCustomer(c.id)}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleWhatsAppCustomer(c.id)}
                               onClick={(e) => e.stopPropagation()}
-                              style={{ width: '16px', height: '16px', accentColor: 'var(--success)', cursor: 'pointer' }}
+                              style={{ width: '18px', height: '18px', accentColor: 'var(--success)', cursor: 'pointer', flexShrink: 0 }}
                             />
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                            
+                            {/* Customer Photo / Avatar */}
+                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--border)', flexShrink: 0 }}>
+                              {c.photo ? (
+                                <img src={c.photo} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-secondary)' }}>
+                                  {(c.name || 'C').charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Customer Info (Name, Phone, Address) */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 }}>
+                              <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {c.name}
                               </span>
-                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                📞 {c.phone} | {c.plan === 'Monthly' ? (db.settings?.lang === 'mr' ? 'मासिक' : 'Monthly') : c.plan === 'Weekly' ? (db.settings?.lang === 'mr' ? 'साप्ताहिक' : 'Weekly') : c.plan === 'Daily' ? (db.settings?.lang === 'mr' ? 'दैनिक' : 'Daily') : (db.settings?.lang === 'mr' ? 'कस्टम' : 'Custom')}
+                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                📞 {c.phone}
+                              </span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                📍 {c.addr || (db.settings?.lang === 'mr' ? 'पत्ता उपलब्ध नाही' : 'No Address')}
                               </span>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                            <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--danger)' }}>
+                          
+                          {/* Remaining Amount */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0 }}>
+                            <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--danger)' }}>
                               ₹{dueAmt}
                             </span>
-                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '600' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.5px' }}>
                               {db.settings?.lang === 'mr' ? 'थकीत' : 'Due'}
                             </span>
                           </div>
