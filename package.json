@@ -1,6 +1,6 @@
 {
   "name": "lokmanya-mess-desktop",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Offline Mess Management Software for Windows",
   "main": "main.js",
   "scripts": {
