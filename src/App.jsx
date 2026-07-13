@@ -2098,24 +2098,10 @@ export default function App() {
     const whatsappWebUrl = `https://wa.me/${phoneDigits}?text=${encodedMessage}`;
 
     if (isElectron) {
-      try {
-        // If desktop deep-link fails/doesn't open, fall back to WhatsApp Web.
-        // (Renderer can't reliably detect success; timeout keeps behavior robust.)
-        const timer = setTimeout(() => {
-          try {
-            window.open(whatsappWebUrl, 'whatsapp_share_tab');
-          } catch (e) {
-            console.error('WhatsApp Web fallback failed:', e);
-          }
-        }, 1200);
-
-        window.open(whatsappDesktopDeepLink, '_blank');
-        return () => clearTimeout(timer);
-      } catch (e) {
-        console.error('WhatsApp Desktop deep-link failed:', e);
-        window.open(whatsappWebUrl, 'whatsapp_share_tab');
-        return;
-      }
+      // In Electron: ONLY open the installed desktop app deep-link. 
+      // Do not schedule fallback to WhatsApp Web to avoid opening two windows.
+      window.open(whatsappDesktopDeepLink, '_blank');
+      return;
     }
 
     // Browser: go directly to WhatsApp Web.
