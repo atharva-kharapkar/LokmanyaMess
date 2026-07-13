@@ -3995,7 +3995,7 @@ export default function App() {
               <div className="tab-panel animate-fade" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '40px 20px', minHeight: '60vh' }}>
                 <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '30px 24px', textAlign: 'center', borderRadius: '16px', border: '1px solid var(--border)', backgroundColor: 'var(--card)' }}>
                   <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--primary)' }}>
-                    <Lock size={28} />
+                    <span style={{ fontSize: '24px' }}>🔒</span>
                   </div>
                   <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
                     {db.settings.lang === 'mr' ? 'सेटिंग्ज लॉक' : 'Settings Locked'}
