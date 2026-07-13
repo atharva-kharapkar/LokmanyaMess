@@ -3991,17 +3991,17 @@ export default function App() {
           )}
 
           {currentTab === 'settings' && (
-            db.settings.archivePasswordHash && !isSettingsUnlocked ? (
+            db?.settings?.archivePasswordHash && !isSettingsUnlocked ? (
               <div className="tab-panel animate-fade" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '40px 20px', minHeight: '60vh' }}>
                 <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '30px 24px', textAlign: 'center', borderRadius: '16px', border: '1px solid var(--border)', backgroundColor: 'var(--card)' }}>
                   <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--primary)' }}>
                     <span style={{ fontSize: '24px' }}>🔒</span>
                   </div>
                   <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
-                    {db.settings.lang === 'mr' ? 'सेटिंग्ज लॉक' : 'Settings Locked'}
+                    {db?.settings?.lang === 'mr' ? 'सेटिंग्ज लॉक' : 'Settings Locked'}
                   </h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '8px 0 24px', lineHeight: '1.5' }}>
-                    {db.settings.lang === 'mr' ? 'सिस्टम सेटिंग्ज पाहण्यासाठी किंवा बदलण्यासाठी कृपया पासकोड प्रविष्ट करा.' : 'Please enter the access passcode to view or modify system settings.'}
+                    {db?.settings?.lang === 'mr' ? 'सिस्टम सेटिंग्ज पाहण्यासाठी किंवा बदलण्यासाठी कृपया पासकोड प्रविष्ट करा.' : 'Please enter the access passcode to view or modify system settings.'}
                   </p>
                   <input
                     type="password"
@@ -4011,12 +4011,12 @@ export default function App() {
                     onChange={(e) => setSettingsPinInput(e.target.value)}
                     onKeyDown={async (e) => {
                       if (e.key === 'Enter') {
-                        if (await matchesArchiveSecret(settingsPinInput, db.settings.archivePasswordHash)) {
+                        if (await matchesArchiveSecret(settingsPinInput, db?.settings?.archivePasswordHash)) {
                           setIsSettingsUnlocked(true);
                           setSettingsPinInput('');
-                          showToast(db.settings.lang === 'mr' ? 'प्रवेश मंजूर!' : 'Access Granted!', 'success');
+                          showToast(db?.settings?.lang === 'mr' ? 'प्रवेश मंजूर!' : 'Access Granted!', 'success');
                         } else {
-                          showToast(db.settings.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                          showToast(db?.settings?.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
                         }
                       }
                     }}
@@ -4026,16 +4026,16 @@ export default function App() {
                     className="btn btn-primary"
                     style={{ width: '100%', padding: '12px', fontWeight: '700' }}
                     onClick={async () => {
-                      if (await matchesArchiveSecret(settingsPinInput, db.settings.archivePasswordHash)) {
+                      if (await matchesArchiveSecret(settingsPinInput, db?.settings?.archivePasswordHash)) {
                         setIsSettingsUnlocked(true);
                         setSettingsPinInput('');
-                        showToast(db.settings.lang === 'mr' ? 'प्रवेश मंजूर!' : 'Access Granted!', 'success');
+                        showToast(db?.settings?.lang === 'mr' ? 'प्रवेश मंजूर!' : 'Access Granted!', 'success');
                       } else {
-                        showToast(db.settings.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                        showToast(db?.settings?.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
                       }
                     }}
                   >
-                    {db.settings.lang === 'mr' ? 'अनलॉक करा' : 'Unlock Settings'}
+                    {db?.settings?.lang === 'mr' ? 'अनलॉक करा' : 'Unlock Settings'}
                   </button>
                 </div>
               </div>
