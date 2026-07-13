@@ -2034,7 +2034,7 @@ export default function App() {
     const customerName = customer?.name || 'Customer';
     const upiLink =
   upiId && paymentAmount > 0
-    ? `https://atharva-kharapkar.github.io/LokmanyaMess/pay/?pa=${encodeURIComponent(
+    ? `https://atharva-kharapkar.github.io/LokmanyaMess/public/pay/?pa=${encodeURIComponent(
         upiId
       )}&pn=${encodeURIComponent(
         messName
