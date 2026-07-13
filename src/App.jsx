@@ -3991,7 +3991,56 @@ export default function App() {
           )}
 
           {currentTab === 'settings' && (
-            <div className="tab-panel animate-fade">
+            db.settings.archivePasswordHash && !isSettingsUnlocked ? (
+              <div className="tab-panel animate-fade" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '40px 20px', minHeight: '60vh' }}>
+                <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '30px 24px', textAlign: 'center', borderRadius: '16px', border: '1px solid var(--border)', backgroundColor: 'var(--card)' }}>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--primary)' }}>
+                    <Lock size={28} />
+                  </div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>
+                    {db.settings.lang === 'mr' ? 'सेटिंग्ज लॉक' : 'Settings Locked'}
+                  </h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '8px 0 24px', lineHeight: '1.5' }}>
+                    {db.settings.lang === 'mr' ? 'सिस्टम सेटिंग्ज पाहण्यासाठी किंवा बदलण्यासाठी कृपया पासकोड प्रविष्ट करा.' : 'Please enter the access passcode to view or modify system settings.'}
+                  </p>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="••••"
+                    value={settingsPinInput}
+                    onChange={(e) => setSettingsPinInput(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        if (await matchesArchiveSecret(settingsPinInput, db.settings.archivePasswordHash)) {
+                          setIsSettingsUnlocked(true);
+                          setSettingsPinInput('');
+                          showToast(db.settings.lang === 'mr' ? 'प्रवेश मंजूर!' : 'Access Granted!', 'success');
+                        } else {
+                          showToast(db.settings.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                        }
+                      }
+                    }}
+                    style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px' }}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '12px', fontWeight: '700' }}
+                    onClick={async () => {
+                      if (await matchesArchiveSecret(settingsPinInput, db.settings.archivePasswordHash)) {
+                        setIsSettingsUnlocked(true);
+                        setSettingsPinInput('');
+                        showToast(db.settings.lang === 'mr' ? 'प्रवेश मंजूर!' : 'Access Granted!', 'success');
+                      } else {
+                        showToast(db.settings.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                      }
+                    }}
+                  >
+                    {db.settings.lang === 'mr' ? 'अनलॉक करा' : 'Unlock Settings'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="tab-panel animate-fade">
               <div className="card-section">
                 <div className="section-header">
                   <span className="section-title">{t('systemSettings')}</span>
@@ -4227,23 +4276,27 @@ export default function App() {
                         </label>
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
                           <div style={{ flex: 1, minWidth: '180px' }}>
-                            <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'मालक PIN पुष्टीकरण' : 'Owner PIN confirmation'}</label>
+                            <label className="form-label" style={{ fontSize: '12px' }}>
+                              {db.settings.lang === 'mr' ? 'सध्याचा संकेतशब्द' : 'Current Passcode'}
+                            </label>
                             <input
                               type="password"
                               className="form-input"
                               maxLength="6"
-                              placeholder="Owner PIN"
+                              placeholder={db.settings.lang === 'mr' ? 'सध्याचा पासवर्ड' : 'Current Passcode'}
                               value={archivePinOwnerAuthInput}
                               onChange={(e) => setArchivePinOwnerAuthInput(e.target.value.replace(/\D/g, ''))}
                             />
                           </div>
                           <div style={{ flex: 1, minWidth: '180px' }}>
-                            <label className="form-label" style={{ fontSize: '12px' }}>{db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}</label>
+                            <label className="form-label" style={{ fontSize: '12px' }}>
+                              {db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}
+                            </label>
                             <input
                               type="password"
                               className="form-input"
                               maxLength="6"
-                              placeholder="New Passcode"
+                              placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड' : 'New Passcode'}
                               value={newArchivePinInput}
                               onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
                             />
@@ -4251,7 +4304,7 @@ export default function App() {
                           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                             <button
                               className="btn btn-primary"
-                              onClick={updateArchivePasscodeWithOwnerPin}
+                              onClick={updateArchivePasscodeWithCurrentPasscode}
                             >
                               {db.settings.lang === 'mr' ? 'अपडेट करा' : 'Update Passcode'}
                             </button>
@@ -4365,7 +4418,8 @@ export default function App() {
                 </div>
               </div>
             </div>
-          )}
+          )
+        )}
         </div>
       </div>
 
