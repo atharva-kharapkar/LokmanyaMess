@@ -651,6 +651,8 @@ export default function App() {
   const [whatsappDuesTemplateInput, setWhatsappDuesTemplateInput] = useState('');
   const [activeBranch, setActiveBranch] = useState('Branch 1');
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
+  const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
+  const [settingsPinInput, setSettingsPinInput] = useState('');
   const [archivePinInput, setArchivePinInput] = useState('');
   const [archivePinOwnerAuthInput, setArchivePinOwnerAuthInput] = useState('');
   const [newArchivePinInput, setNewArchivePinInput] = useState('');
@@ -854,28 +856,20 @@ export default function App() {
     return true;
   }, [db.settings, showToast]);
 
-  const updateArchivePasscodeWithOwnerPin = useCallback(async () => {
-    const isMarathi = db.settings && db.settings.lang === 'mr';
-    const cleanedOwnerPin = String(archivePinOwnerAuthInput).replace(/\D/g, '');
+  const updateArchivePasscodeWithCurrentPasscode = useCallback(async () => {
+    const isMarathi = db?.settings?.lang === 'mr';
 
-    if (!db.settings?.ownerPinHash) {
-      showToast(
-        isMarathi
-          ? 'कृपया प्रथम मालक PIN सेट करा.'
-          : 'Please set the owner PIN first.',
-        'error'
-      );
-      return false;
-    }
-
-    if (!await matchesSecret(cleanedOwnerPin, db.settings.ownerPinHash, PIN_LENGTH)) {
-      showToast(
-        isMarathi
-          ? 'मालक PIN चुकीचा आहे.'
-          : 'Owner PIN is incorrect.',
-        'error'
-      );
-      return false;
+    // If an archive passcode is already configured, we require current passcode verification.
+    if (db?.settings?.archivePasswordHash) {
+      if (!await matchesArchiveSecret(archivePinOwnerAuthInput, db.settings.archivePasswordHash)) {
+        showToast(
+          isMarathi
+            ? 'सध्याचा संकेतशब्द चुकीचा आहे.'
+            : 'Current passcode is incorrect.',
+          'error'
+        );
+        return false;
+      }
     }
 
     const saved = await saveArchivePasscodeSetting(newArchivePinInput);
@@ -884,7 +878,7 @@ export default function App() {
     setArchivePinOwnerAuthInput('');
     setNewArchivePinInput('');
     return true;
-  }, [archivePinOwnerAuthInput, db.settings, newArchivePinInput, saveArchivePasscodeSetting, showToast]);
+  }, [archivePinOwnerAuthInput, db?.settings, newArchivePinInput, saveArchivePasscodeSetting, showToast]);
 
   useEffect(() => {
     if (toast) {
@@ -1325,6 +1319,8 @@ export default function App() {
     setRole(null);
     setPinError('');
     setPinInput('');
+    setIsSettingsUnlocked(false);
+    setIsArchiveUnlocked(false);
   };
 
   const handlePinSubmit = async (e) => {
