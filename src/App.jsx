@@ -2133,12 +2133,30 @@ export default function App() {
   const [bulkSearch, setBulkSearch] = useState('');
 
   const modalDueCustomers = useMemo(() => {
-    return (db.customers || []).filter(c => 
-      (c.branch || 'Branch 1') === activeBranch && 
-      c.status !== 'old' && 
-      getCustomerDues(c) > 0
-    );
-  }, [db.customers, activeBranch]);
+    let targetCategory = 'dinein';
+    if (currentTab === 'tiffin') targetCategory = 'tiffin';
+    if (currentTab === 'shortterm') targetCategory = 'shortterm';
+    if (currentTab === 'oldcustomers') targetCategory = 'old';
+
+    return (db.customers || []).filter(c => {
+      // Archive/Status Filter
+      if (targetCategory === 'old') {
+        if (c.status !== 'old') return false;
+      } else {
+        if (c.status === 'old') return false;
+        const itemCat = c.category || 'dinein';
+        if (itemCat !== targetCategory) return false;
+      }
+
+      // Branch Filter
+      if (targetCategory !== 'old') {
+        const itemBranch = c.branch || 'Branch 1';
+        if (itemBranch !== activeBranch) return false;
+      }
+
+      return getCustomerDues(c) > 0;
+    });
+  }, [db.customers, activeBranch, currentTab]);
 
   const filteredModalDueCustomers = useMemo(() => {
     const query = bulkSearch.toLowerCase().trim();
@@ -2150,13 +2168,11 @@ export default function App() {
   }, [modalDueCustomers, bulkSearch]);
 
   const handleOpenBulkReminder = useCallback(() => {
-    const dueIds = (db.customers || [])
-      .filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old' && getCustomerDues(c) > 0)
-      .map(c => c.id);
+    const dueIds = modalDueCustomers.map(c => c.id);
     setSelectedWhatsAppCustomerIds(dueIds);
     setBulkSearch('');
     setIsBulkReminderOpen(true);
-  }, [db.customers, activeBranch]);
+  }, [modalDueCustomers]);
 
   const toggleSelectAllBulk = useCallback(() => {
     const allFilteredIds = filteredModalDueCustomers.map(c => c.id);
