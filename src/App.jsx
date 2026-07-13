@@ -2032,6 +2032,7 @@ export default function App() {
     const paymentPhone = String(db.settings?.paymentPhone || '').trim();
     const paymentAmount = remaining > 0 ? remaining : 0;
     const customerName = customer?.name || 'Customer';
+    const trId = `LM${customer?.id || 'CUST'}${Date.now()}`;
     const upiLink =
       upiId && paymentAmount > 0
         ? `https://atharva-kharapkar.github.io/LokmanyaMess/public/pay/?pa=${encodeURIComponent(
@@ -2042,6 +2043,8 @@ export default function App() {
             paymentAmount
           )}&tn=${encodeURIComponent(
             `${messName} reminder for ${customerName}`
+          )}&tr=${encodeURIComponent(
+            trId
           )}&lang=${db.settings?.lang || 'en'}${paymentPhone ? `&ph=${encodeURIComponent(paymentPhone)}` : ''}`
         : '';
     const defaultTemplate = db.settings?.lang === 'mr'

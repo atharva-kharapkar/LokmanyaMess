@@ -248,6 +248,12 @@
 
     .gpay-btn { background-color: var(--gpay); }
     .phonepe-btn { background-color: var(--phonepe); }
+    .app-btn:active {
+      transform: scale(0.98);
+    }
+
+    .gpay-btn { background-color: var(--gpay); }
+    .phonepe-btn { background-color: var(--phonepe); }
     .paytm-btn { background-color: var(--paytm); }
     .bhim-btn { background-color: var(--bhim); }
 
@@ -308,6 +314,17 @@
       flex-direction: column;
       align-items: center;
       gap: 12px;
+    }
+
+    .qr-badge {
+      background: var(--success);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
     }
 
     .qr-image {
@@ -436,8 +453,17 @@
 
     <!-- QR Code Block - Always visible on mobile too! -->
     <div class="qr-container">
+      <div class="qr-badge" id="qr-badge-text">Pre-filled QR Code</div>
       <img class="qr-image" id="qr-img" src="" alt="UPI QR Code">
       <div class="qr-text" id="txt-qr">Scan QR Code or take a screenshot and import it in your payment app.</div>
+      
+      <!-- Interactive mobile screenshot instructions alert card -->
+      <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 10px 12px; font-size: 11px; text-align: left; line-height: 1.4; color: #a7f3d0; width: 100%; display: flex; align-items: flex-start; gap: 8px;">
+        <span style="font-size: 14px;">📸</span>
+        <span id="qr-screenshot-instruction">
+          <strong>Mobile User?</strong> Take a screenshot of this QR Code now, open GPay/PhonePe, and upload it from your gallery to pay the exact amount instantly.
+        </span>
+      </div>
     </div>
 
     <div class="footer">
@@ -453,6 +479,7 @@
     const pn = params.get('pn') || 'Lokmanya Mess';
     const am = params.get('am') || '0';
     const tn = params.get('tn') || 'Mess Dues';
+    const tr = params.get('tr') || '';
     const lang = params.get('lang') || 'en';
     const ph = params.get('ph') || '';
 
@@ -471,6 +498,8 @@
       document.getElementById('desc-pay-phone').textContent = "नंबर कॉपी करा आणि थेट पेमेंट करण्यासाठी PhonePe, GPay, किंवा Paytm मध्ये सर्च करा.";
       document.getElementById('btn-copy-phone').textContent = "कॉपी करा";
       document.getElementById('toast-msg').textContent = "UPI आयडी कॉपी केला!";
+      document.getElementById('qr-badge-text').textContent = "रक्कम भरलेला QR कोड";
+      document.getElementById('qr-screenshot-instruction').innerHTML = "<strong>मोबाईल वापरकर्ता?</strong> या QR कोडचा स्क्रीनशॉट घ्या, GPay/PhonePe उघडा आणि अचूक रक्कम त्वरित भरण्यासाठी गॅलरीमधून अपलोड करा.";
     }
 
     document.getElementById('payee-title').textContent = decodeURIComponent(pn);
@@ -495,8 +524,10 @@
       const prefill = document.getElementById('prefill-checkbox').checked;
       if (prefill) {
         upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+        if (tr) {
+          upiUri += `&tr=${encodeURIComponent(tr)}`;
+        }
       } else {
-        // Exclude amount & notes to skip commercial collect blocks on P2P handles
         upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
       }
       
@@ -513,37 +544,39 @@
       const prefill = document.getElementById('prefill-checkbox').checked;
       
       if (isAndroid) {
+        let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
+        if (prefill) {
+          uriParams += `&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+          if (tr) {
+            uriParams += `&tr=${encodeURIComponent(tr)}`;
+          }
+        }
+        
         if (app === 'gpay') {
-          targetUrl = prefill 
-            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`
-            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+          targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
         } else if (app === 'phonepe') {
-          targetUrl = prefill
-            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=com.phonepe.app;end`
-            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=com.phonepe.app;end`;
+          targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=com.phonepe.app;end`;
         } else if (app === 'paytm') {
-          targetUrl = prefill
-            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=net.one97.paytm;end`
-            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=net.one97.paytm;end`;
+          targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=net.one97.paytm;end`;
         } else if (app === 'bhim') {
-          targetUrl = prefill
-            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=in.org.npci.upiapp;end`
-            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
+          targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
         }
       } else {
         // iOS URL Schemas
+        let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
+        if (prefill) {
+          uriParams += `&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+          if (tr) {
+            uriParams += `&tr=${encodeURIComponent(tr)}`;
+          }
+        }
+
         if (app === 'gpay') {
-          targetUrl = prefill
-            ? `gpay://upi/pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`
-            : `gpay://upi/pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
+          targetUrl = `gpay://upi/pay?${uriParams}`;
         } else if (app === 'phonepe') {
-          targetUrl = prefill
-            ? `phonepe://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`
-            : `phonepe://pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
+          targetUrl = `phonepe://pay?${uriParams}`;
         } else if (app === 'paytm') {
-          targetUrl = prefill
-            ? `paytmmp://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`
-            : `paytmmp://pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
+          targetUrl = `paytmmp://pay?${uriParams}`;
         }
       }
 
