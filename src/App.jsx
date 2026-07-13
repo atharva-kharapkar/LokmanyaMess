@@ -2029,17 +2029,17 @@ export default function App() {
     const paymentAmount = remaining > 0 ? remaining : 0;
     const customerName = customer?.name || 'Customer';
     const upiLink =
-  upiId && paymentAmount > 0
-    ? `https://atharva-kharapkar.github.io/LokmanyaMess/public/pay/?pa=${encodeURIComponent(
-        upiId
-      )}&pn=${encodeURIComponent(
-        messName
-      )}&am=${encodeURIComponent(
-        paymentAmount
-      )}&tn=${encodeURIComponent(
-        `${messName} reminder for ${customerName}`
-      )}`
-    : '';
+      upiId && paymentAmount > 0
+        ? `https://atharva-kharapkar.github.io/LokmanyaMess/public/pay/?pa=${encodeURIComponent(
+            upiId
+          )}&pn=${encodeURIComponent(
+            messName
+          )}&am=${encodeURIComponent(
+            paymentAmount
+          )}&tn=${encodeURIComponent(
+            `${messName} reminder for ${customerName}`
+          )}&lang=${db.settings?.lang || 'en'}`
+        : '';
     const defaultTemplate = db.settings?.lang === 'mr'
       ? 'नमस्कार [Name], तुमची थकीत रक्कम ₹[Dues] आहे. कृपया पेमेंट करा: [UpiLink] - [MessName]'
       : 'Dear [Name], your pending dues are Rs [Dues]. Please pay here: [UpiLink] - [MessName]';

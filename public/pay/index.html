@@ -9,13 +9,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
+      --bg: #0b0f19;
+      --card-bg: #151d30;
       --text: #f8fafc;
       --text-secondary: #94a3b8;
       --primary: #f97316;
       --primary-hover: #ea580c;
-      --border: #334155;
+      --border: #24324f;
+      --success: #10b981;
       
       --gpay: #1a73e8;
       --phonepe: #5f259f;
@@ -42,97 +43,199 @@
 
     .container {
       width: 100%;
-      max-width: 420px;
+      max-width: 440px;
       background-color: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 32px 24px;
+      border-radius: 28px;
+      padding: 28px 24px;
       text-align: center;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
-      animation: fadeIn 0.5s ease-out;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      animation: fadeIn 0.4s ease-out;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(15px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     .logo-container {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       display: flex;
       justify-content: center;
     }
 
     .logo-circle {
-      width: 64px;
-      height: 64px;
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
       background: linear-gradient(135deg, #f97316, #ea580c);
       display: flex;
       justify-content: center;
       align-items: center;
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 800;
-      box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.4);
+      box-shadow: 0 8px 20px rgba(249, 115, 22, 0.3);
     }
 
     .title {
       font-size: 22px;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       color: var(--text);
     }
 
     .subtitle {
-      font-size: 14px;
+      font-size: 13px;
       color: var(--text-secondary);
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .amount-card {
-      background-color: rgba(249, 115, 22, 0.08);
-      border: 1px dashed var(--primary);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 28px;
+      background: rgba(249, 115, 22, 0.06);
+      border: 1px dashed rgba(249, 115, 22, 0.4);
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 20px;
     }
 
     .amount-label {
-      font-size: 12px;
+      font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 1px;
       color: var(--primary);
       font-weight: 700;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
     .amount-value {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: 800;
       color: var(--text);
+    }
+
+    /* Toggle Switch Styles */
+    .toggle-section {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      text-align: left;
+    }
+
+    .toggle-info {
+      flex: 1;
+      padding-right: 12px;
+    }
+
+    .toggle-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .toggle-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #475569;
+      transition: .3s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--success);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    .section-divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 20px 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-divider:not(:empty)::before {
+      margin-right: .5em;
+    }
+
+    .section-divider:not(:empty)::after {
+      margin-left: .5em;
     }
 
     .app-list {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 10px;
     }
 
     .app-btn {
       width: 100%;
-      height: 52px;
+      height: 48px;
       border-radius: 12px;
       border: none;
       color: white;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      transition: transform 0.2s, filter 0.2s;
+      gap: 10px;
+      transition: transform 0.15s, opacity 0.15s;
     }
 
     .app-btn:active {
@@ -140,7 +243,7 @@
     }
 
     .app-btn:hover {
-      filter: brightness(1.15);
+      opacity: 0.9;
     }
 
     .gpay-btn { background-color: var(--gpay); }
@@ -148,44 +251,116 @@
     .paytm-btn { background-color: var(--paytm); }
     .bhim-btn { background-color: var(--bhim); }
 
+    /* VPA Copy Card */
+    .vpa-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    .vpa-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .vpa-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      word-break: break-all;
+      margin-top: 2px;
+    }
+
+    .copy-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+
+    .copy-btn:hover {
+      background: var(--primary-hover);
+    }
+
+    /* QR Container always visible */
     .qr-container {
-      margin-top: 24px;
-      display: none;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px;
+      margin-bottom: 16px;
+      display: flex;
       flex-direction: column;
       align-items: center;
       gap: 12px;
     }
 
     .qr-image {
-      width: 200px;
-      height: 200px;
+      width: 170px;
+      height: 170px;
       background-color: white;
-      padding: 12px;
-      border-radius: 16px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     }
 
     .qr-text {
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .decline-warning {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 14px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      font-size: 11px;
+      color: #fca5a5;
+      text-align: left;
+      line-height: 1.4;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background-color: var(--success);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
     }
 
     .footer {
       font-size: 11px;
       color: var(--text-secondary);
-      margin-top: 16px;
-    }
-
-    @media (min-width: 768px) {
-      .app-list {
-        display: none;
-      }
-      .qr-container {
-        display: flex;
-      }
-      .subtitle {
-        margin-bottom: 12px;
-      }
+      margin-top: 12px;
     }
   </style>
 </head>
@@ -199,30 +374,58 @@
     <div class="subtitle" id="payment-subtitle">Secure UPI Payment Portal</div>
 
     <div class="amount-card">
-      <div class="amount-label">Amount Outstanding</div>
+      <div class="amount-label" id="lbl-outstanding">Amount Outstanding</div>
       <div class="amount-value" id="amount-val">₹0.00</div>
+    </div>
+
+    <!-- Security warning card -->
+    <div class="decline-warning" id="decline-info">
+      <strong>⚠️ Payment declining?</strong> GPay/PhonePe may block auto-filled links to personal accounts. If it fails, turn off <strong>"Pre-fill Amount"</strong> below or copy the UPI ID to pay.
+    </div>
+
+    <!-- Pre-fill toggle switch -->
+    <div class="toggle-section">
+      <div class="toggle-info">
+        <div class="toggle-title" id="title-prefill">Pre-fill Amount</div>
+        <div class="toggle-desc" id="desc-prefill">Turn off if payment gets declined for security reasons.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="prefill-checkbox" checked onchange="updateUpiLinks()">
+        <span class="slider"></span>
+      </label>
     </div>
 
     <!-- Mobile view: Click to open preferred app directly -->
     <div class="app-list">
-      <button class="app-btn gpay-btn" onclick="payWith('gpay')">
-        Google Pay
-      </button>
       <button class="app-btn phonepe-btn" onclick="payWith('phonepe')">
-        PhonePe
+        Pay via PhonePe
+      </button>
+      <button class="app-btn gpay-btn" onclick="payWith('gpay')">
+        Pay via Google Pay
       </button>
       <button class="app-btn paytm-btn" onclick="payWith('paytm')">
-        Paytm
+        Pay via Paytm
       </button>
       <button class="app-btn bhim-btn" onclick="payWith('bhim')">
-        Other UPI App
+        Pay via BHIM / Other App
       </button>
     </div>
 
-    <!-- Desktop view: Scan QR code -->
-    <div class="qr-container" id="qr-block">
+    <div class="section-divider" id="div-or">Or Pay Manually</div>
+
+    <!-- Copy VPA Card -->
+    <div class="vpa-card">
+      <div>
+        <div class="vpa-label">UPI ID / VPA</div>
+        <div class="vpa-val" id="vpa-text">lokmanya@upi</div>
+      </div>
+      <button class="copy-btn" onclick="copyVPA()" id="btn-copy">Copy</button>
+    </div>
+
+    <!-- QR Code Block - Always visible on mobile too! -->
+    <div class="qr-container">
       <img class="qr-image" id="qr-img" src="" alt="UPI QR Code">
-      <div class="qr-text">Scan this QR code with any UPI app to pay</div>
+      <div class="qr-text" id="txt-qr">Scan QR Code or take a screenshot and import it in your payment app.</div>
     </div>
 
     <div class="footer">
@@ -230,55 +433,103 @@
     </div>
   </div>
 
+  <div class="toast" id="toast-msg">UPI ID Copied!</div>
+
   <script>
     const params = new URLSearchParams(window.location.search);
     const pa = params.get('pa') || 'lokmanya@upi';
     const pn = params.get('pn') || 'Lokmanya Mess';
     const am = params.get('am') || '0';
     const tn = params.get('tn') || 'Mess Dues';
+    const lang = params.get('lang') || 'en';
+
+    // Apply translations
+    const isMarathi = (lang === 'mr');
+    if (isMarathi) {
+      document.getElementById('payment-subtitle').textContent = "सुरक्षित UPI पेमेंट पोर्टल";
+      document.getElementById('lbl-outstanding').textContent = "थकीत रक्कम";
+      document.getElementById('title-prefill').textContent = "रक्कम स्वयंचलित भरा";
+      document.getElementById('desc-prefill').textContent = "सुरक्षिततेच्या कारणास्तव पेमेंट नाकारले गेल्यास हे बंद करा.";
+      document.getElementById('div-or').textContent = "किंवा मॅन्युअली पेमेंट करा";
+      document.getElementById('btn-copy').textContent = "कॉपी करा";
+      document.getElementById('txt-qr').textContent = "हा QR कोड स्कॅन करा किंवा स्क्रीनशॉट काढून तुमच्या पेमेंट ॲपमध्ये अपलोड करा.";
+      document.getElementById('decline-info').innerHTML = "<strong>⚠️ पेमेंट नाकारले जात आहे?</strong> वैयक्तिक खात्यांसाठी स्वयंचलित भरलेले दुवे ब्लॉक होऊ शकतात. अडचण आल्यास <strong>\"रक्कम स्वयंचलित भरा\"</strong> बंद करा किंवा UPI आयडी कॉपी करा.";
+      document.getElementById('toast-msg').textContent = "UPI आयडी कॉपी केला!";
+    }
 
     document.getElementById('payee-title').textContent = decodeURIComponent(pn);
     document.getElementById('amount-val').textContent = `₹${parseFloat(am).toFixed(2)}`;
+    document.getElementById('vpa-text').textContent = pa;
 
-    const upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+    let upiUri = '';
 
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
-    document.getElementById('qr-img').src = qrUrl;
-
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (!isMobile) {
-      document.getElementById('qr-block').style.display = 'flex';
-    } else {
-      if (window.innerWidth >= 768) {
-        document.getElementById('qr-block').style.display = 'flex';
+    function updateUpiLinks() {
+      const prefill = document.getElementById('prefill-checkbox').checked;
+      if (prefill) {
+        upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+      } else {
+        // Exclude amount & notes to skip commercial collect blocks on P2P handles
+        upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
       }
+      
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
+      document.getElementById('qr-img').src = qrUrl;
     }
+
+    // Initialize links
+    updateUpiLinks();
 
     function payWith(app) {
       let targetUrl = upiUri;
       const isAndroid = /Android/i.test(navigator.userAgent);
+      const prefill = document.getElementById('prefill-checkbox').checked;
       
       if (isAndroid) {
         if (app === 'gpay') {
-          targetUrl = `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+          targetUrl = prefill 
+            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`
+            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
         } else if (app === 'phonepe') {
-          targetUrl = `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=com.phonepe.app;end`;
+          targetUrl = prefill
+            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=com.phonepe.app;end`
+            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=com.phonepe.app;end`;
         } else if (app === 'paytm') {
-          targetUrl = `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=net.one97.paytm;end`;
+          targetUrl = prefill
+            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=net.one97.paytm;end`
+            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=net.one97.paytm;end`;
         } else if (app === 'bhim') {
-          targetUrl = `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
+          targetUrl = prefill
+            ? `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}#Intent;scheme=upi;package=in.org.npci.upiapp;end`
+            : `intent://pay?pa=${pa}&pn=${encodeURIComponent(pn)}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
         }
       } else {
+        // iOS URL Schemas
         if (app === 'gpay') {
-          targetUrl = `gpay://upi/pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+          targetUrl = prefill
+            ? `gpay://upi/pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`
+            : `gpay://upi/pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
         } else if (app === 'phonepe') {
-          targetUrl = `phonepe://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+          targetUrl = prefill
+            ? `phonepe://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`
+            : `phonepe://pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
         } else if (app === 'paytm') {
-          targetUrl = `paytmmp://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+          targetUrl = prefill
+            ? `paytmmp://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`
+            : `paytmmp://pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
         }
       }
 
       window.location.href = targetUrl;
+    }
+
+    function copyVPA() {
+      navigator.clipboard.writeText(pa).then(() => {
+        const toast = document.getElementById('toast-msg');
+        toast.classList.add('show');
+        setTimeout(() => {
+          toast.classList.remove('show');
+        }, 2000);
+      });
     }
   </script>
 </body>
