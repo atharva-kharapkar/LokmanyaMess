@@ -4271,7 +4271,7 @@ export default function App() {
                           {db.settings.lang === 'mr' ? 'जुने ग्राहक आर्काइव्ह संकेतशब्द सेटिंग्ज' : 'Old Customers Archive Passcode settings'}
                         </label>
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
-                          <div style={{ flex: 1, minWidth: '180px' }}>
+                          <div className="form-group" style={{ flex: 1, minWidth: '180px', marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px' }}>
                               {db.settings.lang === 'mr' ? 'सध्याचा संकेतशब्द' : 'Current Passcode'}
                             </label>
@@ -4284,7 +4284,7 @@ export default function App() {
                               onChange={(e) => setArchivePinOwnerAuthInput(e.target.value.replace(/\D/g, ''))}
                             />
                           </div>
-                          <div style={{ flex: 1, minWidth: '180px' }}>
+                          <div className="form-group" style={{ flex: 1, minWidth: '180px', marginBottom: 0 }}>
                             <label className="form-label" style={{ fontSize: '12px' }}>
                               {db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}
                             </label>
