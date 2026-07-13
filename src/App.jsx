@@ -4060,6 +4060,7 @@ export default function App() {
                             value={upiIdInput}
                             onChange={(e) => setUpiIdInput(e.target.value)}
                             onBlur={() => saveSettingField('upiId', upiIdInput.trim(), { label: 'UPI ID' })}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
                             placeholder={db.settings.lang === 'mr' ? 'उदा. name@bank' : 'Example: name@bank'}
                           />
                           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
