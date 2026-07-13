@@ -609,7 +609,11 @@ function isOwnerRole(role) {
 }
 
 function normalizeWhatsAppPhone(phone) {
-  return String(phone || '').replace(/\D/g, '');
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `91${digits}`;
+  }
+  return digits;
 }
 
 export default function App() {
@@ -657,6 +661,7 @@ export default function App() {
   const [settingsPinInput, setSettingsPinInput] = useState('');
   const [archivePinInput, setArchivePinInput] = useState('');
   const [archivePinOwnerAuthInput, setArchivePinOwnerAuthInput] = useState('');
+  const [archiveOwnerPinInput, setArchiveOwnerPinInput] = useState('');
   const [newArchivePinInput, setNewArchivePinInput] = useState('');
   const [shortTermDays, setShortTermDays] = useState('10');
   const [shortTermMeals, setShortTermMeals] = useState('2');
@@ -709,6 +714,15 @@ export default function App() {
 
   useEffect(() => {
     currentTabRef.current = currentTab;
+    // Automatically lock settings and old customers archive when navigating away
+    if (currentTab !== 'settings') {
+      setIsSettingsUnlocked(false);
+      setSettingsPinInput('');
+    }
+    if (currentTab !== 'oldcustomers') {
+      setIsArchiveUnlocked(false);
+      setArchivePinInput('');
+    }
   }, [currentTab]);
 
   useEffect(() => {
@@ -882,6 +896,38 @@ export default function App() {
     setNewArchivePinInput('');
     return true;
   }, [archivePinOwnerAuthInput, db?.settings, newArchivePinInput, saveArchivePasscodeSetting, showToast]);
+
+  const updateArchivePasscodeWithOwnerPin = useCallback(async () => {
+    const isMarathi = db?.settings?.lang === 'mr';
+    const cleanedOwnerPin = archiveOwnerPinInput.trim();
+
+    if (!db?.settings?.ownerPinHash) {
+      showToast(
+        isMarathi
+          ? 'मालक पिन सेट केलेला नाही. कृपया आधी मालक पिन सेट करा.'
+          : 'Owner PIN is not set. Please set the Owner PIN first.',
+        'error'
+      );
+      return false;
+    }
+
+    if (!await matchesSecret(cleanedOwnerPin, db.settings.ownerPinHash, PIN_LENGTH)) {
+      showToast(
+        isMarathi
+          ? 'चुकीचा मालक पिन.'
+          : 'Invalid Owner PIN.',
+        'error'
+      );
+      return false;
+    }
+
+    const saved = await saveArchivePasscodeSetting(newArchivePinInput);
+    if (!saved) return false;
+
+    setArchiveOwnerPinInput('');
+    setNewArchivePinInput('');
+    return true;
+  }, [archiveOwnerPinInput, db?.settings, newArchivePinInput, saveArchivePasscodeSetting, showToast]);
 
   useEffect(() => {
     if (toast) {
@@ -4308,44 +4354,95 @@ export default function App() {
 
                       <hr style={{ border: 'none', borderBottom: '1px solid var(--border)' }} />
 
-                      <div className="form-group">
-                        <label className="form-label" style={{ fontWeight: '700', fontSize: '15px' }}>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <label className="form-label" style={{ fontWeight: '700', fontSize: '15px', marginBottom: 0 }}>
                           {db.settings.lang === 'mr' ? 'जुने ग्राहक आर्काइव्ह संकेतशब्द सेटिंग्ज' : 'Old Customers Archive Passcode settings'}
                         </label>
-                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
-                          <div className="form-group" style={{ flex: 1, minWidth: '180px', marginBottom: 0 }}>
-                            <label className="form-label" style={{ fontSize: '12px' }}>
-                              {db.settings.lang === 'mr' ? 'सध्याचा संकेतशब्द' : 'Current Passcode'}
-                            </label>
-                            <input
-                              type="password"
-                              className="form-input"
-                              maxLength="6"
-                              placeholder={db.settings.lang === 'mr' ? 'सध्याचा पासवर्ड' : 'Current Passcode'}
-                              value={archivePinOwnerAuthInput}
-                              onChange={(e) => setArchivePinOwnerAuthInput(e.target.value.replace(/\D/g, ''))}
-                            />
+                        
+                        {/* Option 1: Current Passcode */}
+                        <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '700', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                            {db.settings.lang === 'mr' ? 'पर्याय १: सध्याचा पासवर्ड वापरा' : 'Option 1: Use Current Passcode'}
                           </div>
-                          <div className="form-group" style={{ flex: 1, minWidth: '180px', marginBottom: 0 }}>
-                            <label className="form-label" style={{ fontSize: '12px' }}>
-                              {db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}
-                            </label>
-                            <input
-                              type="password"
-                              className="form-input"
-                              maxLength="6"
-                              placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड' : 'New Passcode'}
-                              value={newArchivePinInput}
-                              onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
-                            />
+                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            <div className="form-group" style={{ flex: 1, minWidth: '160px', marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '11px' }}>
+                                {db.settings.lang === 'mr' ? 'सध्याचा संकेतशब्द' : 'Current Passcode'}
+                              </label>
+                              <input
+                                type="password"
+                                className="form-input"
+                                maxLength="6"
+                                placeholder="******"
+                                value={archivePinOwnerAuthInput}
+                                onChange={(e) => setArchivePinOwnerAuthInput(e.target.value.replace(/\D/g, ''))}
+                              />
+                            </div>
+                            <div className="form-group" style={{ flex: 1, minWidth: '160px', marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '11px' }}>
+                                {db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}
+                              </label>
+                              <input
+                                type="password"
+                                className="form-input"
+                                maxLength="6"
+                                placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड' : 'New Passcode'}
+                                value={newArchivePinInput}
+                                onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                              <button
+                                className="btn btn-primary"
+                                onClick={updateArchivePasscodeWithCurrentPasscode}
+                              >
+                                {db.settings.lang === 'mr' ? 'अपडेट करा' : 'Update Passcode'}
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                            <button
-                              className="btn btn-primary"
-                              onClick={updateArchivePasscodeWithCurrentPasscode}
-                            >
-                              {db.settings.lang === 'mr' ? 'अपडेट करा' : 'Update Passcode'}
-                            </button>
+                        </div>
+
+                        {/* Option 2: Reset using Owner PIN */}
+                        <div style={{ background: 'rgba(249, 115, 22, 0.02)', padding: '12px', borderRadius: '12px', border: '1px dashed rgba(249, 115, 22, 0.3)' }}>
+                          <div style={{ fontSize: '11px', color: 'var(--primary)', textTransform: 'uppercase', fontWeight: '700', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                            {db.settings.lang === 'mr' ? 'पर्याय २: मालक पिनने रीसेट करा' : 'Option 2: Reset with Owner PIN'}
+                          </div>
+                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            <div className="form-group" style={{ flex: 1, minWidth: '160px', marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '11px', color: 'var(--primary)' }}>
+                                {db.settings.lang === 'mr' ? 'मालक पिन (६-अंकी)' : 'Owner PIN (6-digit)'}
+                              </label>
+                              <input
+                                type="password"
+                                className="form-input"
+                                maxLength="6"
+                                placeholder="******"
+                                value={archiveOwnerPinInput}
+                                onChange={(e) => setArchiveOwnerPinInput(e.target.value.replace(/\D/g, ''))}
+                              />
+                            </div>
+                            <div className="form-group" style={{ flex: 1, minWidth: '160px', marginBottom: 0 }}>
+                              <label className="form-label" style={{ fontSize: '11px' }}>
+                                {db.settings.lang === 'mr' ? 'नवीन आर्काइव्ह पासवर्ड' : 'New Archive Password'}
+                              </label>
+                              <input
+                                type="password"
+                                className="form-input"
+                                maxLength="6"
+                                placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड' : 'New Passcode'}
+                                value={newArchivePinInput}
+                                onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                              <button
+                                className="btn btn-primary"
+                                style={{ backgroundColor: 'var(--primary)', borderColor: 'var(--primary)' }}
+                                onClick={updateArchivePasscodeWithOwnerPin}
+                              >
+                                {db.settings.lang === 'mr' ? 'रीसेट करा' : 'Reset Passcode'}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
