@@ -1523,6 +1523,9 @@ export default function App() {
   const [payNote, setPayNote] = useState('');
   const [historyModalCustomer, setHistoryModalCustomer] = useState(null);
   const [isBulkReminderOpen, setIsBulkReminderOpen] = useState(false);
+  const [bulkQueue, setBulkQueue] = useState([]);
+  const [bulkQueueIndex, setBulkQueueIndex] = useState(0);
+  const [isQueueProcessing, setIsQueueProcessing] = useState(false);
 
   const openPayModal = (customer) => {
     setPayModalCustomer(customer);
@@ -2204,8 +2207,7 @@ export default function App() {
 
     // Skip ₹0 pending dues
     const dueCustomers = selectedCustomers
-      .map((c) => ({ c, due: getCustomerDues(c) }))
-      .filter(({ due }) => due > 0);
+      .filter((c) => getCustomerDues(c) > 0);
 
     if (!dueCustomers.length) {
       showToast(
@@ -2217,17 +2219,52 @@ export default function App() {
       return;
     }
 
-    // Open WhatsApp chats one-by-one; user will manually press Send in each chat.
-    // Keep text pre-typed and do NOT auto-send.
-    dueCustomers.forEach(({ c }, idx) => {
-      const delayMs = idx * 600;
-      setTimeout(() => {
-        sendWhatsAppReminder(c);
-      }, delayMs);
-    });
+    // Initialize the sequential sending queue
+    setBulkQueue(dueCustomers);
+    setBulkQueueIndex(0);
+    setIsQueueProcessing(true);
+  }, [db.customers, selectedWhatsAppCustomerIds, db.settings, showToast]);
 
-    clearWhatsAppSelection();
-  }, [db.customers, selectedWhatsAppCustomerIds, db.settings, showToast, sendWhatsAppReminder, clearWhatsAppSelection]);
+  const handleQueueNext = useCallback((skip = false) => {
+    if (!bulkQueue.length || bulkQueueIndex >= bulkQueue.length) return;
+
+    const currentCustomer = bulkQueue[bulkQueueIndex];
+    
+    if (!skip) {
+      sendWhatsAppReminder(currentCustomer);
+    }
+
+    const nextIndex = bulkQueueIndex + 1;
+    if (nextIndex >= bulkQueue.length) {
+      // Completed the entire queue
+      setIsQueueProcessing(false);
+      setIsBulkReminderOpen(false);
+      setBulkQueue([]);
+      setBulkQueueIndex(0);
+      setSelectedWhatsAppCustomerIds([]);
+      showToast(
+        db.settings?.lang === 'mr'
+          ? 'सर्व निवडलेल्या ग्राहकांना संदेश यशस्वीरित्या पाठवले आहेत!'
+          : 'All selected reminders processed successfully!',
+        'success'
+      );
+    } else {
+      setBulkQueueIndex(nextIndex);
+    }
+  }, [bulkQueue, bulkQueueIndex, sendWhatsAppReminder, db.settings, showToast]);
+
+  const handleQueueCancel = useCallback(() => {
+    setIsQueueProcessing(false);
+    setBulkQueue([]);
+    setBulkQueueIndex(0);
+    setSelectedWhatsAppCustomerIds([]);
+    showToast(
+      db.settings?.lang === 'mr'
+        ? 'बुल्क आठवण प्रक्रिया रद्द केली.'
+        : 'Bulk reminder process cancelled.',
+      'error'
+    );
+  }, [db.settings, showToast]);
 
 
 
@@ -4788,150 +4825,242 @@ export default function App() {
           <div className="modal-card" style={{ maxWidth: '600px', width: '92%' }}>
             <div className="modal-header">
               <span className="modal-title">
-                {db.settings?.lang === 'mr' ? 'बुल्क WhatsApp आठवण' : 'Bulk WhatsApp Reminder'}
+                {isQueueProcessing
+                  ? (db.settings?.lang === 'mr' ? 'बुल्क संदेश पाठवत आहे...' : 'Sending Bulk Reminders...')
+                  : (db.settings?.lang === 'mr' ? 'बुल्क WhatsApp आठवण' : 'Bulk WhatsApp Reminder')
+                }
               </span>
-              <X className="modal-close" onClick={() => setIsBulkReminderOpen(false)} />
+              <X 
+                className="modal-close" 
+                onClick={isQueueProcessing ? handleQueueCancel : () => setIsBulkReminderOpen(false)} 
+              />
             </div>
             
-            <div className="modal-body">
-              <div style={{ marginBottom: '16px', background: 'rgba(34, 197, 94, 0.05)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.1)' }}>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                  {db.settings?.lang === 'mr' 
-                    ? 'ग्राहकांना थकीत रक्कम आठवण पाठवा. खालील यादीतून ग्राहक निवडा.' 
-                    : 'Send payment reminders to multiple customers via WhatsApp. Select customers from the list below.'}
-                </p>
-              </div>
-
-              {/* Search bar inside modal */}
-              <div style={{ marginBottom: '12px' }}>
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder={db.settings?.lang === 'mr' ? 'नाव किंवा फोन नंबर शोधा...' : 'Search by name or phone...'}
-                  value={bulkSearch}
-                  onChange={(e) => setBulkSearch(e.target.value)}
-                  style={{ width: '100%' }}
-                />
-              </div>
-
-              {/* Select All Toggle Bar */}
-              {filteredModalDueCustomers.length > 0 && (
-                <div 
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '10px 12px',
-                    background: 'rgba(0, 0, 0, 0.03)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    marginBottom: '10px',
-                    cursor: 'pointer',
-                    userSelect: 'none'
-                  }} 
-                  onClick={toggleSelectAllBulk}
-                >
-                  <input
-                    type="checkbox"
-                    checked={filteredModalDueCustomers.map(c => c.id).every(id => selectedWhatsAppCustomerIds.includes(id))}
-                    onChange={toggleSelectAllBulk}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ marginRight: '10px', width: '16px', height: '16px', accentColor: 'var(--success)', cursor: 'pointer' }}
-                  />
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                    {db.settings?.lang === 'mr' ? 'सर्व निवडा' : 'Select All'} ({filteredModalDueCustomers.length})
-                  </span>
-                </div>
-              )}
-
-              {/* Smooth scrolling customer list container */}
-              <div 
-                className="bulk-customer-list-container"
-                style={{
-                  maxHeight: '320px',
-                  overflowY: 'auto',
-                  scrollBehavior: 'smooth',
-                  border: '1px solid var(--border)',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  backgroundColor: 'var(--bg)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}
-              >
-                {filteredModalDueCustomers.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                    {db.settings?.lang === 'mr' ? 'थकीत रक्कम असलेले ग्राहक आढळले नाहीत.' : 'No customers with pending dues found.'}
+            {isQueueProcessing ? (
+              <div className="modal-body">
+                {/* Progress bar */}
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '700', marginBottom: '6px', color: 'var(--text-secondary)' }}>
+                    <span>
+                      {db.settings?.lang === 'mr' 
+                        ? `प्रगती: ग्राहक ${bulkQueueIndex + 1} पैकी ${bulkQueue.length}` 
+                        : `Progress: Customer ${bulkQueueIndex + 1} of ${bulkQueue.length}`}
+                    </span>
+                    <span>
+                      {Math.round((bulkQueueIndex / bulkQueue.length) * 100)}%
+                    </span>
                   </div>
-                ) : (
-                  filteredModalDueCustomers.map(c => {
-                    const isSelected = selectedWhatsAppCustomerIds.includes(c.id);
-                    const dueAmt = getCustomerDues(c);
-                    return (
-                      <div 
-                        key={c.id} 
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 12px',
-                          backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.04)' : 'var(--card)',
-                          border: isSelected ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid var(--border)',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease'
-                        }}
-                        onClick={() => toggleWhatsAppCustomer(c.id)}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleWhatsAppCustomer(c.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ width: '16px', height: '16px', accentColor: 'var(--success)', cursor: 'pointer' }}
-                          />
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                              {c.name}
+                  <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--border)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ 
+                      width: `${(bulkQueueIndex / bulkQueue.length) * 100}%`, 
+                      height: '100%', 
+                      backgroundColor: 'var(--success)', 
+                      borderRadius: '4px',
+                      transition: 'width 0.3s ease' 
+                    }} />
+                  </div>
+                </div>
+
+                {/* Current Customer Card */}
+                {bulkQueue[bulkQueueIndex] && (
+                  <div style={{ 
+                    background: 'var(--bg)', 
+                    border: '1.5px solid var(--border)', 
+                    borderRadius: '12px', 
+                    padding: '16px', 
+                    marginBottom: '20px' 
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)' }}>
+                          {bulkQueue[bulkQueueIndex].name}
+                        </h4>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          📞 {bulkQueue[bulkQueueIndex].phone}
+                        </span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--danger)' }}>
+                          ₹{getCustomerDues(bulkQueue[bulkQueueIndex])}
+                        </span>
+                        <div style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+                          {db.settings?.lang === 'mr' ? 'थकीत रक्कम' : 'Pending Due'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)', borderTop: '1px dashed var(--border)', paddingTop: '10px' }}>
+                      <div>
+                        <strong>{db.settings?.lang === 'mr' ? 'योजना:' : 'Plan:'}</strong> {bulkQueue[bulkQueueIndex].plan}
+                      </div>
+                      <div style={{ marginLeft: '12px' }}>
+                        <strong>{db.settings?.lang === 'mr' ? 'सुरुवात तारीख:' : 'Start Date:'}</strong> {bulkQueue[bulkQueueIndex].joinDate}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ background: 'rgba(216, 90, 48, 0.05)', border: '1px solid rgba(216, 90, 48, 0.1)', borderRadius: '8px', padding: '12px', fontSize: '13px', color: '#c2410c', lineHeight: '1.5' }}>
+                  💡 {db.settings?.lang === 'mr' 
+                    ? 'खालील "चॅट उघडा" बटण दाबा. WhatsApp उघडल्यावर चॅटमध्ये संदेश पाठवा (Send) बटण दाबा. त्यानंतर पुढील ग्राहकासाठी येथे परत या.' 
+                    : 'Click "Open Chat & Next" to launch the message draft in WhatsApp. Press "Send" in WhatsApp, then return here for the next customer.'}
+                </div>
+              </div>
+            ) : (
+              <div className="modal-body">
+                <div style={{ marginBottom: '16px', background: 'rgba(34, 197, 94, 0.05)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.1)' }}>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                    {db.settings?.lang === 'mr' 
+                      ? 'ग्राहकांना थकीत रक्कम आठवण पाठवा. खालील यादीतून ग्राहक निवडा.' 
+                      : 'Send payment reminders to multiple customers via WhatsApp. Select customers from the list below.'}
+                  </p>
+                </div>
+
+                {/* Search bar inside modal */}
+                <div style={{ marginBottom: '12px' }}>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder={db.settings?.lang === 'mr' ? 'नाव किंवा फोन नंबर शोधा...' : 'Search by name or phone...'}
+                    value={bulkSearch}
+                    onChange={(e) => setBulkSearch(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                {/* Select All Toggle Bar */}
+                {filteredModalDueCustomers.length > 0 && (
+                  <div 
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '10px 12px',
+                      background: 'rgba(0, 0, 0, 0.03)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      marginBottom: '10px',
+                      cursor: 'pointer',
+                      userSelect: 'none'
+                    }} 
+                    onClick={toggleSelectAllBulk}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filteredModalDueCustomers.map(c => c.id).every(id => selectedWhatsAppCustomerIds.includes(id))}
+                      onChange={toggleSelectAllBulk}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ marginRight: '10px', width: '16px', height: '16px', accentColor: 'var(--success)', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                      {db.settings?.lang === 'mr' ? 'सर्व निवडा' : 'Select All'} ({filteredModalDueCustomers.length})
+                    </span>
+                  </div>
+                )}
+
+                {/* Smooth scrolling customer list container */}
+                <div 
+                  className="bulk-customer-list-container"
+                  style={{
+                    maxHeight: '320px',
+                    overflowY: 'auto',
+                    scrollBehavior: 'smooth',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    backgroundColor: 'var(--bg)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}
+                >
+                  {filteredModalDueCustomers.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                      {db.settings?.lang === 'mr' ? 'थकीत रक्कम असलेले ग्राहक आढळले नाहीत.' : 'No customers with pending dues found.'}
+                    </div>
+                  ) : (
+                    filteredModalDueCustomers.map(c => {
+                      const isSelected = selectedWhatsAppCustomerIds.includes(c.id);
+                      const dueAmt = getCustomerDues(c);
+                      return (
+                        <div 
+                          key={c.id} 
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 12px',
+                            backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.04)' : 'var(--card)',
+                            border: isSelected ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid var(--border)',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onClick={() => toggleWhatsAppCustomer(c.id)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleWhatsAppCustomer(c.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ width: '16px', height: '16px', accentColor: 'var(--success)', cursor: 'pointer' }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                                {c.name}
+                              </span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                📞 {c.phone} | {c.plan === 'Monthly' ? (db.settings?.lang === 'mr' ? 'मासिक' : 'Monthly') : c.plan === 'Weekly' ? (db.settings?.lang === 'mr' ? 'साप्ताहिक' : 'Weekly') : c.plan === 'Daily' ? (db.settings?.lang === 'mr' ? 'दैनिक' : 'Daily') : (db.settings?.lang === 'mr' ? 'कस्टम' : 'Custom')}
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--danger)' }}>
+                              ₹{dueAmt}
                             </span>
-                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                              📞 {c.phone} | {c.plan === 'Monthly' ? (db.settings?.lang === 'mr' ? 'मासिक' : 'Monthly') : c.plan === 'Weekly' ? (db.settings?.lang === 'mr' ? 'साप्ताहिक' : 'Weekly') : c.plan === 'Daily' ? (db.settings?.lang === 'mr' ? 'दैनिक' : 'Daily') : (db.settings?.lang === 'mr' ? 'कस्टम' : 'Custom')}
+                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '600' }}>
+                              {db.settings?.lang === 'mr' ? 'थकीत' : 'Due'}
                             </span>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                          <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--danger)' }}>
-                            ₹{dueAmt}
-                          </span>
-                          <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '600' }}>
-                            {db.settings?.lang === 'mr' ? 'थकीत' : 'Due'}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="modal-footer">
-              <button className="btn" onClick={() => setIsBulkReminderOpen(false)}>
-                {db.settings?.lang === 'mr' ? 'बंद करा' : 'Close'}
-              </button>
-              <button 
-                className="btn btn-success" 
-                onClick={() => {
-                  sendBulkWhatsAppReminders();
-                  setIsBulkReminderOpen(false);
-                }}
-                disabled={selectedWhatsAppCustomerIds.length === 0}
-                title={db.settings?.lang === 'mr' ? 'निवडलेले पाठवा' : 'Send selected'}
-              >
-                <Bell size={14} style={{ marginRight: '6px' }} />
-                {db.settings?.lang === 'mr' ? 'संदेश पाठवा' : 'Send Reminders'} ({selectedWhatsAppCustomerIds.length})
-              </button>
-            </div>
+            {isQueueProcessing ? (
+              <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+                <button className="btn btn-danger" onClick={handleQueueCancel}>
+                  {db.settings?.lang === 'mr' ? 'थांबवा' : 'Stop'}
+                </button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button className="btn" onClick={() => handleQueueNext(true)}>
+                    {db.settings?.lang === 'mr' ? 'वगळा' : 'Skip'}
+                  </button>
+                  <button className="btn btn-success" onClick={() => handleQueueNext(false)}>
+                    <Bell size={14} style={{ marginRight: '6px' }} />
+                    {db.settings?.lang === 'mr' ? 'चॅट उघडा' : 'Open Chat & Next'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="modal-footer">
+                <button className="btn" onClick={() => setIsBulkReminderOpen(false)}>
+                  {db.settings?.lang === 'mr' ? 'बंद करा' : 'Close'}
+                </button>
+                <button 
+                  className="btn btn-success" 
+                  onClick={sendBulkWhatsAppReminders}
+                  disabled={selectedWhatsAppCustomerIds.length === 0}
+                  title={db.settings?.lang === 'mr' ? 'निवडलेले पाठवा' : 'Send selected'}
+                >
+                  <Bell size={14} style={{ marginRight: '6px' }} />
+                  {db.settings?.lang === 'mr' ? 'संदेश पाठवा' : 'Send Reminders'} ({selectedWhatsAppCustomerIds.length})
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
