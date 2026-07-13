@@ -623,6 +623,7 @@ export default function App() {
     settings: {
       lang: 'en',
       upiId: '',
+      paymentPhone: '',
       whatsappDuesTemplate: '',
       ownerPinHash: '',
       messName: 'Lokmanya Mess',
@@ -648,6 +649,7 @@ export default function App() {
   const [ownerNameInput, setOwnerNameInput] = useState('');
   const [ownerAddressInput, setOwnerAddressInput] = useState('');
   const [upiIdInput, setUpiIdInput] = useState('');
+  const [paymentPhoneInput, setPaymentPhoneInput] = useState('');
   const [whatsappDuesTemplateInput, setWhatsappDuesTemplateInput] = useState('');
   const [activeBranch, setActiveBranch] = useState('Branch 1');
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
@@ -725,6 +727,7 @@ export default function App() {
     setOwnerNameInput(settings.ownerName || 'Mess Owner');
     setOwnerAddressInput(settings.ownerAddress || '');
     setUpiIdInput(settings.upiId || '');
+    setPaymentPhoneInput(settings.paymentPhone || '');
     setWhatsappDuesTemplateInput(settings.whatsappDuesTemplate || '');
   }, []);
 
@@ -2026,6 +2029,7 @@ export default function App() {
     const expiry = customer?.joinDate ? expiryStr(customer.joinDate, customer.plan) : '';
     const messName = db.settings?.messName || 'Lokmanya Mess';
     const upiId = String(db.settings?.upiId || '').trim();
+    const paymentPhone = String(db.settings?.paymentPhone || '').trim();
     const paymentAmount = remaining > 0 ? remaining : 0;
     const customerName = customer?.name || 'Customer';
     const upiLink =
@@ -2038,7 +2042,7 @@ export default function App() {
             paymentAmount
           )}&tn=${encodeURIComponent(
             `${messName} reminder for ${customerName}`
-          )}&lang=${db.settings?.lang || 'en'}`
+          )}&lang=${db.settings?.lang || 'en'}${paymentPhone ? `&ph=${encodeURIComponent(paymentPhone)}` : ''}`
         : '';
     const defaultTemplate = db.settings?.lang === 'mr'
       ? 'नमस्कार [Name], तुमची थकीत रक्कम ₹[Dues] आहे. कृपया पेमेंट करा: [UpiLink] - [MessName]'
@@ -4113,7 +4117,7 @@ export default function App() {
                       </div>
 
                       <div className="form-row">
-                        <div className="form-group" style={{ width: '100%' }}>
+                        <div className="form-group" style={{ flex: 1 }}>
                           <label className="form-label">{db.settings.lang === 'mr' ? 'UPI आयडी' : 'UPI ID'}</label>
                           <input
                             type="text"
@@ -4128,6 +4132,25 @@ export default function App() {
                             {db.settings.lang === 'mr'
                               ? 'ही आयडी WhatsApp रिमाइंडरमध्ये पेमेंट लिंकसाठी वापरली जाईल.'
                               : 'This is used to add a payment link in WhatsApp reminders.'}
+                          </div>
+                        </div>
+
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label className="form-label">{db.settings.lang === 'mr' ? 'पेमेंट मोबाईल नंबर' : 'Payment Mobile Number'}</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={paymentPhoneInput}
+                            onChange={(e) => setPaymentPhoneInput(e.target.value.replace(/\D/g, ''))}
+                            onBlur={() => saveSettingField('paymentPhone', paymentPhoneInput.trim(), { label: 'Payment Mobile Number' })}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                            placeholder={db.settings.lang === 'mr' ? 'उदा. 9876543210' : 'Example: 9876543210'}
+                            maxLength="10"
+                          />
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                            {db.settings.lang === 'mr'
+                              ? 'UPI लिंक अयशस्वी झाल्यास ग्राहक या नंबरवर थेट पेमेंट करू शकतात.'
+                              : 'Customers can pay directly to this number if the UPI link declines.'}
                           </div>
                         </div>
                       </div>

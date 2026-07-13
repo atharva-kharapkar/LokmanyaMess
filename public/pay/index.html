@@ -380,7 +380,19 @@
 
     <!-- Security warning card -->
     <div class="decline-warning" id="decline-info">
-      <strong>⚠️ Payment declining?</strong> GPay/PhonePe may block auto-filled links to personal accounts. If it fails, turn off <strong>"Pre-fill Amount"</strong> below or copy the UPI ID to pay.
+      <strong>⚠️ Payment declining?</strong> GPay/PhonePe may block auto-filled links to personal accounts. If it fails, copy the <strong>Mobile Number</strong> or <strong>UPI ID</strong> below to pay manually inside the app.
+    </div>
+
+    <!-- Mobile Number Payment Option (FALLBACK FOR SECURITY DECLINES) -->
+    <div class="vpa-card" id="phone-payment-block" style="display: none; background: rgba(16, 185, 129, 0.05); border-color: rgba(16, 185, 129, 0.25);">
+      <div>
+        <div class="vpa-label" style="color: var(--success);" id="lbl-pay-phone">Pay via Mobile Number (Recommended)</div>
+        <div class="vpa-val" id="phone-text">9876543210</div>
+        <div style="font-size: 10px; color: var(--text-secondary); margin-top: 4px;" id="desc-pay-phone">
+          Copy number & search inside PhonePe, GPay, or Paytm to pay directly.
+        </div>
+      </div>
+      <button class="copy-btn" style="background-color: var(--success);" onclick="copyPhone()" id="btn-copy-phone">Copy</button>
     </div>
 
     <!-- Pre-fill toggle switch -->
@@ -442,6 +454,7 @@
     const am = params.get('am') || '0';
     const tn = params.get('tn') || 'Mess Dues';
     const lang = params.get('lang') || 'en';
+    const ph = params.get('ph') || '';
 
     // Apply translations
     const isMarathi = (lang === 'mr');
@@ -453,13 +466,28 @@
       document.getElementById('div-or').textContent = "किंवा मॅन्युअली पेमेंट करा";
       document.getElementById('btn-copy').textContent = "कॉपी करा";
       document.getElementById('txt-qr').textContent = "हा QR कोड स्कॅन करा किंवा स्क्रीनशॉट काढून तुमच्या पेमेंट ॲपमध्ये अपलोड करा.";
-      document.getElementById('decline-info').innerHTML = "<strong>⚠️ पेमेंट नाकारले जात आहे?</strong> वैयक्तिक खात्यांसाठी स्वयंचलित भरलेले दुवे ब्लॉक होऊ शकतात. अडचण आल्यास <strong>\"रक्कम स्वयंचलित भरा\"</strong> बंद करा किंवा UPI आयडी कॉपी करा.";
+      document.getElementById('decline-info').innerHTML = "<strong>⚠️ पेमेंट नाकारले जात आहे?</strong> वैयक्तिक खात्यांसाठी स्वयंचलित भरलेले दुवे ब्लॉक होऊ शकतात. अडचण आल्यास खालील <strong>मोबाईल नंबर</strong> किंवा <strong>UPI आयडी</strong> कॉपी करून मॅन्युअली पेमेंट करा.";
+      document.getElementById('lbl-pay-phone').textContent = "मोबाईल नंबरद्वारे पेमेंट (शिफारस केलेले)";
+      document.getElementById('desc-pay-phone').textContent = "नंबर कॉपी करा आणि थेट पेमेंट करण्यासाठी PhonePe, GPay, किंवा Paytm मध्ये सर्च करा.";
+      document.getElementById('btn-copy-phone').textContent = "कॉपी करा";
       document.getElementById('toast-msg').textContent = "UPI आयडी कॉपी केला!";
     }
 
     document.getElementById('payee-title').textContent = decodeURIComponent(pn);
     document.getElementById('amount-val').textContent = `₹${parseFloat(am).toFixed(2)}`;
     document.getElementById('vpa-text').textContent = pa;
+
+    // Detect and extract target phone number
+    let targetPhone = ph.trim();
+    if (!targetPhone) {
+      const match = pa.match(/\b\d{10}\b/);
+      if (match) targetPhone = match[0];
+    }
+
+    if (targetPhone && /^\d{10}$/.test(targetPhone)) {
+      document.getElementById('phone-text').textContent = targetPhone;
+      document.getElementById('phone-payment-block').style.display = 'flex';
+    }
 
     let upiUri = '';
 
@@ -525,9 +553,23 @@
     function copyVPA() {
       navigator.clipboard.writeText(pa).then(() => {
         const toast = document.getElementById('toast-msg');
+        toast.textContent = isMarathi ? "UPI आयडी कॉपी केला!" : "UPI ID Copied!";
         toast.classList.add('show');
         setTimeout(() => {
           toast.classList.remove('show');
+        }, 2000);
+      });
+    }
+
+    function copyPhone() {
+      const phone = document.getElementById('phone-text').textContent;
+      navigator.clipboard.writeText(phone).then(() => {
+        const toast = document.getElementById('toast-msg');
+        toast.textContent = isMarathi ? "मोबाईल नंबर कॉपी केला!" : "Mobile number copied!";
+        toast.classList.add('show');
+        setTimeout(() => {
+          toast.classList.remove('show');
+          toast.textContent = isMarathi ? "UPI आयडी कॉपी केला!" : "UPI ID Copied!";
         }, 2000);
       });
     }
