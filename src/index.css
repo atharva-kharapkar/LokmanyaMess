@@ -979,22 +979,16 @@ to {
 }
 
 .customer-bar {
-  display: grid;
-  grid-template-columns: 30px 70px 2fr 1.5fr 2.5fr;
-  grid-template-rows: auto auto;
-  grid-template-areas:
-    "checkbox photo details plan financials"
-    "actions actions actions actions actions";
-
-  align-items: center;
-  background-color: var(--card);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: var(--shadow);
-  border: 1.5px solid var(--border);
-  transition: all .2s ease;
-  column-gap: 16px;
-  row-gap: 12px;
+  display:grid;
+  grid-template-columns:80px 2fr 1.5fr 3.5fr 2.5fr;
+  align-items:center;
+  background-color:var(--card);
+  border-radius:16px;
+  padding:20px;
+  box-shadow:var(--shadow);
+  border:1.5px solid var(--border);
+  transition:all .2s ease;
+  gap:16px
 }
 
 
@@ -1397,4 +1391,20 @@ to {
   padding: 0 !important;
   border-right: none !important;
   overflow: hidden !important;
+}
+
+/* Scrollbar styles for bulk reminder list container */
+.bulk-customer-list-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.bulk-customer-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+.bulk-customer-list-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bulk-customer-list-container::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 20px;
 }

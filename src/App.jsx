@@ -1522,6 +1522,7 @@ export default function App() {
   const [payMode, setPayMode] = useState('Cash');
   const [payNote, setPayNote] = useState('');
   const [historyModalCustomer, setHistoryModalCustomer] = useState(null);
+  const [isBulkReminderOpen, setIsBulkReminderOpen] = useState(false);
 
   const openPayModal = (customer) => {
     setPayModalCustomer(customer);
@@ -2144,6 +2145,50 @@ export default function App() {
 
   // ===== WhatsApp Bulk Reminder (single entry button + multi-select) =====
   const [selectedWhatsAppCustomerIds, setSelectedWhatsAppCustomerIds] = useState([]);
+  const [bulkSearch, setBulkSearch] = useState('');
+
+  const modalDueCustomers = useMemo(() => {
+    return (db.customers || []).filter(c => 
+      (c.branch || 'Branch 1') === activeBranch && 
+      c.status !== 'old' && 
+      getCustomerDues(c) > 0
+    );
+  }, [db.customers, activeBranch]);
+
+  const filteredModalDueCustomers = useMemo(() => {
+    const query = bulkSearch.toLowerCase().trim();
+    if (!query) return modalDueCustomers;
+    return modalDueCustomers.filter(c => 
+      (c.name || '').toLowerCase().includes(query) || 
+      (c.phone || '').includes(query)
+    );
+  }, [modalDueCustomers, bulkSearch]);
+
+  const handleOpenBulkReminder = useCallback(() => {
+    const dueIds = (db.customers || [])
+      .filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old' && getCustomerDues(c) > 0)
+      .map(c => c.id);
+    setSelectedWhatsAppCustomerIds(dueIds);
+    setBulkSearch('');
+    setIsBulkReminderOpen(true);
+  }, [db.customers, activeBranch]);
+
+  const toggleSelectAllBulk = useCallback(() => {
+    const allFilteredIds = filteredModalDueCustomers.map(c => c.id);
+    const areAllSelected = allFilteredIds.every(id => selectedWhatsAppCustomerIds.includes(id));
+    
+    if (areAllSelected) {
+      setSelectedWhatsAppCustomerIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+    } else {
+      setSelectedWhatsAppCustomerIds(prev => {
+        const next = [...prev];
+        allFilteredIds.forEach(id => {
+          if (!next.includes(id)) next.push(id);
+        });
+        return next;
+      });
+    }
+  }, [filteredModalDueCustomers, selectedWhatsAppCustomerIds]);
 
   const toggleWhatsAppCustomer = useCallback((custId) => {
     setSelectedWhatsAppCustomerIds((prev) => {
@@ -3236,27 +3281,13 @@ export default function App() {
                     {/* Bulk WhatsApp Reminder */}
                     <button
                       className="btn btn-sm btn-success"
-                      onClick={sendBulkWhatsAppReminders}
-                      disabled={!selectedWhatsAppCustomerIds.length}
-                      style={{ opacity: selectedWhatsAppCustomerIds.length ? 1 : 0.6 }}
+                      onClick={handleOpenBulkReminder}
                       title={
-                        selectedWhatsAppCustomerIds.length
-                          ? (db.settings.lang === 'mr' ? 'निवडलेल्या ग्राहकांना WhatsApp आठवण पाठवा' : 'Send WhatsApp reminders to selected customers')
-                          : (db.settings.lang === 'mr' ? 'प्रथम ग्राहक निवडा' : 'Select customers first')
+                        db.settings.lang === 'mr' ? 'बुल्क WhatsApp आठवण पाठवा' : 'Send WhatsApp reminders in bulk'
                       }
                     >
                       <Bell size={16} style={{ marginRight: '6px' }} />
                       {db.settings.lang === 'mr' ? 'बुल्क WhatsApp आठवण' : 'Bulk WhatsApp Reminder'}
-                    </button>
-
-                    <button
-                      className="btn"
-                      onClick={clearWhatsAppSelection}
-                      disabled={!selectedWhatsAppCustomerIds.length}
-                      style={{ opacity: selectedWhatsAppCustomerIds.length ? 1 : 0.6 }}
-                      title={db.settings.lang === 'mr' ? 'निवड साफ करा' : 'Clear selection'}
-                    >
-                      {db.settings.lang === 'mr' ? 'निवड साफ करा' : 'Clear'}
                     </button>
 
                     <button className="btn" onClick={handleExportCustomers}>
@@ -3290,36 +3321,6 @@ export default function App() {
                       
                       return (
                         <div key={c.id} className={`customer-bar status-${status} ${hasDues ? 'has-dues' : 'no-dues'}`}>
-                        {/* WhatsApp Bulk Selection Checkbox */}
-                        {currentTab !== 'oldcustomers' && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gridRow: '1 / span 2',
-                              cursor: 'pointer'
-                            }}
-                            onClick={(e) => { e.stopPropagation(); toggleWhatsAppCustomer(c.id); }}
-                            title={isWhatsAppSelected(c.id)
-                              ? (db.settings.lang === 'mr' ? 'निवड काढा' : 'Deselect')
-                              : (db.settings.lang === 'mr' ? 'WhatsApp साठी निवडा' : 'Select for WhatsApp reminder')
-                            }
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isWhatsAppSelected(c.id)}
-                              onChange={() => toggleWhatsAppCustomer(c.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                width: '18px',
-                                height: '18px',
-                                cursor: 'pointer',
-                                accentColor: 'var(--success)'
-                              }}
-                            />
-                          </div>
-                        )}
                         {/* Left: Profile Photo */}
                         <div className="customer-bar-avatar-container">
                           {c.photo ? (
@@ -4790,6 +4791,160 @@ export default function App() {
             </div>
             <div style={{ marginTop: '14px', fontSize: '16px', fontWeight: '700', color: 'var(--text)', textAlign: 'center' }}>
               {previewImage.name}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK WHATSAPP REMINDER MODAL */}
+      {isBulkReminderOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: '600px', width: '92%' }}>
+            <div className="modal-header">
+              <span className="modal-title">
+                {db.settings?.lang === 'mr' ? 'बुल्क WhatsApp आठवण' : 'Bulk WhatsApp Reminder'}
+              </span>
+              <X className="modal-close" onClick={() => setIsBulkReminderOpen(false)} />
+            </div>
+            
+            <div className="modal-body">
+              <div style={{ marginBottom: '16px', background: 'rgba(34, 197, 94, 0.05)', padding: '14px', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.1)' }}>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                  {db.settings?.lang === 'mr' 
+                    ? 'ग्राहकांना थकीत रक्कम आठवण पाठवा. खालील यादीतून ग्राहक निवडा.' 
+                    : 'Send payment reminders to multiple customers via WhatsApp. Select customers from the list below.'}
+                </p>
+              </div>
+
+              {/* Search bar inside modal */}
+              <div style={{ marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder={db.settings?.lang === 'mr' ? 'नाव किंवा फोन नंबर शोधा...' : 'Search by name or phone...'}
+                  value={bulkSearch}
+                  onChange={(e) => setBulkSearch(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              {/* Select All Toggle Bar */}
+              {filteredModalDueCustomers.length > 0 && (
+                <div 
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    background: 'rgba(0, 0, 0, 0.03)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    marginBottom: '10px',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }} 
+                  onClick={toggleSelectAllBulk}
+                >
+                  <input
+                    type="checkbox"
+                    checked={filteredModalDueCustomers.map(c => c.id).every(id => selectedWhatsAppCustomerIds.includes(id))}
+                    onChange={toggleSelectAllBulk}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ marginRight: '10px', width: '16px', height: '16px', accentColor: 'var(--success)', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                    {db.settings?.lang === 'mr' ? 'सर्व निवडा' : 'Select All'} ({filteredModalDueCustomers.length})
+                  </span>
+                </div>
+              )}
+
+              {/* Smooth scrolling customer list container */}
+              <div 
+                className="bulk-customer-list-container"
+                style={{
+                  maxHeight: '320px',
+                  overflowY: 'auto',
+                  scrollBehavior: 'smooth',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  backgroundColor: 'var(--bg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                {filteredModalDueCustomers.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                    {db.settings?.lang === 'mr' ? 'थकीत रक्कम असलेले ग्राहक आढळले नाहीत.' : 'No customers with pending dues found.'}
+                  </div>
+                ) : (
+                  filteredModalDueCustomers.map(c => {
+                    const isSelected = selectedWhatsAppCustomerIds.includes(c.id);
+                    const dueAmt = getCustomerDues(c);
+                    return (
+                      <div 
+                        key={c.id} 
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 12px',
+                          backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.04)' : 'var(--card)',
+                          border: isSelected ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid var(--border)',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onClick={() => toggleWhatsAppCustomer(c.id)}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleWhatsAppCustomer(c.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ width: '16px', height: '16px', accentColor: 'var(--success)', cursor: 'pointer' }}
+                          />
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                              {c.name}
+                            </span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                              📞 {c.phone} | {c.plan === 'Monthly' ? (db.settings?.lang === 'mr' ? 'मासिक' : 'Monthly') : c.plan === 'Weekly' ? (db.settings?.lang === 'mr' ? 'साप्ताहिक' : 'Weekly') : c.plan === 'Daily' ? (db.settings?.lang === 'mr' ? 'दैनिक' : 'Daily') : (db.settings?.lang === 'mr' ? 'कस्टम' : 'Custom')}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                          <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--danger)' }}>
+                            ₹{dueAmt}
+                          </span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: '600' }}>
+                            {db.settings?.lang === 'mr' ? 'थकीत' : 'Due'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn" onClick={() => setIsBulkReminderOpen(false)}>
+                {db.settings?.lang === 'mr' ? 'बंद करा' : 'Close'}
+              </button>
+              <button 
+                className="btn btn-success" 
+                onClick={() => {
+                  sendBulkWhatsAppReminders();
+                  setIsBulkReminderOpen(false);
+                }}
+                disabled={selectedWhatsAppCustomerIds.length === 0}
+                title={db.settings?.lang === 'mr' ? 'निवडलेले पाठवा' : 'Send selected'}
+              >
+                <Bell size={14} style={{ marginRight: '6px' }} />
+                {db.settings?.lang === 'mr' ? 'संदेश पाठवा' : 'Send Reminders'} ({selectedWhatsAppCustomerIds.length})
+              </button>
             </div>
           </div>
         </div>
