@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   X,
   FileSpreadsheet,
-  DollarSign,
+  IndianRupee,
   History,
   Eye,
   EyeOff,
@@ -52,7 +52,7 @@ const ARCHIVE_PIN_MAX_LENGTH = 6;
 const normalizeText = (value) => String(value ?? '').trim().replace(/\s+/g, ' ');
 const isBlank = (value) => normalizeText(value).length === 0;
 const isExactDigits = (value, length) => new RegExp(`^\\d{${length}}$`).test(String(value ?? ''));
-const isArchivePinValid = (value) => /^\d{4,6}$/.test(String(value ?? ''));
+const isArchivePinValid = (value) => /^\d{4}$/.test(String(value ?? ''));
 const toAmountNumber = (value) => Number(String(value ?? '').trim());
 
 function sha256Pure(ascii) {
@@ -203,7 +203,7 @@ async function matchesSecret(candidate, storedHash, expectedLength) {
 }
 
 async function matchesArchiveSecret(candidate, storedHash) {
-  if (!isArchivePinValid(candidate)) return false;
+  if (!/^\d{4,6}$/.test(String(candidate ?? ''))) return false;
   if (!storedHash) return false;
   return (await hashSecret(candidate)) === storedHash;
 }
@@ -528,8 +528,33 @@ function getDueWarningDays(c) {
   const elapsedTime = todayMidnight - startDate;
   const elapsedDays = Math.round(elapsedTime / 86400000);
   const cycleDay = elapsedDays % daysPerCycle;
-
   return cycleDay >= 6 ? cycleDay : 0;
+}
+
+function getDaysPendingDues(c) {
+  if (!c || !c.joinDate || c.status === 'old') return 0;
+  const dues = getCustomerDues(c);
+  if (dues <= 0) return 0;
+
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = parseLocalDate(c.joinDate);
+
+  if (c.category === 'shortterm') {
+    const diffTime = todayMidnight - startDate;
+    return Math.max(0, Math.round(diffTime / 86400000));
+  }
+
+  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+  const amount = Number(c.amount || 0);
+  if (amount <= 0) return 0;
+
+  const paidCycles = Math.floor((c.deposited || 0) / amount);
+  const unpaidCycleStartDate = new Date(startDate);
+  unpaidCycleStartDate.setDate(startDate.getDate() + paidCycles * daysPerCycle);
+
+  const diffTime = todayMidnight - unpaidCycleStartDate;
+  return Math.max(0, Math.round(diffTime / 86400000));
 }
 
 function sanitizeImportedDb(rawDb) {
@@ -663,6 +688,7 @@ export default function App() {
   const [archivePinOwnerAuthInput, setArchivePinOwnerAuthInput] = useState('');
   const [archiveOwnerPinInput, setArchiveOwnerPinInput] = useState('');
   const [newArchivePinInput, setNewArchivePinInput] = useState('');
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [shortTermDays, setShortTermDays] = useState('10');
   const [shortTermMeals, setShortTermMeals] = useState('2');
 
@@ -840,7 +866,7 @@ export default function App() {
   const saveArchivePasscodeSetting = useCallback(async (value) => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
     if (!isArchivePinValid(value)) {
-      showToast(isMarathi ? 'à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¥ª à¤¤à¥‡ à¥¬ à¤…à¤‚à¤•à¥€ à¤…à¤¸à¤¾à¤µà¤¾.' : 'Passcode must be 4 to 6 digits.', 'error');
+      showToast(isMarathi ? 'पासवर्ड केवळ ४ अंकी असावा.' : 'Passcode must be exactly 4 digits.', 'error');
       return false;
     }
 
@@ -851,7 +877,7 @@ export default function App() {
         archivePasswordHash: await hashSecret(value)
       }
     }));
-    showToast(isMarathi ? 'à¤†à¤°à¥à¤•à¤¾à¤‡à¤µà¥à¤¹ à¤ªà¤¾à¤¸à¤µà¤°à¥à¤¡ à¤¯à¤¶à¤¸à¥à¤µà¥€à¤°à¤¿à¤¤à¥à¤¯à¤¾ à¤¬à¤¦à¤²à¤²à¤¾!' : 'Archive passcode updated successfully!', 'success');
+    showToast(isMarathi ? 'आर्काइव्ह संकेतशब्द यशस्वीरित्या बदलला!' : 'Archive passcode updated successfully!', 'success');
     return true;
   }, [db.settings, showToast]);
 
@@ -1591,7 +1617,7 @@ export default function App() {
 
   const handlePaySubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!payModalCustomer) return;
+    if (!payModalCustomer || isSavingPayment) return;
     const amt = parseFloat(payAmount);
     if (isNaN(amt) || amt <= 0) {
       showToast(db.settings.lang === 'mr' ? 'कृपया वैध रक्कम प्रविष्ट करा.' : 'Please enter a valid amount.', 'error');
@@ -1604,31 +1630,39 @@ export default function App() {
       return;
     }
     
-    const newTxn = {
-      id: 'txn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-      custId: payModalCustomer.id,
-      amount: amt,
-      date: payDate,
-      paymentMode: payMode,
-      note: payNote.trim()
-    };
+    setIsSavingPayment(true);
+    try {
+      const newTxn = {
+        id: 'txn_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        custId: payModalCustomer.id,
+        amount: amt,
+        date: payDate,
+        paymentMode: payMode,
+        note: payNote.trim()
+      };
 
-    await saveDb((currentDb) => ({
-      ...currentDb,
-      customers: currentDb.customers.map((c) => (
-        c.id === payModalCustomer.id
-          ? { ...c, deposited: (c.deposited || 0) + amt }
-          : c
-      )),
-      transactions: [...(currentDb.transactions || []), newTxn]
-    }));
+      await saveDb((currentDb) => ({
+        ...currentDb,
+        customers: currentDb.customers.map((c) => (
+          c.id === payModalCustomer.id
+            ? { ...c, deposited: (c.deposited || 0) + amt }
+            : c
+        )),
+        transactions: [...(currentDb.transactions || []), newTxn]
+      }));
 
-    showToast(db.settings.lang === 'mr' ? 'पेमेंट यशस्वीरित्या नोंदवले गेले!' : 'Payment recorded successfully!');
-    setPayAmount('');
-    setPayDate('');
-    setPayMode('Cash');
-    setPayNote('');
-    setPayModalCustomer(null);
+      showToast(db.settings.lang === 'mr' ? 'पेमेंट यशस्वीरित्या नोंदवले गेले!' : 'Payment recorded successfully!');
+      setPayAmount('');
+      setPayDate('');
+      setPayMode('Cash');
+      setPayNote('');
+      setPayModalCustomer(null);
+    } catch (err) {
+      console.error(err);
+      showToast(db.settings.lang === 'mr' ? 'त्रुटी आली!' : 'Error saving payment!', 'error');
+    } finally {
+      setIsSavingPayment(false);
+    }
   };
 
   const handleDeleteTxn = async (txnId, custId, amount) => {
@@ -1680,7 +1714,22 @@ export default function App() {
       setShortTermDays(String(c.shortTermDays || '10'));
       setShortTermMeals(String(c.shortTermMeals || '2'));
     }
-    setCustForm({ name: c.name, phone: c.phone, aadhar: c.aadhar || '', plan: c.plan, amount: String(c.amount), deposited: String(c.deposited || 0), joinDate: c.joinDate, addr: c.addr || '', photo: c.photo || '', category: c.category || 'dinein' });
+
+    // Strip leading country codes to show only 10 digits
+    let cleanPhone = (c.phone || '').replace(/^\+91|^91/, '');
+
+    setCustForm({ 
+      name: c.name, 
+      phone: cleanPhone, 
+      aadhar: c.aadhar || '', 
+      plan: c.plan, 
+      amount: String(c.amount), 
+      deposited: String(c.deposited || 0), 
+      joinDate: c.joinDate, 
+      addr: c.addr || '', 
+      photo: c.photo || '', 
+      category: c.category || 'dinein' 
+    });
     setCustModal(true);
   };
 
@@ -1761,18 +1810,18 @@ export default function App() {
     }
 
     if (isBlank(custForm.addr)) {
-      showToast(isMarathi ? 'à¤•à¥ƒà¤ªà¤¯à¤¾ à¤µà¥ˆà¤§ à¤ªà¤¤à¥à¤¤à¤¾ à¤ªà¥à¤°à¤µà¤¿à¤·à¥à¤Ÿ à¤•à¤°à¤¾.' : 'Address cannot be blank.', 'error');
+      showToast(isMarathi ? 'कृपया वैध पत्ता प्रविष्ट करा.' : 'Address cannot be blank.', 'error');
       return;
     }
 
     const amount = toAmountNumber(custForm.amount);
     const deposited = toAmountNumber(custForm.deposited);
     if (!Number.isFinite(amount) || amount <= 0) {
-      showToast(isMarathi ? 'à¤•à¥ƒà¤ªà¤¯à¤¾ à¤µà¥ˆà¤§ à¤°à¤•à¥à¤•à¤® à¤ªà¥à¤°à¤µà¤¿à¤·à¥à¤Ÿ à¤•à¤°à¤¾.' : 'Please enter a valid amount.', 'error');
+      showToast(isMarathi ? 'कृपया वैध रक्कम प्रविष्ट करा.' : 'Please enter a valid amount.', 'error');
       return;
     }
     if (!Number.isFinite(deposited) || deposited < 0) {
-      showToast(isMarathi ? 'à¤œà¤®à¤¾ à¤°à¤•à¥à¤•à¤® à¤µà¥ˆà¤§ à¤…à¤¸à¤£à¥‡ à¤†à¤µà¤¶à¥à¤¯à¤• à¤†à¤¹à¥‡.' : 'Deposited amount must be a valid number.', 'error');
+      showToast(isMarathi ? 'जमा रक्कम वैध असणे आवश्यक आहे.' : 'Deposited amount must be a valid number.', 'error');
       return;
     }
 
@@ -1848,6 +1897,7 @@ export default function App() {
     });
     setCustSearch(''); // Clear search query to show the new customer immediately
     setCustModal(false);
+    setEditCustId(null);
   };
 
   const deleteCustomer = async (id) => {
@@ -2852,7 +2902,7 @@ export default function App() {
               setIsArchiveUnlocked(false);
             }}
           >
-            <DollarSign size={18} />
+            <IndianRupee size={18} />
             <span>{t('shortterm')}</span>
           </div>
           <div
@@ -3319,8 +3369,9 @@ export default function App() {
                     type="password"
                     className="form-input"
                     placeholder="••••"
+                    maxLength="4"
                     value={archivePinInput}
-                    onChange={(e) => setArchivePinInput(e.target.value)}
+                    onChange={(e) => setArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                     style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px' }}
                   />
                   <button
@@ -3406,6 +3457,7 @@ export default function App() {
                       
                       const warningDays = getDueWarningDays(c);
                       const isNameRed = warningDays > 0;
+                      const daysPendingDues = getDaysPendingDues(c);
                       
                       return (
                         <div key={c.id} className={`customer-bar status-${status} ${hasDues ? 'has-dues' : 'no-dues'}`}>
@@ -3438,6 +3490,13 @@ export default function App() {
                           >
                             {c.name} {isNameRed && (db.settings.lang === 'mr' ? ` (${warningDays} दिवस थकीत!)` : ` (Due pending for ${warningDays} days)`)}
                           </div>
+                          {hasDues && daysPendingDues > 0 && (
+                            <div style={{ color: '#ff1e1e', fontSize: '12px', fontWeight: '800', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              ⚠️ {db.settings.lang === 'mr' 
+                                ? `मागील ${daysPendingDues} दिवसांपासून थकीत रक्कम बाकी आहे` 
+                                : `Due is pending from last ${daysPendingDues} days`}
+                            </div>
+                          )}
                           <div className="customer-bar-subinfo">📞 {c.phone}</div>
                           {c.addr ? <div className="customer-bar-subinfo">📍 {c.addr}</div> : <div className="customer-bar-subinfo" style={{ color: '#ef4444', fontWeight: '600' }}>📍 No Address</div>}
                           {c.aadhar && <div className="customer-bar-subinfo">🪪 {t('aadharCard')}: {c.aadhar}</div>}
@@ -3733,9 +3792,9 @@ export default function App() {
                         type="password"
                         className="form-input"
                         placeholder="Passcode"
-                        maxLength="6"
+                        maxLength="4"
                         value={collectionArchivePinInput}
-                        onChange={(e) => setCollectionArchivePinInput(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => setCollectionArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                         style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text' }}
                       />
                       <button 
@@ -3804,7 +3863,7 @@ export default function App() {
               <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginBottom: '20px' }}>
                 <div className="stat-card">
                   <div className="stat-icon" style={{ backgroundColor: '#fff1f2', color: 'var(--danger)' }}>
-                    <DollarSign size={24} />
+                    <IndianRupee size={24} />
                   </div>
                   <div className="stat-info">
                     <div className="stat-label">{db.settings.lang === 'mr' ? 'आजचा एकूण खर्च' : "Today's Expenses"}</div>
@@ -3813,7 +3872,7 @@ export default function App() {
                 </div>
                 <div className="stat-card">
                   <div className="stat-icon" style={{ backgroundColor: '#fff1f2', color: 'var(--danger)' }}>
-                    <DollarSign size={24} />
+                    <IndianRupee size={24} />
                   </div>
                   <div className="stat-info">
                     <div className="stat-label">{db.settings.lang === 'mr' ? 'चालू महिन्याचा एकूण खर्च' : "Current Month's Expenses"}</div>
@@ -3983,9 +4042,9 @@ export default function App() {
                         type="password"
                         className="form-input"
                         placeholder="Passcode"
-                        maxLength="6"
+                        maxLength="4"
                         value={expenseArchivePinInput}
-                        onChange={(e) => setExpenseArchivePinInput(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => setExpenseArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                         style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text' }}
                       />
                       <button 
@@ -4072,8 +4131,9 @@ export default function App() {
                     type="password"
                     className="form-input"
                     placeholder="••••"
+                    maxLength="4"
                     value={settingsPinInput}
-                    onChange={(e) => setSettingsPinInput(e.target.value)}
+                    onChange={(e) => setSettingsPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                     onKeyDown={async (e) => {
                       if (e.key === 'Enter') {
                         if (await matchesArchiveSecret(settingsPinInput, db?.settings?.archivePasswordHash)) {
@@ -4385,10 +4445,10 @@ export default function App() {
                               <input
                                 type="password"
                                 className="form-input"
-                                maxLength="6"
-                                placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड' : 'New Passcode'}
+                                maxLength="4"
+                                placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड (४-अंकी)' : 'New Passcode (4-digit)'}
                                 value={newArchivePinInput}
-                                onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
+                                onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                               />
                             </div>
                             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -4428,10 +4488,10 @@ export default function App() {
                               <input
                                 type="password"
                                 className="form-input"
-                                maxLength="6"
-                                placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड' : 'New Passcode'}
+                                maxLength="4"
+                                placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड (४-अंकी)' : 'New Passcode (4-digit)'}
                                 value={newArchivePinInput}
-                                onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, ''))}
+                                onChange={(e) => setNewArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                               />
                             </div>
                             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -4626,11 +4686,15 @@ export default function App() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn" onClick={() => setPayModalCustomer(null)}>
+                <button type="button" className="btn" onClick={() => setPayModalCustomer(null)} disabled={isSavingPayment}>
                   {db.settings.lang === 'mr' ? 'रद्द करा' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn btn-success">
-                  {db.settings.lang === 'mr' ? 'नोंदवा' : 'Record'}
+                <button type="submit" className="btn btn-success" disabled={isSavingPayment}>
+                  {isSavingPayment ? (
+                    db.settings.lang === 'mr' ? 'नोंदवत आहे...' : 'Recording...'
+                  ) : (
+                    db.settings.lang === 'mr' ? 'नोंदवा' : 'Record'
+                  )}
                 </button>
               </div>
             </form>
@@ -4719,7 +4783,7 @@ export default function App() {
           <div className="modal-card">
             <div className="modal-header">
               <span className="modal-title">{editCustId ? t('editCustProfile') : t('addNewCust')}</span>
-              <X className="modal-close" onClick={() => setCustModal(false)} />
+              <X className="modal-close" onClick={() => { setCustModal(false); setEditCustId(null); }} />
             </div>
             <div className="modal-body">
               {/* Profile Photo Capture Section */}
@@ -4929,7 +4993,7 @@ export default function App() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn" onClick={() => setCustModal(false)}>{t('cancel')}</button>
+              <button className="btn" onClick={() => { setCustModal(false); setEditCustId(null); }}>{t('cancel')}</button>
               <button className="btn btn-primary" onClick={saveCustomer}>{t('saveProfile')}</button>
             </div>
           </div>
