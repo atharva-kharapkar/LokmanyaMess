@@ -504,9 +504,9 @@ function computeStatus(c) {
   
   if (c.category === 'shortterm') {
     const daysRemaining = getExpiryDays(c);
-    if (daysRemaining <= 0) return 'expired';
-    if (daysRemaining <= 2) return 'expiring';
-    return 'active';
+    if (daysRemaining > 2) return 'active';
+    if (daysRemaining >= -2) return 'expiring'; // Warning zone & 2-day recovery period after plan end
+    return 'expired';
   }
 
   const daysPerCycle = PLAN_DAYS[c.plan] || 30;
