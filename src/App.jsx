@@ -232,37 +232,62 @@ function isValidDate(dateStr) {
   );
 }
 
-function getExpiryDate(joinDate, plan) {
-  const startDate = parseLocalDate(joinDate);
-  const daysPerCycle = PLAN_DAYS[plan] || 30;
+function getExpiryDate(c, optionalPlan) {
+  if (typeof c === 'string') {
+    const startDate = parseLocalDate(c);
+    const daysPerCycle = PLAN_DAYS[optionalPlan] || 30;
+    const today = new Date();
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const elapsedTime = todayMidnight - startDate;
+    const elapsedDays = Math.round(elapsedTime / 86400000);
+    let elapsedCycles = 0;
+    if (elapsedDays > 0) {
+      elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
+    }
+    const currentCycleExpiry = new Date(startDate);
+    currentCycleExpiry.setDate(startDate.getDate() + (elapsedCycles + 1) * daysPerCycle);
+    return currentCycleExpiry;
+  }
+
+  if (!c || !c.joinDate) return new Date();
+  const startDate = parseLocalDate(c.joinDate);
+  if (c.category === 'shortterm') {
+    const durationDays = Number(c.shortTermDays || 10);
+    const expiryDate = new Date(startDate);
+    expiryDate.setDate(startDate.getDate() + durationDays);
+    return expiryDate;
+  }
+
+  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  
   const elapsedTime = todayMidnight - startDate;
   const elapsedDays = Math.round(elapsedTime / 86400000);
-  
   let elapsedCycles = 0;
   if (elapsedDays > 0) {
     elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
   }
-  
   const currentCycleExpiry = new Date(startDate);
   currentCycleExpiry.setDate(startDate.getDate() + (elapsedCycles + 1) * daysPerCycle);
   return currentCycleExpiry;
 }
 
-function getExpiryDays(joinDate, plan) {
+function getExpiryDays(c) {
+  if (!c) return 0;
+  const joinDate = typeof c === 'string' ? c : c.joinDate;
   if (!joinDate) return 0;
-  const expiryDate = getExpiryDate(joinDate, plan);
+  const expiryDate = getExpiryDate(c, typeof c === 'string' ? arguments[1] : undefined);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const diffTime = expiryDate - todayMidnight;
   return Math.round(diffTime / 86400000);
 }
 
-function expiryStr(joinDate, plan) {
+function expiryStr(c) {
+  if (!c) return '';
+  const joinDate = typeof c === 'string' ? c : c.joinDate;
   if (!joinDate) return '';
-  const d = getExpiryDate(joinDate, plan);
+  const d = getExpiryDate(c, typeof c === 'string' ? arguments[1] : undefined);
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
@@ -477,6 +502,13 @@ function getCustomerDues(c) {
 function computeStatus(c) {
   if (!c || !c.joinDate) return 'expired';
   
+  if (c.category === 'shortterm') {
+    const daysRemaining = getExpiryDays(c);
+    if (daysRemaining <= 0) return 'expired';
+    if (daysRemaining <= 2) return 'expiring';
+    return 'active';
+  }
+
   const daysPerCycle = PLAN_DAYS[c.plan] || 30;
   const startDate = parseLocalDate(c.joinDate);
   const today = new Date();
@@ -1867,7 +1899,15 @@ export default function App() {
           ...currentDb,
           customers: currentDb.customers.map((c) => (
             c.id === editCustId
-              ? { ...c, ...finalForm, amount, deposited, category: nextTargetCat }
+              ? { 
+                  ...c, 
+                  ...finalForm, 
+                  amount, 
+                  deposited, 
+                  category: nextTargetCat,
+                  shortTermDays: nextTargetCat === 'shortterm' ? Number(shortTermDays) : undefined,
+                  shortTermMeals: nextTargetCat === 'shortterm' ? Number(shortTermMeals) : undefined
+                }
               : c
           ))
         };
@@ -1879,7 +1919,9 @@ export default function App() {
         amount,
         deposited,
         category: nextTargetCat,
-        branch: activeBranch
+        branch: activeBranch,
+        shortTermDays: nextTargetCat === 'shortterm' ? Number(shortTermDays) : undefined,
+        shortTermMeals: nextTargetCat === 'shortterm' ? Number(shortTermMeals) : undefined
       };
       const nextTransactions = [...(currentDb.transactions || [])];
       if (newCust.deposited > 0) {
@@ -2102,7 +2144,7 @@ export default function App() {
     let csvContent = 'Customer Name,Phone Number,Aadhar,Plan,Amount,Status,Join Date,Expiry Date,Address\n';
     db.customers.forEach(c => {
       const status = computeStatus(c).toUpperCase();
-      const exp = expiryStr(c.joinDate, c.plan);
+      const exp = expiryStr(c);
       csvContent += `"${c.name}","${c.phone}","${c.aadhar || ''}","${c.plan}",${c.amount},"${status}","${c.joinDate}","${exp}","${c.addr || ''}"\n`;
     });
 
@@ -2125,7 +2167,7 @@ export default function App() {
   const buildCustomerReminderMessage = useCallback((customer) => {
     const remaining = getCustomerDues(customer);
     const status = computeStatus(customer);
-    const expiry = customer?.joinDate ? expiryStr(customer.joinDate, customer.plan) : '';
+    const expiry = customer?.joinDate ? expiryStr(customer) : '';
     const messName = db.settings?.messName || 'Lokmanya Mess';
     const upiId = String(db.settings?.upiId || '').trim();
     const paymentPhone = String(db.settings?.paymentPhone || '').trim();
@@ -3268,7 +3310,7 @@ export default function App() {
                                   {status === 'expiring' && (db.settings.lang === 'mr' ? 'लवकरच संपणार' : 'expiring')}
                                 </span>
                               </td>
-                              <td>{expiryStr(c.joinDate, c.plan)}</td>
+                              <td>{expiryStr(c)}</td>
                             </tr>
                           );
                         })}
@@ -3516,9 +3558,22 @@ export default function App() {
                         {/* Middle: Plan details */}
                         <div className="customer-bar-plan">
                           <div className="customer-bar-label">{t('planCycle')}</div>
-                          <div className="customer-bar-val">{c.plan === 'Monthly' ? t('monthly30') : c.plan === 'Weekly' ? t('weekly7') : c.plan === 'Daily' ? t('daily1') : t('custom')}</div>
+                          <div className="customer-bar-val">
+                            {c.category === 'shortterm' 
+                              ? (db.settings.lang === 'mr' 
+                                  ? `शॉर्ट-टर्म (${c.shortTermDays || '10'} दिवस)` 
+                                  : `Short-Term (${c.shortTermDays || '10'} Days)`)
+                              : (c.plan === 'Monthly' 
+                                  ? t('monthly30') 
+                                  : c.plan === 'Weekly' 
+                                    ? t('weekly7') 
+                                    : c.plan === 'Daily' 
+                                      ? t('daily1') 
+                                      : t('custom'))
+                            }
+                          </div>
                           <div className="customer-bar-subval">{t('started')}: {c.joinDate}</div>
-                          <div className="customer-bar-subval">{t('expires')}: {expiryStr(c.joinDate, c.plan)}</div>
+                          <div className="customer-bar-subval">{t('expires')}: {expiryStr(c)}</div>
                         </div>
 
                         {/* Middle-Right: Fees & Dues */}
