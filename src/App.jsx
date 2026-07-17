@@ -548,17 +548,22 @@ function computeStatus(c) {
 }
 
 function getDueWarningDays(c) {
-  if (!c || !c.joinDate || c.category === 'shortterm' || c.status === 'old') return 0;
+  if (!c || !c.joinDate || c.status === 'old') return 0;
 
   const remaining = getCustomerDues(c);
   if (remaining <= 0) return 0;
 
-  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
   const startDate = parseLocalDate(c.joinDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const elapsedTime = todayMidnight - startDate;
-  const elapsedDays = Math.round(elapsedTime / 86400000);
+  const elapsedDays = Math.max(0, Math.round(elapsedTime / 86400000));
+
+  if (c.category === 'shortterm') {
+    return elapsedDays >= 2 ? elapsedDays : 0;
+  }
+
+  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
   const cycleDay = elapsedDays % daysPerCycle;
   return cycleDay >= 6 ? cycleDay : 0;
 }
