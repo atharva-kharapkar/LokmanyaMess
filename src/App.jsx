@@ -1595,6 +1595,7 @@ export default function App() {
   const [payMode, setPayMode] = useState('Cash');
   const [payNote, setPayNote] = useState('');
   const [historyModalCustomer, setHistoryModalCustomer] = useState(null);
+  const [selectedCustomerProfile, setSelectedCustomerProfile] = useState(null);
   const [isBulkReminderOpen, setIsBulkReminderOpen] = useState(false);
   const [bulkQueue, setBulkQueue] = useState([]);
   const [bulkQueueIndex, setBulkQueueIndex] = useState(0);
@@ -2423,11 +2424,19 @@ export default function App() {
 
   const branchTxns = useMemo(() => {
     const custMap = new Map((db.customers || []).map(c => [c.id, c]));
-    return (db.transactions || []).filter(tx => {
-      const cust = custMap.get(tx.custId);
-      const txBranch = cust ? (cust.branch || 'Branch 1') : 'Branch 1';
-      return txBranch === activeBranch;
-    });
+    return (db.transactions || [])
+      .map(tx => {
+        const cust = custMap.get(tx.custId);
+        return {
+          ...tx,
+          custName: cust ? cust.name : (tx.custName || 'Unknown'),
+          customer: cust
+        };
+      })
+      .filter(tx => {
+        const txBranch = tx.customer ? (tx.customer.branch || 'Branch 1') : 'Branch 1';
+        return txBranch === activeBranch;
+      });
   }, [db.transactions, db.customers, activeBranch]);
 
   // --- Collections Calculations ---
@@ -3722,35 +3731,81 @@ export default function App() {
 
                   {/* Transactions List */}
                   <div style={{ flex: 1, maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', backgroundColor: '#f8f9fc' }}>
-                    {filteredTxns.map((tx, idx) => (
-                      <div key={tx.id} className="row" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', borderBottom: idx === filteredTxns.length - 1 ? 'none' : '1px solid var(--border)', gap: '12px', backgroundColor: '#fff', borderRadius: '8px', marginBottom: '6px', border: '1px solid var(--border)' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: '700', fontSize: '14px', color: 'var(--text)' }}>{tx.custName}</div>
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📅 {tx.date}</span>
-                            <span className="badge badge-active" style={{ fontSize: '9px', padding: '2px 6px' }}>{tx.paymentMode}</span>
-                          </div>
-                          {tx.note && (
-                            <div style={{ fontSize: '12px', color: 'var(--primary)', fontStyle: 'italic', marginTop: '4px', backgroundColor: 'var(--primary-light)', padding: '4px 8px', borderRadius: '4px', display: 'inline-block' }}>
-                              📝 Note: {tx.note}
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontWeight: '800', color: 'var(--success)', fontSize: '15px' }}>₹{tx.amount}</span>
-                          {role === 'owner' && (
-                            <button 
-                              className="btn btn-sm btn-icon btn-danger" 
-                              title={db.settings.lang === 'mr' ? 'व्यवहार हटवा' : 'Delete Transaction'}
-                              onClick={() => handleDeleteTxn(tx.id, tx.custId, tx.amount)}
-                              style={{ width: '28px', height: '28px' }}
+                    {filteredTxns.map((tx, idx) => {
+                      const cust = tx.customer;
+                      const hasPhoto = cust && cust.photo;
+                      return (
+                        <div key={tx.id} className="row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', borderBottom: idx === filteredTxns.length - 1 ? 'none' : '1px solid var(--border)', gap: '12px', backgroundColor: '#fff', borderRadius: '8px', marginBottom: '6px', border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                            {/* Avatar */}
+                            <div 
+                              style={{ 
+                                width: '36px', 
+                                height: '36px', 
+                                borderRadius: '50%', 
+                                overflow: 'hidden', 
+                                display: 'flex', 
+                                justifyContent: 'center', 
+                                alignItems: 'center', 
+                                backgroundColor: 'var(--primary-light)', 
+                                border: '1px solid var(--border)',
+                                cursor: cust ? 'pointer' : 'default',
+                                flexShrink: 0
+                              }}
+                              onClick={() => cust && setSelectedCustomerProfile(cust)}
                             >
-                              <Trash2 size={12} />
-                            </button>
-                          )}
+                              {hasPhoto ? (
+                                <img src={cust.photo} alt={tx.custName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--primary)' }}>
+                                  {(tx.custName || 'C').charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Info */}
+                            <div style={{ flex: 1 }}>
+                              <div 
+                                style={{ 
+                                  fontWeight: '700', 
+                                  fontSize: '14px', 
+                                  color: cust ? 'var(--primary)' : 'var(--text)', 
+                                  cursor: cust ? 'pointer' : 'default',
+                                  display: 'inline-block'
+                                }}
+                                onClick={() => cust && setSelectedCustomerProfile(cust)}
+                                className={cust ? "hover-underline" : ""}
+                              >
+                                {tx.custName}
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📅 {tx.date}</span>
+                                <span className="badge badge-active" style={{ fontSize: '9px', padding: '2px 6px' }}>{tx.paymentMode}</span>
+                              </div>
+                              {tx.note && (
+                                <div style={{ fontSize: '12px', color: 'var(--primary)', fontStyle: 'italic', marginTop: '4px', backgroundColor: 'var(--primary-light)', padding: '4px 8px', borderRadius: '4px', display: 'inline-block' }}>
+                                  📝 Note: {tx.note}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontWeight: '800', color: 'var(--success)', fontSize: '15px' }}>₹{tx.amount}</span>
+                            {role === 'owner' && (
+                              <button 
+                                className="btn btn-sm btn-icon btn-danger" 
+                                title={db.settings.lang === 'mr' ? 'व्यवहार हटवा' : 'Delete Transaction'}
+                                onClick={() => handleDeleteTxn(tx.id, tx.custId, tx.amount)}
+                                style={{ width: '28px', height: '28px' }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {filteredTxns.length === 0 && (
                       <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                         {db.settings.lang === 'mr' ? 'कोणतेही रेकॉर्ड सापडले नाही.' : 'No collections recorded.'}
@@ -4772,6 +4827,135 @@ export default function App() {
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={() => setHistoryModalCustomer(null)}>
+                {db.settings.lang === 'mr' ? 'बंद करा' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOMER DETAILS POPUP MODAL */}
+      {selectedCustomerProfile && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-card" style={{ maxWidth: '420px', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+            <div className="modal-header" style={{ borderBottom: 'none', padding: '20px 20px 10px' }}>
+              <span className="modal-title" style={{ fontSize: '18px', fontWeight: '800' }}>
+                {db.settings.lang === 'mr' ? 'ग्राहक प्रोफाइल' : 'Customer Profile'}
+              </span>
+              <X className="modal-close" onClick={() => setSelectedCustomerProfile(null)} />
+            </div>
+            
+            <div className="modal-body" style={{ padding: '10px 20px 20px', textAlign: 'center' }}>
+              {/* Profile Card Header (Initials or Photo) */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
+                <div 
+                  style={{ 
+                    width: '80px', 
+                    height: '80px', 
+                    borderRadius: '50%', 
+                    overflow: 'hidden', 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    background: 'linear-gradient(135deg, var(--primary) 0%, #a855f7 100%)', 
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                    marginBottom: '12px'
+                  }}
+                >
+                  {selectedCustomerProfile.photo ? (
+                    <img 
+                      src={selectedCustomerProfile.photo} 
+                      alt={selectedCustomerProfile.name} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
+                  ) : (
+                    <span style={{ fontSize: '32px', fontWeight: '800', color: '#fff' }}>
+                      {(selectedCustomerProfile.name || 'C').charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <h4 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: '800', color: 'var(--text)' }}>
+                  {selectedCustomerProfile.name}
+                </h4>
+                <span 
+                  className={`badge ${
+                    selectedCustomerProfile.status === 'active' ? 'badge-active' : 'badge-inactive'
+                  }`} 
+                  style={{ textTransform: 'capitalize', fontSize: '11px', padding: '3px 8px' }}
+                >
+                  {selectedCustomerProfile.status}
+                </span>
+              </div>
+
+              {/* Profile Details List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', textAlign: 'left', background: 'var(--bg)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--border)', paddingBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {db.settings.lang === 'mr' ? 'मोबाईल नंबर:' : 'Mobile No:'}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text)' }}>
+                    {selectedCustomerProfile.phone || '-'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--border)', paddingBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {db.settings.lang === 'mr' ? 'वर्गवारी:' : 'Category:'}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text)', textTransform: 'capitalize' }}>
+                    {selectedCustomerProfile.category === 'dinein' 
+                      ? (db.settings.lang === 'mr' ? 'डाईन-इन' : 'Dine-in')
+                      : selectedCustomerProfile.category === 'tiffin'
+                        ? (db.settings.lang === 'mr' ? 'टिफिन डिलिव्हरी' : 'Tiffin Delivery')
+                        : (db.settings.lang === 'mr' ? 'शॉर्ट-टर्म' : 'Short-Term')}
+                  </span>
+                </div>
+                {selectedCustomerProfile.category !== 'shortterm' && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--border)', paddingBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      {db.settings.lang === 'mr' ? 'प्लॅन:' : 'Plan:'}
+                    </span>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text)', textTransform: 'capitalize' }}>
+                      {selectedCustomerProfile.plan}
+                    </span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed var(--border)', paddingBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {db.settings.lang === 'mr' ? 'जॉईन तारीख:' : 'Join Date:'}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text)' }}>
+                    {selectedCustomerProfile.joinDate}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', pt: '4px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {db.settings.lang === 'mr' ? 'थकीत रक्कम:' : 'Dues:'}
+                  </span>
+                  <span 
+                    style={{ 
+                      fontSize: '13px', 
+                      fontWeight: '800', 
+                      color: getCustomerDues(selectedCustomerProfile) > 0 ? 'var(--danger)' : 'var(--success)' 
+                    }}
+                  >
+                    ₹{getCustomerDues(selectedCustomerProfile)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: 'none', padding: '10px 20px 20px', display: 'flex', gap: '10px' }}>
+              <button 
+                className="btn btn-primary" 
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setSelectedCustomerProfile(null);
+                  setHistoryModalCustomer(selectedCustomerProfile);
+                }}
+              >
+                {db.settings.lang === 'mr' ? 'इतिहास पहा' : 'View History'}
+              </button>
+              <button className="btn" style={{ flex: 1 }} onClick={() => setSelectedCustomerProfile(null)}>
                 {db.settings.lang === 'mr' ? 'बंद करा' : 'Close'}
               </button>
             </div>

@@ -1408,3 +1408,11 @@ to {
   background-color: var(--border);
   border-radius: 20px;
 }
+
+.hover-underline {
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+.hover-underline:hover {
+  text-decoration: underline;
+  color: var(--primary-dark) !important;
+}
