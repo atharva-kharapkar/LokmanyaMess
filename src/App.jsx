@@ -22,7 +22,7 @@ import {
   Coins,
   TrendingUp
 } from 'lucide-react';
-import { collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, query, limit } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, getDoc, query, limit } from 'firebase/firestore';
 import { db as firestoreDb, firebaseBootError } from './firebase';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI;
@@ -1056,12 +1056,40 @@ export default function App() {
   // Load database and setup Firebase real-time listeners on mount
   useEffect(() => {
     let isMounted = true;
-    let unsubCustomers = () => {};
-    let unsubTxns = () => {};
-    let unsubEmployees = () => {};
-    let unsubSalaries = () => {};
-    let unsubSettings = () => {};
-    let unsubExpenses = () => {};
+
+    const restoreDbFromCloud = async () => {
+      if (!isCloudSyncAvailable || !navigator.onLine) return;
+      try {
+        console.log('Local database is empty. Restoring from cloud...');
+        const [settingsSnap, customersSnap, txnsSnap, employeesSnap, salariesSnap, expensesSnap] = await Promise.all([
+          getDoc(doc(firestoreDb, 'desktop_config', 'app_settings')),
+          getDocs(collection(firestoreDb, 'desktop_customers')),
+          getDocs(collection(firestoreDb, 'desktop_transactions')),
+          getDocs(collection(firestoreDb, 'desktop_employees')),
+          getDocs(collection(firestoreDb, 'desktop_salaries')),
+          getDocs(collection(firestoreDb, 'desktop_expenses'))
+        ]);
+
+        const restoredDb = {
+          customers: customersSnap.docs.map(d => d.data()),
+          transactions: txnsSnap.docs.map(d => d.data()),
+          employees: employeesSnap.docs.map(d => d.data()),
+          salaries: salariesSnap.docs.map(d => d.data()),
+          expenses: expensesSnap.docs.map(d => d.data()),
+          settings: settingsSnap.exists() ? await secureSettings(settingsSnap.data()) : dbRef.current.settings
+        };
+
+        if (restoredDb.customers.length > 0 || restoredDb.employees.length > 0 || restoredDb.expenses.length > 0) {
+          setDb(restoredDb);
+          dbRef.current = restoredDb;
+          applyLoadedSettings(restoredDb.settings);
+          await writeLocalBackup(restoredDb);
+          console.log('Database successfully restored from cloud!');
+        }
+      } catch (err) {
+        console.error('Error restoring database from cloud:', err);
+      }
+    };
 
     const loadLocalData = async () => {
       try {
@@ -1073,7 +1101,20 @@ export default function App() {
           if (local) localData = JSON.parse(local);
         }
 
-        if (!isMounted || !localData || typeof localData !== 'object') {
+        if (!isMounted) return;
+
+        if (!localData || typeof localData !== 'object') {
+          await restoreDbFromCloud();
+          return;
+        }
+
+        const isLocalEmpty = 
+          (!localData.customers || localData.customers.length === 0) &&
+          (!localData.employees || localData.employees.length === 0) &&
+          (!localData.expenses || localData.expenses.length === 0);
+
+        if (isLocalEmpty) {
+          await restoreDbFromCloud();
           return;
         }
 
@@ -1102,72 +1143,6 @@ export default function App() {
     };
 
     loadLocalData();
-
-    if (!isCloudSyncAvailable || !navigator.onLine) {
-      if (firebaseBootError) {
-        console.error('Cloud sync disabled during startup:', firebaseBootError);
-      }
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    // 1. Setup real-time listeners immediately for instant UI load (offline-first)
-    unsubCustomers = onSnapshot(collection(firestoreDb, 'desktop_customers'), (snapshot) => {
-      const list = snapshot.docs.map(d => d.data());
-      setDb(prev => {
-        if (JSON.stringify(prev.customers) === JSON.stringify(list)) return prev;
-        return { ...prev, customers: list };
-      });
-    });
-
-    unsubTxns = onSnapshot(collection(firestoreDb, 'desktop_transactions'), (snapshot) => {
-      const list = snapshot.docs.map(d => d.data());
-      setDb(prev => {
-        if (JSON.stringify(prev.transactions) === JSON.stringify(list)) return prev;
-        return { ...prev, transactions: list };
-      });
-    });
-
-    unsubEmployees = onSnapshot(collection(firestoreDb, 'desktop_employees'), (snapshot) => {
-      const list = snapshot.docs.map(d => d.data());
-      setDb(prev => {
-        if (JSON.stringify(prev.employees) === JSON.stringify(list)) return prev;
-        return { ...prev, employees: list };
-      });
-    });
-
-    unsubSalaries = onSnapshot(collection(firestoreDb, 'desktop_salaries'), (snapshot) => {
-      const list = snapshot.docs.map(d => d.data());
-      setDb(prev => {
-        if (JSON.stringify(prev.salaries) === JSON.stringify(list)) return prev;
-        return { ...prev, salaries: list };
-      });
-    });
-
-    unsubSettings = onSnapshot(doc(firestoreDb, 'desktop_config', 'app_settings'), async (snapshot) => {
-      if (snapshot.exists()) {
-        const rawSettings = snapshot.data();
-        const settingsData = await secureSettings(rawSettings);
-        setDb(prev => {
-          if (JSON.stringify(prev.settings) === JSON.stringify(settingsData)) return prev;
-          return { ...prev, settings: settingsData };
-        });
-        applyLoadedSettings(settingsData);
-        if (hasLegacySecrets(rawSettings)) {
-          await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), settingsData);
-        }
-      }
-      setSettingsLoaded(true);
-    });
-
-    unsubExpenses = onSnapshot(collection(firestoreDb, 'desktop_expenses'), (snapshot) => {
-      const list = snapshot.docs.map(d => d.data());
-      setDb(prev => {
-        if (JSON.stringify(prev.expenses) === JSON.stringify(list)) return prev;
-        return { ...prev, expenses: list };
-      });
-    });
 
     // 2. Perform local-to-cloud data migration asynchronously in the background (only if online & not done yet)
     async function migrateLocalToCloudIfNeeded() {
@@ -1238,12 +1213,6 @@ export default function App() {
     // Clean up real-time snapshot listeners on unmount
     return () => {
       isMounted = false;
-      unsubCustomers();
-      unsubTxns();
-      unsubEmployees();
-      unsubSalaries();
-      unsubSettings();
-      unsubExpenses();
     };
   }, [applyLoadedSettings]);
 
