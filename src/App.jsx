@@ -549,7 +549,7 @@ function getDaysPendingDues(c) {
   const amount = Number(c.amount || 0);
   if (amount <= 0) return 0;
 
-  const paidCycles = Math.floor((c.deposited || 0) / amount);
+  const paidCycles = Math.max(0, Math.floor((c.deposited || 0) / amount));
   const unpaidCycleStartDate = new Date(startDate);
   unpaidCycleStartDate.setDate(startDate.getDate() + paidCycles * daysPerCycle);
 
@@ -1019,6 +1019,39 @@ export default function App() {
 
 
 
+
+  // Automatic cloud sync trigger when network connection is restored
+  useEffect(() => {
+    const handleOnline = async () => {
+      console.log('Connection restored! Syncing database with Firestore...');
+      try {
+        const currentDb = dbRef.current;
+        const ok = await syncDbToCloud(currentDb, currentDb);
+        if (ok) {
+          const nowIso = new Date().toISOString();
+          setSaveHealth((prev) => ({
+            ...prev,
+            status: 'healthy',
+            lastCloudSyncAt: nowIso,
+            lastSavedAt: nowIso,
+            lastError: ''
+          }));
+          showToast(
+            dbRef.current.settings?.lang === 'mr'
+              ? 'इंटरनेट पूर्ववत झाले, क्लाउड सिंक यशस्वी!'
+              : 'Connection restored, cloud sync completed!',
+            'success'
+          );
+        }
+      } catch (err) {
+        console.error('Failed to sync database on reconnect:', err);
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [syncDbToCloud, showToast]);
 
   // Load database and setup Firebase real-time listeners on mount
   useEffect(() => {
