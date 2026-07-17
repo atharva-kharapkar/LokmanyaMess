@@ -113,6 +113,23 @@
       color: var(--text);
     }
 
+    .amount-input-style {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text);
+      border: none;
+      background: transparent;
+      text-align: center;
+      outline: none;
+      font-family: inherit;
+      width: 140px;
+      border-bottom: 2px dashed rgba(249, 115, 22, 0.4);
+      padding: 0;
+    }
+    .amount-input-style:focus {
+      border-bottom: 2px solid var(--primary);
+    }
+
     /* Toggle Switch Styles */
     .toggle-section {
       background: rgba(255, 255, 255, 0.02);
@@ -394,7 +411,16 @@
 
     <div class="amount-card">
       <div class="amount-label" id="lbl-outstanding">Amount Outstanding</div>
-      <div class="amount-value" id="amount-val">₹0.00</div>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 6px;">
+        <span style="font-size: 32px; font-weight: 800; color: var(--text);">₹</span>
+        <input 
+          type="number" 
+          id="amount-input" 
+          class="amount-input-style" 
+          value="0" 
+          oninput="onAmountChanged()"
+        />
+      </div>
     </div>
 
     <!-- Security warning card -->
@@ -496,11 +522,13 @@
     const lang = params.get('lang') || 'en';
     const ph = params.get('ph') || '';
 
+    let currentAmount = parseFloat(am) || 0;
+
     // Apply translations
     const isMarathi = (lang === 'mr');
     if (isMarathi) {
       document.getElementById('payment-subtitle').textContent = "सुरक्षित UPI पेमेंट पोर्टल";
-      document.getElementById('lbl-outstanding').textContent = "थकीत रक्कम";
+      document.getElementById('lbl-outstanding').textContent = "थकीत रक्कम (बदलायचे असल्यास एडिट करा)";
       document.getElementById('title-prefill').textContent = "रक्कम स्वयंचलित भरा";
       document.getElementById('desc-prefill').textContent = "सुरक्षिततेच्या कारणास्तव पेमेंट नाकारले गेल्यास हे बंद करा.";
       document.getElementById('div-or').textContent = "किंवा मॅन्युअली पेमेंट करा";
@@ -517,7 +545,7 @@
     }
 
     document.getElementById('payee-title').textContent = decodeURIComponent(pn);
-    document.getElementById('amount-val').textContent = `₹${parseFloat(am).toFixed(2)}`;
+    document.getElementById('amount-input').value = currentAmount > 0 ? currentAmount.toFixed(0) : '';
     document.getElementById('vpa-text').textContent = pa;
 
     // Detect and extract target phone number
@@ -537,7 +565,7 @@
     function updateUpiLinks() {
       const prefill = document.getElementById('prefill-checkbox').checked;
       if (prefill) {
-        upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+        upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}&am=${currentAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(tn)}`;
         if (tr) {
           upiUri += `&tr=${encodeURIComponent(tr)}`;
         }
@@ -547,6 +575,12 @@
       
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
       document.getElementById('qr-img').src = qrUrl;
+    }
+
+    function onAmountChanged() {
+      const val = parseFloat(document.getElementById('amount-input').value);
+      currentAmount = isNaN(val) || val < 0 ? 0 : val;
+      updateUpiLinks();
     }
 
     // Initialize links
@@ -560,7 +594,7 @@
       if (isAndroid) {
         let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
         if (prefill) {
-          uriParams += `&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+          uriParams += `&am=${currentAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(tn)}`;
           if (tr) {
             uriParams += `&tr=${encodeURIComponent(tr)}`;
           }
@@ -581,7 +615,7 @@
         // iOS URL Schemas
         let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
         if (prefill) {
-          uriParams += `&am=${am}&cu=INR&tn=${encodeURIComponent(tn)}`;
+          uriParams += `&am=${currentAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(tn)}`;
           if (tr) {
             uriParams += `&tr=${encodeURIComponent(tr)}`;
           }
@@ -634,7 +668,7 @@
       const originalText = downloadBtn.innerHTML;
       downloadBtn.innerHTML = isMarathi ? "📥 डाऊनलोड होत आहे..." : "📥 Downloading...";
       downloadBtn.disabled = true;
-
+ 
       try {
         const response = await fetch(url);
         const blob = await response.blob();
@@ -642,7 +676,7 @@
         
         const link = document.createElement('a');
         link.href = blobUrl;
-        link.download = `LokmanyaMess_UPI_QR_${parseFloat(am).toFixed(0)}.png`;
+        link.download = `LokmanyaMess_UPI_QR_${isNaN(currentAmount) ? 'Payment' : currentAmount.toFixed(0)}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
