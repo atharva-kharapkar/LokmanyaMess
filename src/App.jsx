@@ -814,6 +814,12 @@ export default function App() {
   }, []);
 
   const writeLocalBackup = useCallback(async (sanitizedDb) => {
+    try {
+      localStorage.setItem('lokmanya_db', JSON.stringify(sanitizedDb));
+    } catch (e) {
+      console.warn('Failed to write to localStorage backup:', e);
+    }
+
     if (isElectron) {
       const writeResult = await window.electronAPI.writeDatabase(sanitizedDb);
       if (!writeResult || !writeResult.success) {
@@ -824,52 +830,56 @@ export default function App() {
       if (false) {
         const persistedDb = await window.electronAPI.readDatabase();
       }
-      return;
     }
-
-    localStorage.setItem('lokmanya_db', JSON.stringify(sanitizedDb));
   }, []);
 
-  const syncCollectionDiff = useCallback(async (collectionName, oldList = [], newList = []) => {
+  const syncCollectionDiff = useCallback(async (collectionName, oldList = [], newList = [], forcePushAll = false) => {
     if (!isCloudSyncAvailable) {
       return;
     }
 
-    if (JSON.stringify(oldList) === JSON.stringify(newList)) {
+    if (!forcePushAll && JSON.stringify(oldList) === JSON.stringify(newList)) {
       return;
     }
 
-    const oldMap = new Map(oldList.map((item) => [item.id, item]));
-    const newMap = new Map(newList.map((item) => [item.id, item]));
+    const oldMap = new Map((oldList || []).map((item) => [item.id, item]));
+    const newMap = new Map((newList || []).map((item) => [item.id, item]));
 
-    for (const item of newList) {
+    for (const item of (newList || [])) {
       const oldItem = oldMap.get(item.id);
-      if (!oldItem || JSON.stringify(oldItem) !== JSON.stringify(item)) {
+      if (forcePushAll || !oldItem || JSON.stringify(oldItem) !== JSON.stringify(item)) {
         await setDoc(doc(firestoreDb, collectionName, item.id), item);
       }
     }
 
-    for (const item of oldList) {
-      if (!newMap.has(item.id)) {
-        await deleteDoc(doc(firestoreDb, collectionName, item.id));
+    if (!forcePushAll && oldList) {
+      for (const item of oldList) {
+        if (!newMap.has(item.id)) {
+          await deleteDoc(doc(firestoreDb, collectionName, item.id));
+        }
       }
     }
   }, []);
 
   const syncDbToCloud = useCallback(async (oldDb, sanitizedDb) => {
+    const forcePushAll = arguments[2] || false;
     if (!isCloudSyncAvailable) {
       return false;
     }
 
-    if (JSON.stringify(oldDb.settings) !== JSON.stringify(sanitizedDb.settings)) {
-      await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), sanitizedDb.settings);
+    const prevDb = oldDb || { customers: [], transactions: [], employees: [], salaries: [], expenses: [], archives: [], settings: {} };
+
+    if (forcePushAll || JSON.stringify(prevDb.settings) !== JSON.stringify(sanitizedDb.settings)) {
+      if (sanitizedDb.settings) {
+        await setDoc(doc(firestoreDb, 'desktop_config', 'app_settings'), sanitizedDb.settings);
+      }
     }
 
-    await syncCollectionDiff('desktop_customers', oldDb.customers || [], sanitizedDb.customers || []);
-    await syncCollectionDiff('desktop_transactions', oldDb.transactions || [], sanitizedDb.transactions || []);
-    await syncCollectionDiff('desktop_employees', oldDb.employees || [], sanitizedDb.employees || []);
-    await syncCollectionDiff('desktop_salaries', oldDb.salaries || [], sanitizedDb.salaries || []);
-    await syncCollectionDiff('desktop_expenses', oldDb.expenses || [], sanitizedDb.expenses || []);
+    await syncCollectionDiff('desktop_customers', prevDb.customers || [], sanitizedDb.customers || [], forcePushAll);
+    await syncCollectionDiff('desktop_transactions', prevDb.transactions || [], sanitizedDb.transactions || [], forcePushAll);
+    await syncCollectionDiff('desktop_employees', prevDb.employees || [], sanitizedDb.employees || [], forcePushAll);
+    await syncCollectionDiff('desktop_salaries', prevDb.salaries || [], sanitizedDb.salaries || [], forcePushAll);
+    await syncCollectionDiff('desktop_expenses', prevDb.expenses || [], sanitizedDb.expenses || [], forcePushAll);
     return true;
   }, [syncCollectionDiff]);
 
@@ -1060,10 +1070,10 @@ export default function App() {
   // Automatic cloud sync trigger when network connection is restored
   useEffect(() => {
     const handleOnline = async () => {
-      console.log('Connection restored! Syncing database with Firestore...');
+      console.log('Connection restored! Force syncing offline database with Firestore...');
       try {
         const currentDb = dbRef.current;
-        const ok = await syncDbToCloud(currentDb, currentDb);
+        const ok = await syncDbToCloud(null, currentDb, true);
         if (ok) {
           const nowIso = new Date().toISOString();
           setSaveHealth((prev) => ({
@@ -1075,8 +1085,8 @@ export default function App() {
           }));
           showToast(
             dbRef.current.settings?.lang === 'mr'
-              ? 'इंटरनेट पूर्ववत झाले, क्लाउड सिंक यशस्वी!'
-              : 'Connection restored, cloud sync completed!',
+              ? 'इंटरनेट पूर्ववत झाले, ऑफलाईन बदल क्लाउडवर यशस्वी सिंक झाले!'
+              : 'Connection restored, offline changes synced to cloud!',
             'success'
           );
         }
@@ -1308,7 +1318,7 @@ export default function App() {
 
       if (isCloudSyncAvailable && navigator.onLine) {
         try {
-          cloudSyncOk = await syncDbToCloud(oldDb, sanitizedDb);
+          cloudSyncOk = await syncDbToCloud(oldDb, sanitizedDb, false);
         } catch (err) {
           console.error('Error syncing changes to Firebase Firestore:', err);
           const isMarathi = sanitizedDb.settings && sanitizedDb.settings.lang === 'mr';
@@ -1320,24 +1330,30 @@ export default function App() {
             lastSavedAt: nowIso,
             lastCloudSyncAt: prev.lastCloudSyncAt
           }));
-          showToast(
-            isMarathi
-              ? 'डेटा स्थानिक पातळीवर सेव्ह झाला, पण क्लाउड सिंक अयशस्वी झाले.'
-              : 'Changes were saved locally, but cloud sync failed.',
-            'error'
-          );
         }
       } else {
         cloudSyncOk = false;
       }
 
+      const isMarathi = sanitizedDb.settings && sanitizedDb.settings.lang === 'mr';
+      const finalStatus = navigator.onLine ? (cloudSyncOk ? 'healthy' : 'degraded') : 'offline_saved';
+
       setSaveHealth((prev) => ({
         ...prev,
-        status: cloudSyncOk ? 'healthy' : 'degraded',
+        status: finalStatus,
         lastSavedAt: nowIso,
         lastCloudSyncAt: cloudSyncOk ? nowIso : prev.lastCloudSyncAt,
-        lastError: cloudSyncOk ? '' : (isCloudSyncAvailable ? 'Offline. Sync pending.' : '')
+        lastError: cloudSyncOk ? '' : (isCloudSyncAvailable && navigator.onLine ? 'Cloud sync failed' : '')
       }));
+
+      if (!navigator.onLine) {
+        showToast(
+          isMarathi
+            ? 'बदल स्थानिक पातळीवर जतन केले!'
+            : 'Saved locally (Offline)!',
+          'success'
+        );
+      }
 
       return {
         success: true,
@@ -1359,7 +1375,7 @@ export default function App() {
         ...prev,
         pending: savePendingCountRef.current,
         status:
-          prev.status === 'error' || prev.status === 'degraded'
+          prev.status === 'error' || prev.status === 'degraded' || prev.status === 'offline_saved'
             ? prev.status
             : savePendingCountRef.current > 0
               ? 'saving'
@@ -1385,6 +1401,14 @@ export default function App() {
           details: isMarathi
             ? 'बदल रांगेत आहेत आणि जतन केले जात आहेत.'
             : 'Changes are queued and being persisted.'
+        };
+      case 'offline_saved':
+        return {
+          color: 'var(--success)',
+          label: isMarathi ? 'स्थानिक पातळीवर जतन झाले (ऑफलाईन)' : 'Saved Locally (Offline)',
+          details: isMarathi
+            ? 'तुमचा डेटा या संगणकावर १००% सुरक्षित आहे. ऑनलाइन झाल्यावर क्लाउडवर सिंक होईल.'
+            : 'Your data is 100% safe on this computer. It will sync to cloud when online.'
         };
       case 'degraded':
         return {

@@ -214,13 +214,14 @@ ipcMain.handle('read-database', async () => {
     transactions: [],
     salaries: [],
     expenses: [],
+    archives: [],
     settings: {
       lang: 'en',
       upiId: '',
-    ownerPin: '', // Owner must set PIN on first run
-    requireSetup: true,
-    messName: 'Lokmanya Mess',
-    ownerName: 'Mess Owner'
+      ownerPin: '', // Owner must set PIN on first run
+      requireSetup: true,
+      messName: 'Lokmanya Mess',
+      ownerName: 'Mess Owner'
     }
   };
 
@@ -234,6 +235,7 @@ ipcMain.handle('read-database', async () => {
     if (!parsed || typeof parsed !== 'object') return defaultDb;
     if (!parsed.settings || typeof parsed.settings !== 'object') parsed.settings = defaultDb.settings;
     if (!parsed.expenses) parsed.expenses = [];
+    if (!parsed.archives) parsed.archives = [];
     return parsed;
   } catch (e) {
     console.error("Error reading database:", e);
@@ -257,6 +259,7 @@ ipcMain.handle('write-database', async (event, data) => {
       transactions: Array.isArray(data.transactions) ? data.transactions : [],
       salaries: Array.isArray(data.salaries) ? data.salaries : [],
       expenses: Array.isArray(data.expenses) ? data.expenses : [],
+      archives: Array.isArray(data.archives) ? data.archives : [],
       settings: (data.settings && typeof data.settings === 'object') ? data.settings : { lang: 'en' }
     };
     fs.writeFileSync(dbPath, JSON.stringify(safeData, null, 2), 'utf8');
