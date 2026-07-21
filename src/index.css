@@ -73,17 +73,19 @@ body {
   user-select:none
 }
 
-/* Allow typing/cursor in input fields (PIN/password screens) */
-input, textarea, [contenteditable="true"] {
-  -webkit-user-select: text;
-  user-select: text;
-  cursor: text;
+/* Allow typing/cursor in all input fields, selects, and textareas */
+input, select, textarea, [contenteditable="true"] {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
 }
 
-/* Defensive: ensure login/pin inputs are not blocked by global interaction rules */
-input[type="password"], input[type="text"] {
-  pointer-events: auto;
-  cursor: text;
+input[type="text"], input[type="number"], input[type="password"], input[type="tel"], input[type="date"], textarea {
+  cursor: text !important;
+}
+
+select {
+  cursor: pointer !important;
 }
 
 /* Prevent any accidental blocking of login input click/typing */

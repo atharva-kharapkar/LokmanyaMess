@@ -53,7 +53,11 @@ const normalizeText = (value) => String(value ?? '').trim().replace(/\s+/g, ' ')
 const isBlank = (value) => normalizeText(value).length === 0;
 const isExactDigits = (value, length) => new RegExp(`^\\d{${length}}$`).test(String(value ?? ''));
 const isArchivePinValid = (value) => /^\d{4}$/.test(String(value ?? ''));
-const toAmountNumber = (value) => Number(String(value ?? '').trim());
+const toAmountNumber = (value) => {
+  const str = String(value ?? '').trim().replace(/[^\d.]/g, '');
+  const num = parseFloat(str);
+  return Number.isFinite(num) ? num : 0;
+};
 
 function sha256Pure(ascii) {
   function rightRotate(value, amount) {
@@ -1142,44 +1146,54 @@ export default function App() {
       try {
         let localData = null;
         if (isElectron) {
-          localData = await window.electronAPI.readDatabase();
-        } else {
+          try {
+            localData = await window.electronAPI.readDatabase();
+          } catch (e) {
+            console.error('Failed to read from Electron IPC database:', e);
+          }
+        }
+
+        if (!localData || typeof localData !== 'object' || (!localData.customers && !localData.employees && !localData.expenses)) {
           const local = localStorage.getItem('lokmanya_db');
-          if (local) localData = JSON.parse(local);
+          if (local) {
+            try {
+              localData = JSON.parse(local);
+            } catch (e) {
+              console.error('Failed to parse localStorage db:', e);
+            }
+          }
         }
 
         if (!isMounted) return;
 
-        if (!localData || typeof localData !== 'object') {
+        const hasLocalContent = localData && typeof localData === 'object' && (
+          (Array.isArray(localData.customers) && localData.customers.length > 0) ||
+          (Array.isArray(localData.employees) && localData.employees.length > 0) ||
+          (Array.isArray(localData.expenses) && localData.expenses.length > 0) ||
+          (Array.isArray(localData.transactions) && localData.transactions.length > 0) ||
+          (localData.settings && Object.keys(localData.settings).length > 0)
+        );
+
+        if (hasLocalContent) {
+          const mergedDb = {
+            customers: Array.isArray(localData.customers) ? localData.customers : [],
+            employees: Array.isArray(localData.employees) ? localData.employees : [],
+            transactions: Array.isArray(localData.transactions) ? localData.transactions : [],
+            salaries: Array.isArray(localData.salaries) ? localData.salaries : [],
+            expenses: Array.isArray(localData.expenses) ? localData.expenses : [],
+            archives: Array.isArray(localData.archives) ? localData.archives : [],
+            settings: {
+              ...dbRef.current.settings,
+              ...(localData.settings || {})
+            }
+          };
+
+          setDb((prev) => ({ ...prev, ...mergedDb }));
+          dbRef.current = { ...dbRef.current, ...mergedDb };
+          applyLoadedSettings(mergedDb.settings);
+        } else if (isCloudSyncAvailable && navigator.onLine) {
           await restoreDbFromCloud();
-          return;
         }
-
-        const isLocalEmpty = 
-          (!localData.customers || localData.customers.length === 0) &&
-          (!localData.employees || localData.employees.length === 0) &&
-          (!localData.expenses || localData.expenses.length === 0);
-
-        if (isLocalEmpty) {
-          await restoreDbFromCloud();
-          return;
-        }
-
-        const mergedDb = {
-          customers: Array.isArray(localData.customers) ? localData.customers : [],
-          employees: Array.isArray(localData.employees) ? localData.employees : [],
-          transactions: Array.isArray(localData.transactions) ? localData.transactions : [],
-          salaries: Array.isArray(localData.salaries) ? localData.salaries : [],
-          expenses: Array.isArray(localData.expenses) ? localData.expenses : [],
-          settings: {
-            ...dbRef.current.settings,
-            ...(localData.settings || {})
-          }
-        };
-
-        setDb((prev) => ({ ...prev, ...mergedDb }));
-        dbRef.current = { ...dbRef.current, ...mergedDb };
-        applyLoadedSettings(mergedDb.settings);
       } catch (err) {
         console.error('Error loading local backup during startup:', err);
       } finally {
@@ -1880,12 +1894,8 @@ export default function App() {
 
     const amount = toAmountNumber(custForm.amount);
     const deposited = toAmountNumber(custForm.deposited);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showToast(isMarathi ? 'कृपया वैध रक्कम प्रविष्ट करा.' : 'Please enter a valid amount.', 'error');
-      return;
-    }
-    if (!Number.isFinite(deposited) || deposited < 0) {
-      showToast(isMarathi ? 'जमा रक्कम वैध असणे आवश्यक आहे.' : 'Deposited amount must be a valid number.', 'error');
+    if (amount <= 0) {
+      showToast(isMarathi ? 'कृपया वैध फी रक्कम प्रविष्ट करा.' : 'Please enter a valid fee amount.', 'error');
       return;
     }
 
@@ -4510,10 +4520,10 @@ export default function App() {
                             <input
                               type="password"
                               className="form-input"
-                              maxLength="6"
-                              placeholder="******"
+                              maxLength="4"
+                              placeholder="****"
                               value={newBranch1PinInput}
-                              onChange={(e) => setNewBranch1PinInput(e.target.value.replace(/\D/g, ''))}
+                              onChange={(e) => setNewBranch1PinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                               style={{ flex: 1 }}
                             />
                             <button
@@ -4534,10 +4544,10 @@ export default function App() {
                             <input
                               type="password"
                               className="form-input"
-                              maxLength="6"
-                              placeholder="******"
+                              maxLength="4"
+                              placeholder="****"
                               value={newBranch2PinInput}
-                              onChange={(e) => setNewBranch2PinInput(e.target.value.replace(/\D/g, ''))}
+                              onChange={(e) => setNewBranch2PinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                               style={{ flex: 1 }}
                             />
                             <button
@@ -5207,10 +5217,11 @@ export default function App() {
                   <div className="form-group">
                     <label className="form-label">{t('subFeeLabel')}</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       className="form-input"
                       value={custForm.amount}
-                      onChange={(e) => setCustForm({ ...custForm, amount: e.target.value })}
+                      onChange={(e) => setCustForm({ ...custForm, amount: e.target.value.replace(/[^\d.]/g, '') })}
                       readOnly={currentTab === 'shortterm'}
                     />
                   </div>
@@ -5220,10 +5231,11 @@ export default function App() {
               <div className="form-group">
                 <label className="form-label">{t('depositLabel')}</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   className="form-input"
                   value={custForm.deposited}
-                  onChange={(e) => setCustForm({ ...custForm, deposited: e.target.value })}
+                  onChange={(e) => setCustForm({ ...custForm, deposited: e.target.value.replace(/[^\d.]/g, '') })}
                 />
               </div>
 
