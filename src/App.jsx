@@ -5183,38 +5183,59 @@ export default function App() {
                 </div>
               </div>
               {currentTab === 'shortterm' ? (
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">{db.settings.lang === 'mr' ? 'कालावधी (दिवस) *' : 'Duration (Days) *'}</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      value={shortTermDays}
-                      onChange={(e) => {
-                        const days = e.target.value;
-                        setShortTermDays(days);
-                        const amt = Number(days) * Number(shortTermMeals) * 80;
-                        setCustForm(prev => ({ ...prev, amount: String(amt) }));
-                      }}
-                    />
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">{db.settings.lang === 'mr' ? 'कालावधी (दिवस) *' : 'Duration (Days) *'}</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="form-input"
+                        value={shortTermDays}
+                        onChange={(e) => {
+                          const days = e.target.value.replace(/\D/g, '');
+                          setShortTermDays(days);
+                          const amt = Number(days) * Number(shortTermMeals) * 80;
+                          setCustForm(prev => ({ ...prev, amount: String(amt) }));
+                        }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{db.settings.lang === 'mr' ? 'रोजचे जेवण *' : 'Meals Per Day *'}</label>
+                      <select
+                        className="form-select"
+                        value={shortTermMeals}
+                        onChange={(e) => {
+                          const meals = e.target.value;
+                          setShortTermMeals(meals);
+                          const amt = Number(shortTermDays) * Number(meals) * 80;
+                          setCustForm(prev => ({ ...prev, amount: String(amt) }));
+                        }}
+                      >
+                        <option value="1">1 Meal / Day</option>
+                        <option value="2">2 Meals / Day</option>
+                      </select>
+                    </div>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">{db.settings.lang === 'mr' ? 'रोजचे जेवण *' : 'Meals Per Day *'}</label>
-                    <select
-                      className="form-select"
-                      value={shortTermMeals}
-                      onChange={(e) => {
-                        const meals = e.target.value;
-                        setShortTermMeals(meals);
-                        const amt = Number(shortTermDays) * Number(meals) * 80;
-                        setCustForm(prev => ({ ...prev, amount: String(amt) }));
-                      }}
-                    >
-                      <option value="1">1 Meal / Day</option>
-                      <option value="2">2 Meals / Day</option>
-                    </select>
+
+                  <div style={{
+                    marginBottom: '16px',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#065f46' }}>
+                      {db.settings.lang === 'mr' ? 'एकूण शुल्क (Calculated Fee):' : 'Calculated Fee Amount:'}
+                    </span>
+                    <span style={{ fontSize: '18px', fontWeight: '800', color: '#10b981' }}>
+                      ₹ {Number(shortTermDays || 0) * Number(shortTermMeals || 0) * 80}
+                    </span>
                   </div>
-                </div>
+                </>
               ) : (
                 <div className="form-row">
                   <div className="form-group">
