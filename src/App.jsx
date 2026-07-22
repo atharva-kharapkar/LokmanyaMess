@@ -730,6 +730,7 @@ export default function App() {
   const [archiveOwnerPinInput, setArchiveOwnerPinInput] = useState('');
   const [newArchivePinInput, setNewArchivePinInput] = useState('');
   const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
   const [shortTermDays, setShortTermDays] = useState('10');
   const [shortTermMeals, setShortTermMeals] = useState('2');
 
@@ -1813,182 +1814,194 @@ export default function App() {
 
   const saveCustomer = async () => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
-    if (isBlank(custForm.name) || isBlank(custForm.phone)) {
-      showToast(isMarathi ? 'नाव आणि फोन नंबर आवश्यक आहेत.' : 'Name and Phone are required.', 'error');
-      return;
-    }
+    if (isSavingCustomer) return;
+    setIsSavingCustomer(true);
+    try {
+      if (isBlank(custForm.name) || isBlank(custForm.phone)) {
+        showToast(isMarathi ? 'नाव आणि फोन नंबर आवश्यक आहेत.' : 'Name and Phone are required.', 'error');
+        return;
+      }
 
-    // Convert Devanagari numerals (०-९) to English digits (0-9)
-    let phoneInput = custForm.phone;
-    const devanagariMap = {
-      '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
-      '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
-    };
-    phoneInput = phoneInput.split('').map(char => devanagariMap[char] || char).join('');
+      // Convert Devanagari numerals (०-९) to English digits (0-9)
+      let phoneInput = custForm.phone;
+      const devanagariMap = {
+        '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+        '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
+      };
+      phoneInput = phoneInput.split('').map(char => devanagariMap[char] || char).join('');
 
-    // Clean and validate phone number (extract digits only)
-    let digits = phoneInput.replace(/\D/g, '');
-    
-    // Strip all leading zeros (e.g. 0091... -> 91...)
-    while (digits.startsWith('0')) {
-      digits = digits.slice(1);
-    }
-    
-    // Handle duplicate country codes (e.g. 91919876543210 -> 919876543210)
-    if (digits.length === 14 && digits.startsWith('9191')) {
-      digits = digits.slice(2);
-    }
-    
-    // Handle country code + leading zero (e.g. 9109876543210 -> 919876543210)
-    if (digits.length === 13 && digits.startsWith('910')) {
-      digits = '91' + digits.slice(3);
-    }
+      // Clean and validate phone number (extract digits only)
+      let digits = phoneInput.replace(/\D/g, '');
+      
+      // Strip all leading zeros (e.g. 0091... -> 91...)
+      while (digits.startsWith('0')) {
+        digits = digits.slice(1);
+      }
+      
+      // Handle duplicate country codes (e.g. 91919876543210 -> 919876543210)
+      if (digits.length === 14 && digits.startsWith('9191')) {
+        digits = digits.slice(2);
+      }
+      
+      // Handle country code + leading zero (e.g. 9109876543210 -> 919876543210)
+      if (digits.length === 13 && digits.startsWith('910')) {
+        digits = '91' + digits.slice(3);
+      }
 
-    // Convert 10-digit number to 12-digit (prepend 91)
-    if (digits.length === 10) {
-      digits = '91' + digits;
-    }
-    
-    // Validate final format (exactly 12 digits starting with 91)
-    if (digits.length !== 12 || !digits.startsWith('91')) {
-      showToast(
-        isMarathi 
-          ? 'कृपया वैध १०-अंकी मोबाईल नंबर प्रविष्ट करा (उदा. +९१९८७६५४३२१० किंवा ९८७६५४३२१०).' 
-          : 'Phone number must be a valid 10-digit number (e.g. +919876543210 or 9876543210).', 
-        'error'
-      );
-      return;
-    }
-    
-    const cleanPhone = '+' + digits;
-
-    // Aadhar Card validation: if provided, must be exactly 12 digits
-    if (custForm.aadhar && custForm.aadhar.trim()) {
-      const aadharClean = custForm.aadhar.replace(/\D/g, '');
-      if (aadharClean.length !== 12) {
+      // Convert 10-digit number to 12-digit (prepend 91)
+      if (digits.length === 10) {
+        digits = '91' + digits;
+      }
+      
+      // Validate final format (exactly 12 digits starting with 91)
+      if (digits.length !== 12 || !digits.startsWith('91')) {
         showToast(
           isMarathi 
-            ? 'आधार कार्ड नंबर अचूक १२ अंकी असावा.' 
-            : 'Aadhar card number must be exactly 12 digits.', 
+            ? 'कृपया वैध १०-अंकी मोबाईल नंबर प्रविष्ट करा (उदा. +९१९८७६५४३२१० किंवा ९८७६५४३२१०).' 
+            : 'Phone number must be a valid 10-digit number (e.g. +919876543210 or 9876543210).', 
           'error'
         );
         return;
       }
-    }
+      
+      const cleanPhone = '+' + digits;
 
-    // Date format validation (must be valid YYYY-MM-DD)
-    if (!isValidDate(custForm.joinDate)) {
-      showToast(
-        isMarathi 
-          ? 'प्रवेश तारीख वैध YYYY-MM-DD फॉरमॅटमध्ये असावी (उदा. २०२६-०६-२५).' 
-          : 'Joining Date must be a valid date in YYYY-MM-DD format (e.g. 2026-06-25).', 
-        'error'
-      );
-      return;
-    }
-
-    let targetCat = custForm.category;
-    if (!targetCat) {
-      if (editCustId) {
-        const orig = db.customers.find(c => c.id === editCustId);
-        targetCat = orig ? (orig.category || 'dinein') : 'dinein';
-      } else {
-        if (currentTab === 'tiffin') targetCat = 'tiffin';
-        else if (currentTab === 'shortterm') targetCat = 'shortterm';
-        else targetCat = 'dinein';
+      // Aadhar Card validation: if provided, must be exactly 12 digits
+      if (custForm.aadhar && custForm.aadhar.trim()) {
+        const aadharClean = custForm.aadhar.replace(/\D/g, '');
+        if (aadharClean.length !== 12) {
+          showToast(
+            isMarathi 
+              ? 'आधार कार्ड नंबर अचूक १२ अंकी असावा.' 
+              : 'Aadhar card number must be exactly 12 digits.', 
+            'error'
+          );
+          return;
+        }
       }
-    }
 
-    if (targetCat === 'tiffin' && isBlank(custForm.addr)) {
-      showToast(isMarathi ? 'कृपया वैध पत्ता प्रविष्ट करा.' : 'Address cannot be blank.', 'error');
-      return;
-    }
-
-    const amount = toAmountNumber(custForm.amount);
-    const deposited = toAmountNumber(custForm.deposited);
-    if (amount <= 0) {
-      showToast(isMarathi ? 'कृपया वैध फी रक्कम प्रविष्ट करा.' : 'Please enter a valid fee amount.', 'error');
-      return;
-    }
-
-    const finalForm = { ...custForm, name: normalizeText(custForm.name), addr: normalizeText(custForm.addr), phone: cleanPhone, amount: String(amount), deposited: String(deposited) };
-
-    if (!editCustId) {
-      const activeBranchCount = (db.customers || []).filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old').length;
-      if (activeBranchCount >= 320) {
+      // Date format validation (must be valid YYYY-MM-DD)
+      if (!isValidDate(custForm.joinDate)) {
         showToast(
           isMarathi 
-            ? 'या शाखेची ३२० ग्राहकांची मर्यादा संपली आहे!' 
-            : 'This branch has reached its capacity limit of 320 customers!', 
+            ? 'प्रवेश तारीख वैध YYYY-MM-DD फॉरमॅटमध्ये असावी (उदा. २०२६-०६-२५).' 
+            : 'Joining Date must be a valid date in YYYY-MM-DD format (e.g. 2026-06-25).', 
           'error'
         );
         return;
       }
-    }
 
-    await saveDb((currentDb) => {
-      let nextTargetCat = targetCat;
-      if (!nextTargetCat && editCustId) {
-        const originalCustomer = currentDb.customers.find((c) => c.id === editCustId);
-        nextTargetCat = originalCustomer ? (originalCustomer.category || 'dinein') : 'dinein';
+      let targetCat = custForm.category;
+      if (!targetCat) {
+        if (editCustId) {
+          const orig = db.customers.find(c => c.id === editCustId);
+          targetCat = orig ? (orig.category || 'dinein') : 'dinein';
+        } else {
+          if (currentTab === 'tiffin') targetCat = 'tiffin';
+          else if (currentTab === 'shortterm') targetCat = 'shortterm';
+          else targetCat = 'dinein';
+        }
       }
 
-      if (editCustId) {
+      if (targetCat === 'tiffin' && isBlank(custForm.addr)) {
+        showToast(isMarathi ? 'कृपया वैध पत्ता प्रविष्ट करा.' : 'Address cannot be blank.', 'error');
+        return;
+      }
+
+      const amount = toAmountNumber(custForm.amount);
+      const deposited = toAmountNumber(custForm.deposited);
+      if (amount <= 0) {
+        showToast(isMarathi ? 'कृपया वैध फी रक्कम प्रविष्ट करा.' : 'Please enter a valid fee amount.', 'error');
+        return;
+      }
+
+      const finalForm = { ...custForm, name: normalizeText(custForm.name), addr: normalizeText(custForm.addr), phone: cleanPhone, amount: String(amount), deposited: String(deposited) };
+
+      if (!editCustId) {
+        const activeBranchCount = (db.customers || []).filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old').length;
+        if (activeBranchCount >= 320) {
+          showToast(
+            isMarathi 
+              ? 'या शाखेची ३२० ग्राहकांची मर्यादा संपली आहे!' 
+              : 'This branch has reached its capacity limit of 320 customers!', 
+          'error'
+          );
+          return;
+        }
+      }
+
+      await saveDb((currentDb) => {
+        let nextTargetCat = targetCat;
+        if (!nextTargetCat && editCustId) {
+          const originalCustomer = currentDb.customers.find((c) => c.id === editCustId);
+          nextTargetCat = originalCustomer ? (originalCustomer.category || 'dinein') : 'dinein';
+        }
+
+        if (editCustId) {
+          return {
+            ...currentDb,
+            customers: currentDb.customers.map((c) => (
+              c.id === editCustId
+                ? { 
+                    ...c, 
+                    ...finalForm, 
+                    amount, 
+                    deposited, 
+                    category: nextTargetCat,
+                    branch: c.branch || activeBranch,
+                    shortTermDays: nextTargetCat === 'shortterm' ? Number(shortTermDays) : undefined,
+                    shortTermMeals: nextTargetCat === 'shortterm' ? Number(shortTermMeals) : undefined
+                  }
+                : c
+            ))
+          };
+        }
+
+        const newCust = {
+          ...finalForm,
+          id: 'cust_' + Date.now(),
+          amount,
+          deposited,
+          category: nextTargetCat,
+          branch: activeBranch || 'Branch 1',
+          shortTermDays: nextTargetCat === 'shortterm' ? Number(shortTermDays) : undefined,
+          shortTermMeals: nextTargetCat === 'shortterm' ? Number(shortTermMeals) : undefined
+        };
+        const nextTransactions = [...(currentDb.transactions || [])];
+        if (newCust.deposited > 0) {
+          nextTransactions.push({
+            id: 'txn_' + Date.now() + '_init',
+            custId: newCust.id,
+            amount: newCust.deposited,
+            date: newCust.joinDate,
+            paymentMode: 'Cash'
+          });
+        }
+
         return {
           ...currentDb,
-          customers: currentDb.customers.map((c) => (
-            c.id === editCustId
-              ? { 
-                  ...c, 
-                  ...finalForm, 
-                  amount, 
-                  deposited, 
-                  category: nextTargetCat,
-                  branch: c.branch || activeBranch,
-                  shortTermDays: nextTargetCat === 'shortterm' ? Number(shortTermDays) : undefined,
-                  shortTermMeals: nextTargetCat === 'shortterm' ? Number(shortTermMeals) : undefined
-                }
-              : c
-          ))
+          customers: [...currentDb.customers, newCust],
+          transactions: nextTransactions
         };
-      }
-
-      const newCust = {
-        ...finalForm,
-        id: 'cust_' + Date.now(),
-        amount,
-        deposited,
-        category: nextTargetCat,
-        branch: activeBranch,
-        shortTermDays: nextTargetCat === 'shortterm' ? Number(shortTermDays) : undefined,
-        shortTermMeals: nextTargetCat === 'shortterm' ? Number(shortTermMeals) : undefined
-      };
-      const nextTransactions = [...(currentDb.transactions || [])];
-      if (newCust.deposited > 0) {
-        nextTransactions.push({
-          id: 'txn_' + Date.now() + '_init',
-          custId: newCust.id,
-          amount: newCust.deposited,
-          date: newCust.joinDate,
-          paymentMode: 'Cash'
-        });
-      }
-
-      return {
-        ...currentDb,
-        customers: [...currentDb.customers, newCust],
-        transactions: nextTransactions
-      };
-    });
-    setCustSearch(''); // Clear search query to show the new customer immediately
-    setCustModal(false);
-    setEditCustId(null);
-    showToast(
-      isMarathi 
-        ? (editCustId ? 'ग्राहक प्रोफाइल यशस्वीरित्या सुधारित केले!' : 'नवीन ग्राहक यशस्वीरित्या जोडला गेला!') 
-        : (editCustId ? 'Customer profile updated successfully!' : 'New customer added successfully!'),
-      'success'
-    );
+      });
+      setCustSearch(''); // Clear search query to show the new customer immediately
+      setCustModal(false);
+      setEditCustId(null);
+      showToast(
+        isMarathi 
+          ? (editCustId ? 'ग्राहक प्रोफाइल यशस्वीरित्या सुधारित केले!' : 'नवीन ग्राहक यशस्वीरित्या जोडला गेला!') 
+          : (editCustId ? 'Customer profile updated successfully!' : 'New customer added successfully!'),
+        'success'
+      );
+    } catch (err) {
+      console.error('Error saving customer profile:', err);
+      showToast(
+        isMarathi ? 'ग्राहक जतन करताना त्रुटी आली: ' + err.message : 'Error saving customer profile: ' + err.message,
+        'error'
+      );
+    } finally {
+      setIsSavingCustomer(false);
+    }
   };
 
   const deleteCustomer = async (id) => {
@@ -5282,8 +5295,12 @@ export default function App() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn" onClick={() => { setCustModal(false); setEditCustId(null); }}>{t('cancel')}</button>
-              <button className="btn btn-primary" onClick={saveCustomer}>{t('saveProfile')}</button>
+              <button className="btn" onClick={() => { setCustModal(false); setEditCustId(null); }} disabled={isSavingCustomer}>{t('cancel')}</button>
+              <button className="btn btn-primary" onClick={saveCustomer} disabled={isSavingCustomer}>
+                {isSavingCustomer 
+                  ? (db.settings.lang === 'mr' ? 'जतन करत आहे...' : 'Saving...') 
+                  : t('saveProfile')}
+              </button>
             </div>
           </div>
         </div>
