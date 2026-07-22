@@ -1887,7 +1887,19 @@ export default function App() {
       return;
     }
 
-    if (isBlank(custForm.addr)) {
+    let targetCat = custForm.category;
+    if (!targetCat) {
+      if (editCustId) {
+        const orig = db.customers.find(c => c.id === editCustId);
+        targetCat = orig ? (orig.category || 'dinein') : 'dinein';
+      } else {
+        if (currentTab === 'tiffin') targetCat = 'tiffin';
+        else if (currentTab === 'shortterm') targetCat = 'shortterm';
+        else targetCat = 'dinein';
+      }
+    }
+
+    if (targetCat === 'tiffin' && isBlank(custForm.addr)) {
       showToast(isMarathi ? 'कृपया वैध पत्ता प्रविष्ट करा.' : 'Address cannot be blank.', 'error');
       return;
     }
@@ -1913,18 +1925,6 @@ export default function App() {
         return;
       }
     }
-    
-    let targetCat = custForm.category;
-    if (!targetCat) {
-      if (editCustId) {
-        const orig = db.customers.find(c => c.id === editCustId);
-        targetCat = orig ? (orig.category || 'dinein') : 'dinein';
-      } else {
-        if (currentTab === 'tiffin') targetCat = 'tiffin';
-        else if (currentTab === 'shortterm') targetCat = 'shortterm';
-        else targetCat = 'dinein';
-      }
-    }
 
     await saveDb((currentDb) => {
       let nextTargetCat = targetCat;
@@ -1944,6 +1944,7 @@ export default function App() {
                   amount, 
                   deposited, 
                   category: nextTargetCat,
+                  branch: c.branch || activeBranch,
                   shortTermDays: nextTargetCat === 'shortterm' ? Number(shortTermDays) : undefined,
                   shortTermMeals: nextTargetCat === 'shortterm' ? Number(shortTermMeals) : undefined
                 }
@@ -1982,6 +1983,12 @@ export default function App() {
     setCustSearch(''); // Clear search query to show the new customer immediately
     setCustModal(false);
     setEditCustId(null);
+    showToast(
+      isMarathi 
+        ? (editCustId ? 'ग्राहक प्रोफाइल यशस्वीरित्या सुधारित केले!' : 'नवीन ग्राहक यशस्वीरित्या जोडला गेला!') 
+        : (editCustId ? 'Customer profile updated successfully!' : 'New customer added successfully!'),
+      'success'
+    );
   };
 
   const deleteCustomer = async (id) => {
@@ -4520,10 +4527,10 @@ export default function App() {
                             <input
                               type="password"
                               className="form-input"
-                              maxLength="4"
-                              placeholder="****"
+                              maxLength="6"
+                              placeholder="******"
                               value={newBranch1PinInput}
-                              onChange={(e) => setNewBranch1PinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                              onChange={(e) => setNewBranch1PinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
                               style={{ flex: 1 }}
                             />
                             <button
@@ -4544,10 +4551,10 @@ export default function App() {
                             <input
                               type="password"
                               className="form-input"
-                              maxLength="4"
-                              placeholder="****"
+                              maxLength="6"
+                              placeholder="******"
                               value={newBranch2PinInput}
-                              onChange={(e) => setNewBranch2PinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                              onChange={(e) => setNewBranch2PinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
                               style={{ flex: 1 }}
                             />
                             <button
