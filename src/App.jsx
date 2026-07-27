@@ -236,33 +236,25 @@ function isValidDate(dateStr) {
   );
 }
 
-function getExpiryDate(c, optionalPlan) {
-  if (typeof c === 'string') {
-    const startDate = parseLocalDate(c);
-    const daysPerCycle = PLAN_DAYS[optionalPlan] || 30;
-    const today = new Date();
-    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const elapsedTime = todayMidnight - startDate;
-    const elapsedDays = Math.round(elapsedTime / 86400000);
-    let elapsedCycles = 0;
-    if (elapsedDays > 0) {
-      elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
-    }
-    const currentCycleExpiry = new Date(startDate);
-    currentCycleExpiry.setDate(startDate.getDate() + (elapsedCycles + 1) * daysPerCycle);
-    return currentCycleExpiry;
-  }
+function getEffectiveJoinDate(c) {
+  if (!c) return '';
+  if (typeof c === 'string') return c;
+  return c.billingStartDate || c.joinDate || '';
+}
 
-  if (!c || !c.joinDate) return new Date();
-  const startDate = parseLocalDate(c.joinDate);
-  if (c.category === 'shortterm') {
+function getExpiryDate(c, optionalPlan) {
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return new Date();
+  const startDate = parseLocalDate(refDate);
+
+  if (typeof c === 'object' && c.category === 'shortterm') {
     const durationDays = Number(c.shortTermDays || 10);
     const expiryDate = new Date(startDate);
     expiryDate.setDate(startDate.getDate() + durationDays);
     return expiryDate;
   }
 
-  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+  const daysPerCycle = PLAN_DAYS[(typeof c === 'object' ? c.plan : optionalPlan)] || 30;
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const elapsedTime = todayMidnight - startDate;
@@ -484,9 +476,10 @@ function getCustomerDues(c) {
   if (c.category === 'shortterm') {
     return Math.max(0, Number(c.amount || 0) - Number(c.deposited || 0));
   }
-  if (!c.joinDate) return 0;
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return 0;
   const daysPerCycle = PLAN_DAYS[c.plan] || 30;
-  const startDate = parseLocalDate(c.joinDate);
+  const startDate = parseLocalDate(refDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   
@@ -504,7 +497,8 @@ function getCustomerDues(c) {
 }
 
 function computeStatus(c) {
-  if (!c || !c.joinDate) return 'expired';
+  const refDate = getEffectiveJoinDate(c);
+  if (!c || !refDate) return 'expired';
   
   if (c.category === 'shortterm') {
     const daysRemaining = getExpiryDays(c);
@@ -514,7 +508,7 @@ function computeStatus(c) {
   }
 
   const daysPerCycle = PLAN_DAYS[c.plan] || 30;
-  const startDate = parseLocalDate(c.joinDate);
+  const startDate = parseLocalDate(refDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   
@@ -552,12 +546,14 @@ function computeStatus(c) {
 }
 
 function getDueWarningDays(c) {
-  if (!c || !c.joinDate || c.status === 'old') return 0;
+  if (!c || c.status === 'old') return 0;
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return 0;
 
   const remaining = getCustomerDues(c);
   if (remaining <= 0) return 0;
 
-  const startDate = parseLocalDate(c.joinDate);
+  const startDate = parseLocalDate(refDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const elapsedTime = todayMidnight - startDate;
@@ -573,13 +569,15 @@ function getDueWarningDays(c) {
 }
 
 function getDaysPendingDues(c) {
-  if (!c || !c.joinDate || c.status === 'old') return 0;
+  if (!c || c.status === 'old') return 0;
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return 0;
   const dues = getCustomerDues(c);
   if (dues <= 0) return 0;
 
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const startDate = parseLocalDate(c.joinDate);
+  const startDate = parseLocalDate(refDate);
 
   if (c.category === 'shortterm') {
     const diffTime = todayMidnight - startDate;
@@ -1778,11 +1776,11 @@ export default function App() {
     if (currentTab === 'shortterm') {
       setShortTermDays('10');
       setShortTermMeals('2');
-      setCustForm({ name: '', phone: '', aadhar: '', plan: 'Short-Term', amount: String(10 * 2 * 80), deposited: '0', joinDate: todayStr(), addr: '', photo: '', category: 'shortterm' });
+      setCustForm({ name: '', phone: '', aadhar: '', plan: 'Short-Term', amount: String(10 * 2 * 80), deposited: '0', joinDate: todayStr(), billingStartDate: '', addr: '', photo: '', category: 'shortterm' });
     } else if (currentTab === 'tiffin') {
-      setCustForm({ name: '', phone: '', aadhar: '', plan: 'Monthly', amount: '1500', deposited: '0', joinDate: todayStr(), addr: '', photo: '', category: 'tiffin' });
+      setCustForm({ name: '', phone: '', aadhar: '', plan: 'Monthly', amount: '1500', deposited: '0', joinDate: todayStr(), billingStartDate: '', addr: '', photo: '', category: 'tiffin' });
     } else {
-      setCustForm({ name: '', phone: '', aadhar: '', plan: 'Monthly', amount: '1500', deposited: '0', joinDate: todayStr(), addr: '', photo: '', category: 'dinein' });
+      setCustForm({ name: '', phone: '', aadhar: '', plan: 'Monthly', amount: '1500', deposited: '0', joinDate: todayStr(), billingStartDate: '', addr: '', photo: '', category: 'dinein' });
     }
     setCustModal(true);
   };
@@ -1805,6 +1803,7 @@ export default function App() {
       amount: String(c.amount), 
       deposited: String(c.deposited || 0), 
       joinDate: c.joinDate, 
+      billingStartDate: c.billingStartDate || '',
       addr: c.addr || '', 
       photo: c.photo || '', 
       category: c.category || 'dinein' 
@@ -1886,6 +1885,16 @@ export default function App() {
           isMarathi 
             ? 'प्रवेश तारीख वैध YYYY-MM-DD फॉरमॅटमध्ये असावी (उदा. २०२६-०६-२५).' 
             : 'Joining Date must be a valid date in YYYY-MM-DD format (e.g. 2026-06-25).', 
+          'error'
+        );
+        return;
+      }
+
+      if (custForm.billingStartDate && custForm.billingStartDate.trim() && !isValidDate(custForm.billingStartDate)) {
+        showToast(
+          isMarathi 
+            ? 'बिलिंग सुरू तारीख वैध YYYY-MM-DD फॉरमॅटमध्ये असावी (उदा. २०२६-०६-२५).' 
+            : 'Billing Start Date must be a valid date in YYYY-MM-DD format (e.g. 2026-06-25).', 
           'error'
         );
         return;
@@ -5345,6 +5354,25 @@ export default function App() {
                   }}
                 />
               </div>
+
+              {currentTab !== 'shortterm' && (
+                <div className="form-group">
+                  <label className="form-label">
+                    {db.settings.lang === 'mr' ? 'बिलिंग सुरू होण्याची तारीख (पर्यायी)' : 'Billing Start Date (Optional)'}
+                  </label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={custForm.billingStartDate || ''}
+                    onChange={(e) => setCustForm({ ...custForm, billingStartDate: e.target.value })}
+                  />
+                  <small style={{ color: 'var(--text-secondary)', fontSize: '11px', display: 'block', marginTop: '4px', lineHeight: '1.4' }}>
+                    {db.settings.lang === 'mr' 
+                      ? 'नवीन सिस्टीममध्ये बिलिंग ज्या तारखेपासून सुरू करायचे आहे ती तारीख निवडा (उदा. चालू महिन्याची पहिली तारीख). रिकामे ठेवल्यास प्रवेश तारखेपासून हिशोब होईल.' 
+                      : 'Choose the date when billing should start in this new system (e.g. 1st of current month). Leave blank to bill from Joining Date.'}
+                  </small>
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">
                   {currentTab === 'tiffin' 
