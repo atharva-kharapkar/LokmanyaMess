@@ -2004,6 +2004,33 @@ export default function App() {
     }
   };
 
+  const handleFactoryReset = async () => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    const confirmMsg = isMarathi 
+      ? "इशारा: आपण खरोखर सर्व ग्राहक, व्यवहार, कर्मचारी, पगार आणि खर्च कायमचे डिलीट करू इच्छिता? सेटिंग्ज आणि पिन सुरक्षित राहतील. ही क्रिया पूर्ववत केली जाऊ शकत नाही!"
+      : "WARNING: Are you sure you want to permanently delete all customers, transactions, employees, salaries, and expenses? Settings and PINs will be preserved. This action cannot be undone!";
+    
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await saveDb((currentDb) => {
+        return {
+          ...currentDb,
+          customers: [],
+          transactions: [],
+          employees: [],
+          salaries: [],
+          expenses: [],
+          archives: []
+        };
+      });
+      showToast(isMarathi ? 'सर्व डेटा यशस्वीरित्या डिलीट केला गेला!' : 'All database records cleared successfully!', 'success');
+    } catch (err) {
+      console.error('Factory reset failed:', err);
+      showToast(isMarathi ? 'डेटा रीसेट करताना त्रुटी आली: ' + err.message : 'Database reset failed: ' + err.message, 'error');
+    }
+  };
+
   const deleteCustomer = async (id) => {
     if (!isOwnerRole(role)) {
       showToast(
@@ -4777,6 +4804,25 @@ export default function App() {
                               }}
                             />
                           </label>
+                        </div>
+                        <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                          <button 
+                            className="btn btn-danger" 
+                            style={{ 
+                              backgroundColor: '#dc2626', 
+                              borderColor: '#dc2626', 
+                              color: '#ffffff',
+                              fontWeight: '600'
+                            }} 
+                            onClick={handleFactoryReset}
+                          >
+                            {db.settings.lang === 'mr' ? 'सर्व डेटा रीसेट करा (Factory Reset)' : 'Factory Reset (Delete All Data)'}
+                          </button>
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '4px' }}>
+                            {db.settings.lang === 'mr' 
+                              ? 'इशारा: यामुळे सर्व ग्राहक, पेमेंट आणि कर्मचाऱ्यांची माहिती डिलीट होईल. लॉगिन सेटिंग्ज सुरक्षित राहतील.' 
+                              : 'WARNING: This will permanently delete all customers, transactions, and employees from both local and cloud databases. Login credentials will remain safe.'}
+                          </div>
                         </div>
                       </div>
                     </>
