@@ -789,6 +789,13 @@ export default function App() {
       setIsArchiveUnlocked(false);
       setArchivePinInput('');
     }
+    // Close any open modals and clear selection views to prevent transparent overlays blocking clicks on active tabs
+    setCustModal(false);
+    setEditCustId(null);
+    setPayModalCustomer(null);
+    setHistoryModalCustomer(null);
+    setSelectedCustomerProfile(null);
+    setIsBulkReminderOpen(false);
   }, [currentTab]);
 
   useEffect(() => {
@@ -3514,13 +3521,15 @@ export default function App() {
                     {db.settings.lang === 'mr' ? 'संग्रहित जुने ग्राहक रेकॉर्ड पाहण्यासाठी संकेतशब्द प्रविष्ट करा.' : 'Please enter the archive access password to view archived profiles.'}
                   </p>
                   <input
+                    key={`archive-passcode-input-${isArchiveUnlocked}`}
                     type="password"
                     className="form-input"
                     placeholder="••••"
                     maxLength="4"
                     value={archivePinInput}
                     onChange={(e) => setArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px' }}
+                    autoFocus={true}
+                    style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text' }}
                   />
                   <button
                     className="btn btn-primary"
@@ -3996,13 +4005,15 @@ export default function App() {
                     </p>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
+                        key={`collection-passcode-input-${isCollectionArchiveUnlocked}`}
                         type="password"
                         className="form-input"
                         placeholder="Passcode"
                         maxLength="4"
                         value={collectionArchivePinInput}
                         onChange={(e) => setCollectionArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text' }}
+                        autoFocus={true}
+                        style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text', pointerEvents: 'auto' }}
                       />
                       <button 
                         className="btn btn-primary"
@@ -4246,13 +4257,15 @@ export default function App() {
                     </p>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
+                        key={`expense-passcode-input-${isExpenseArchiveUnlocked}`}
                         type="password"
                         className="form-input"
                         placeholder="Passcode"
                         maxLength="4"
                         value={expenseArchivePinInput}
                         onChange={(e) => setExpenseArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text' }}
+                        autoFocus={true}
+                        style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text', pointerEvents: 'auto' }}
                       />
                       <button 
                         className="btn btn-primary"
@@ -4335,6 +4348,7 @@ export default function App() {
                     {db?.settings?.lang === 'mr' ? 'सिस्टम सेटिंग्ज पाहण्यासाठी किंवा बदलण्यासाठी कृपया पासकोड प्रविष्ट करा.' : 'Please enter the access passcode to view or modify system settings.'}
                   </p>
                   <input
+                    key={`settings-passcode-input-${isSettingsUnlocked}`}
                     type="password"
                     className="form-input"
                     placeholder="••••"
@@ -4352,7 +4366,8 @@ export default function App() {
                         }
                       }
                     }}
-                    style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px' }}
+                    autoFocus={true}
+                    style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text' }}
                   />
                   <button
                     className="btn btn-primary"
