@@ -722,6 +722,10 @@ export default function App() {
   const [activeBranch, setActiveBranch] = useState('Branch 1');
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
   const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
+  const settingsInputRef = useRef(null);
+  const archiveInputRef = useRef(null);
+  const collectionInputRef = useRef(null);
+  const expenseInputRef = useRef(null);
   const [settingsPinInput, setSettingsPinInput] = useState('');
   const [archivePinInput, setArchivePinInput] = useState('');
   const [archivePinOwnerAuthInput, setArchivePinOwnerAuthInput] = useState('');
@@ -801,6 +805,42 @@ export default function App() {
   useEffect(() => {
     showCalculatorRef.current = showCalculator;
   }, [showCalculator]);
+
+  // Programmatic focus listener for lock screen inputs
+  useEffect(() => {
+    if (currentTab === 'settings' && !isSettingsUnlocked && settingsInputRef.current) {
+      setTimeout(() => {
+        if (settingsInputRef.current) {
+          settingsInputRef.current.focus();
+          settingsInputRef.current.select();
+        }
+      }, 50);
+    }
+    if (currentTab === 'oldcustomers' && !isArchiveUnlocked && archiveInputRef.current) {
+      setTimeout(() => {
+        if (archiveInputRef.current) {
+          archiveInputRef.current.focus();
+          archiveInputRef.current.select();
+        }
+      }, 50);
+    }
+    if (currentTab === 'collections' && !isCollectionArchiveUnlocked && collectionInputRef.current) {
+      setTimeout(() => {
+        if (collectionInputRef.current) {
+          collectionInputRef.current.focus();
+          collectionInputRef.current.select();
+        }
+      }, 50);
+    }
+    if (currentTab === 'expenses' && !isExpenseArchiveUnlocked && expenseInputRef.current) {
+      setTimeout(() => {
+        if (expenseInputRef.current) {
+          expenseInputRef.current.focus();
+          expenseInputRef.current.select();
+        }
+      }, 50);
+    }
+  }, [currentTab, isSettingsUnlocked, isArchiveUnlocked, isCollectionArchiveUnlocked, isExpenseArchiveUnlocked]);
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
@@ -3521,7 +3561,8 @@ export default function App() {
                     {db.settings.lang === 'mr' ? 'संग्रहित जुने ग्राहक रेकॉर्ड पाहण्यासाठी संकेतशब्द प्रविष्ट करा.' : 'Please enter the archive access password to view archived profiles.'}
                   </p>
                   <input
-                    key={`archive-passcode-input-${isArchiveUnlocked}`}
+                    key={`archive-passcode-input-${currentTab}-${isArchiveUnlocked}`}
+                    ref={archiveInputRef}
                     type="password"
                     className="form-input"
                     placeholder="••••"
@@ -4005,7 +4046,8 @@ export default function App() {
                     </p>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
-                        key={`collection-passcode-input-${isCollectionArchiveUnlocked}`}
+                        key={`collection-passcode-input-${currentTab}-${isCollectionArchiveUnlocked}`}
+                        ref={collectionInputRef}
                         type="password"
                         className="form-input"
                         placeholder="Passcode"
@@ -4257,7 +4299,8 @@ export default function App() {
                     </p>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input
-                        key={`expense-passcode-input-${isExpenseArchiveUnlocked}`}
+                        key={`expense-passcode-input-${currentTab}-${isExpenseArchiveUnlocked}`}
+                        ref={expenseInputRef}
                         type="password"
                         className="form-input"
                         placeholder="Passcode"
@@ -4348,7 +4391,8 @@ export default function App() {
                     {db?.settings?.lang === 'mr' ? 'सिस्टम सेटिंग्ज पाहण्यासाठी किंवा बदलण्यासाठी कृपया पासकोड प्रविष्ट करा.' : 'Please enter the access passcode to view or modify system settings.'}
                   </p>
                   <input
-                    key={`settings-passcode-input-${isSettingsUnlocked}`}
+                    key={`settings-passcode-input-${currentTab}-${isSettingsUnlocked}`}
+                    ref={settingsInputRef}
                     type="password"
                     className="form-input"
                     placeholder="••••"
