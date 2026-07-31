@@ -496,6 +496,38 @@ function getCustomerDues(c) {
   return Math.max(0, totalOwed - (c.deposited || 0));
 }
 
+function getCustomerDuesBreakdown(c) {
+  if (!c) return { prevDues: 0, currentDues: 0, totalDues: 0 };
+  if (c.category === 'shortterm') {
+    const totalDues = Math.max(0, Number(c.amount || 0) - Number(c.deposited || 0));
+    return { prevDues: 0, currentDues: totalDues, totalDues };
+  }
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return { prevDues: 0, currentDues: 0, totalDues: 0 };
+  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+  const startDate = parseLocalDate(refDate);
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  
+  const elapsedTime = todayMidnight - startDate;
+  const elapsedDays = Math.round(elapsedTime / 86400000);
+  
+  let elapsedCycles = 0;
+  if (elapsedDays > 0) {
+    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
+  }
+  
+  const completedCyclesAmount = elapsedCycles * c.amount;
+  const currentCycleFee = c.amount;
+  const deposited = Number(c.deposited || 0);
+
+  const prevDues = Math.max(0, completedCyclesAmount - deposited);
+  const totalDues = Math.max(0, (completedCyclesAmount + currentCycleFee) - deposited);
+  const currentDues = Math.max(0, totalDues - prevDues);
+
+  return { prevDues, currentDues, totalDues };
+}
+
 function computeStatus(c) {
   const refDate = getEffectiveJoinDate(c);
   if (!c || !refDate) return 'expired';
@@ -719,6 +751,7 @@ export default function App() {
   const [upiIdInput, setUpiIdInput] = useState('');
   const [paymentPhoneInput, setPaymentPhoneInput] = useState('');
   const [whatsappDuesTemplateInput, setWhatsappDuesTemplateInput] = useState('');
+  const [duesLimitInput, setDuesLimitInput] = useState('1.5');
   const [activeBranch, setActiveBranch] = useState('Branch 1');
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
   const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
@@ -856,6 +889,7 @@ export default function App() {
     setUpiIdInput(settings.upiId || '');
     setPaymentPhoneInput(settings.paymentPhone || '');
     setWhatsappDuesTemplateInput(settings.whatsappDuesTemplate || '');
+    setDuesLimitInput(settings.duesLimit !== undefined ? String(settings.duesLimit) : '1.5');
   }, []);
 
   const persistDb = useCallback(async (nextDb) => {
@@ -2330,9 +2364,12 @@ export default function App() {
             trId
           )}&lang=${db.settings?.lang || 'en'}${paymentPhone ? `&ph=${encodeURIComponent(paymentPhone)}` : ''}`
         : '';
+    
+    const { prevDues, currentDues } = getCustomerDuesBreakdown(customer);
+
     const defaultTemplate = db.settings?.lang === 'mr'
-      ? 'नमस्कार [Name], तुमची थकीत रक्कम ₹[Dues] आहे. कृपया पेमेंट करा: [UpiLink] - [MessName]'
-      : 'Dear [Name], your pending dues are Rs [Dues]. Please pay here: [UpiLink] - [MessName]';
+      ? 'नमस्कार [Name], तुमची थकीत रक्कम ₹[Dues] आहे. (मागील थकबाकी: ₹[PrevDues], चालू महिना: ₹[CurrentDues]). कृपया पेमेंट करा: [UpiLink] - [MessName]'
+      : 'Dear [Name], your pending dues are Rs [Dues]. (Previous Balance: Rs [PrevDues], Current Month: Rs [CurrentDues]). Please pay here: [UpiLink] - [MessName]';
     const template = String(db.settings?.whatsappDuesTemplate || defaultTemplate);
 
     if (template.trim()) {
@@ -2340,6 +2377,8 @@ export default function App() {
         .replace(/\[Name\]/g, customerName)
         .replace(/\[Dues\]/g, String(paymentAmount))
         .replace(/\[Amount\]/g, String(paymentAmount))
+        .replace(/\[PrevDues\]/g, String(prevDues))
+        .replace(/\[CurrentDues\]/g, String(currentDues))
         .replace(/\[Date\]/g, expiry || '')
         .replace(/\[MessName\]/g, messName)
         .replace(/\[UpiLink\]/g, upiLink || (upiId || ''))
@@ -3688,6 +3727,17 @@ export default function App() {
                           >
                             {c.name} {isNameRed && (db.settings.lang === 'mr' ? ` (${warningDays} दिवस थकीत!)` : ` (Due pending for ${warningDays} days)`)}
                           </div>
+                          {(() => {
+                            const limit = Number(c.amount || 0) * Number(db.settings.duesLimit || 1.5);
+                            if (remaining > limit) {
+                              return (
+                                <div style={{ display: 'inline-block', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', fontSize: '11px', fontWeight: '800', padding: '3px 8px', borderRadius: '4px', border: '1px solid currentColor', marginTop: '4px', width: 'fit-content' }}>
+                                  🚨 {db.settings.lang === 'mr' ? 'अति-थकबाकी इशारा (High Overdue!)' : 'High Overdue Alert!'}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                           {hasDues && daysPendingDues > 0 && (
                             <div style={{ color: '#ff1e1e', fontSize: '12px', fontWeight: '800', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                               ⚠️ {db.settings.lang === 'mr' 
@@ -4545,8 +4595,36 @@ export default function App() {
                               : 'Dear [Name], your pending dues are Rs [Dues]. Please pay here: [UpiLink] - [MessName]'}
                           />
                           <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                            Placeholder tokens: <code>[Name]</code>, <code>[Dues]</code>, <code>[Amount]</code>, <code>[Date]</code>, <code>[UpiLink]</code>, <code>[MessName]</code>
+                            Placeholder tokens: <code>[Name]</code>, <code>[Dues]</code>, <code>[Amount]</code>, <code>[PrevDues]</code>, <code>[CurrentDues]</code>, <code>[Date]</code>, <code>[UpiLink]</code>, <code>[MessName]</code>
                           </span>
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group" style={{ width: '100%' }}>
+                          <label className="form-label">
+                            {db.settings.lang === 'mr' ? 'थकीत रक्कम अलर्ट मर्यादा (Dues Warning Limit)' : 'Dues Warning Limit (Multiplier)'}
+                          </label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="form-input"
+                            value={duesLimitInput}
+                            onChange={(e) => setDuesLimitInput(e.target.value.replace(/[^\d.]/g, ''))}
+                            onBlur={() => {
+                              const val = parseFloat(duesLimitInput);
+                              const finalVal = isNaN(val) || val <= 0 ? 1.5 : val;
+                              setDuesLimitInput(String(finalVal));
+                              saveSettingField('duesLimit', finalVal, { label: 'Dues Warning Limit' });
+                            }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                            placeholder="e.g. 1.5"
+                          />
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                            {db.settings.lang === 'mr'
+                              ? 'जर थकबाकीची रक्कम मासिक शुल्काच्या या पटीपेक्षा जास्त असेल (उदा. १.५ पट), तर ग्राहकाच्या कार्डवर विशेष चेतावणी दिसेल.'
+                              : 'Displays a critical dues warning badge on customer cards if their dues exceed this multiplier of their plan fee (e.g. 1.5x fee).'}
+                          </div>
                         </div>
                       </div>
 
@@ -5052,6 +5130,138 @@ export default function App() {
                   </table>
                 </div>
               )}
+
+              {/* BILLING CYCLES LEDGER */}
+              <div style={{ marginTop: '24px' }}>
+                <div style={{ fontSize: '14px', fontWeight: '800', marginBottom: '10px', color: 'var(--text-primary)' }}>
+                  📊 {db.settings.lang === 'mr' ? 'बिलिंग सायकल लेजर' : 'Billing Cycles Ledger'}
+                </div>
+                {(() => {
+                  const c = historyModalCustomer;
+                  if (!c) return null;
+                  
+                  if (c.category === 'shortterm') {
+                    const totalDues = Math.max(0, Number(c.amount || 0) - Number(c.deposited || 0));
+                    const isPaid = totalDues <= 0;
+                    return (
+                      <div style={{ background: '#f8f9fc', border: '1px solid var(--border)', padding: '12px', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                          <span style={{ fontWeight: '700' }}>{db.settings.lang === 'mr' ? 'शॉर्ट-टर्म कालावधी:' : 'Short-Term Duration:'}</span>
+                          <span>{c.joinDate} to {expiryStr(c)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                          <span>{db.settings.lang === 'mr' ? 'एकूण शुल्क:' : 'Total Cost:'}</span>
+                          <span style={{ fontWeight: '700' }}>₹{c.amount}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                          <span>{db.settings.lang === 'mr' ? 'जमा रक्कम:' : 'Deposited:'}</span>
+                          <span style={{ fontWeight: '700', color: 'var(--success)' }}>₹{c.deposited || 0}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                          <span>Status:</span>
+                          <span className={`badge ${isPaid ? 'badge-active' : 'badge-inactive'}`}>
+                            {isPaid ? (db.settings.lang === 'mr' ? 'पूर्ण भरले' : 'Fully Paid') : (db.settings.lang === 'mr' ? 'थकीत' : 'Unpaid')}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const refDate = getEffectiveJoinDate(c);
+                  if (!refDate) return null;
+                  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+                  const startDate = parseLocalDate(refDate);
+                  const today = new Date();
+                  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  
+                  const elapsedTime = todayMidnight - startDate;
+                  const elapsedDays = Math.round(elapsedTime / 86400000);
+                  
+                  let elapsedCycles = 0;
+                  if (elapsedDays > 0) {
+                    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
+                  }
+
+                  const cycles = [];
+                  for (let i = 0; i <= elapsedCycles; i++) {
+                    const cycleStart = new Date(startDate);
+                    cycleStart.setDate(startDate.getDate() + i * daysPerCycle);
+                    
+                    const cycleEnd = new Date(startDate);
+                    cycleEnd.setDate(startDate.getDate() + (i + 1) * daysPerCycle - 1);
+
+                    const cycleStartStr = `${cycleStart.getFullYear()}-${String(cycleStart.getMonth() + 1).padStart(2, '0')}-${String(cycleStart.getDate()).padStart(2, '0')}`;
+                    const cycleEndStr = `${cycleEnd.getFullYear()}-${String(cycleEnd.getMonth() + 1).padStart(2, '0')}-${String(cycleEnd.getDate()).padStart(2, '0')}`;
+
+                    const cumulativeCost = (i + 1) * c.amount;
+                    const deposited = Number(c.deposited || 0);
+
+                    let cycleStatus = 'unpaid';
+                    let cyclePending = c.amount;
+
+                    if (deposited >= cumulativeCost) {
+                      cycleStatus = 'paid';
+                      cyclePending = 0;
+                    } else if (deposited <= cumulativeCost - c.amount) {
+                      cycleStatus = 'unpaid';
+                      cyclePending = c.amount;
+                    } else {
+                      cycleStatus = 'partial';
+                      cyclePending = cumulativeCost - deposited;
+                    }
+
+                    cycles.push({
+                      index: i + 1,
+                      start: cycleStartStr,
+                      end: cycleEndStr,
+                      fee: c.amount,
+                      status: cycleStatus,
+                      pending: cyclePending
+                    });
+                  }
+
+                  return (
+                    <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                      <table className="table" style={{ margin: 0, fontSize: '12px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f8f9fc' }}>
+                            <th style={{ padding: '6px 12px' }}>#</th>
+                            <th style={{ padding: '6px 12px' }}>{db.settings.lang === 'mr' ? 'कालावधी' : 'Cycle Duration'}</th>
+                            <th style={{ padding: '6px 12px' }}>{db.settings.lang === 'mr' ? 'फी' : 'Fee'}</th>
+                            <th style={{ padding: '6px 12px' }}>{db.settings.lang === 'mr' ? 'स्टेटस' : 'Status'}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cycles.reverse().map(cycle => (
+                            <tr key={cycle.index}>
+                              <td style={{ padding: '6px 12px' }}>{cycle.index}</td>
+                              <td style={{ padding: '6px 12px' }}>{cycle.start} to {cycle.end}</td>
+                              <td style={{ padding: '6px 12px', fontWeight: '600' }}>₹{cycle.fee}</td>
+                              <td style={{ padding: '6px 12px' }}>
+                                {cycle.status === 'paid' && (
+                                  <span className="badge badge-active" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                    {db.settings.lang === 'mr' ? 'पूर्ण भरले' : 'Fully Paid'}
+                                  </span>
+                                )}
+                                {cycle.status === 'partial' && (
+                                  <span className="badge badge-expiring" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                    {db.settings.lang === 'mr' ? `अंशतः (₹${cycle.pending} बाकी)` : `Partial (₹${cycle.pending} due)`}
+                                  </span>
+                                )}
+                                {cycle.status === 'unpaid' && (
+                                  <span className="badge badge-expired" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                    {db.settings.lang === 'mr' ? 'थकीत' : 'Unpaid'}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={() => setHistoryModalCustomer(null)}>
@@ -5169,6 +5379,30 @@ export default function App() {
                     ₹{getCustomerDues(selectedCustomerProfile)}
                   </span>
                 </div>
+                {(() => {
+                  const bd = getCustomerDuesBreakdown(selectedCustomerProfile);
+                  if (bd.totalDues > 0 && selectedCustomerProfile.category !== 'shortterm') {
+                    return (
+                      <div style={{ borderTop: '1px dashed var(--border)', marginTop: '8px', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {bd.prevDues > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                            <span style={{ color: 'var(--text-secondary)' }}>
+                              {db.settings.lang === 'mr' ? 'मागील थकबाकी:' : 'Previous Balance:'}
+                            </span>
+                            <span style={{ fontWeight: '600', color: 'var(--danger)' }}>₹{bd.prevDues}</span>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>
+                            {db.settings.lang === 'mr' ? 'चालू महिन्याचे शुल्क:' : 'Current Cycle Fee:'}
+                          </span>
+                          <span style={{ fontWeight: '600', color: 'var(--text)' }}>₹{bd.currentDues}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
 
