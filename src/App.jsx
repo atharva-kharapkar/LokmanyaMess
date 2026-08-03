@@ -759,6 +759,7 @@ export default function App() {
   const archiveInputRef = useRef(null);
   const collectionInputRef = useRef(null);
   const expenseInputRef = useRef(null);
+  const factoryResetInputRef = useRef(null);
   const [settingsPinInput, setSettingsPinInput] = useState('');
   const [archivePinInput, setArchivePinInput] = useState('');
   const [archivePinOwnerAuthInput, setArchivePinOwnerAuthInput] = useState('');
@@ -878,6 +879,16 @@ export default function App() {
       }, 50);
     }
   }, [currentTab, isSettingsUnlocked, isArchiveUnlocked, isCollectionArchiveUnlocked, isExpenseArchiveUnlocked]);
+
+  useEffect(() => {
+    if (isFactoryResetAuthOpen && factoryResetInputRef.current) {
+      setTimeout(() => {
+        if (factoryResetInputRef.current) {
+          factoryResetInputRef.current.focus();
+        }
+      }, 50);
+    }
+  }, [isFactoryResetAuthOpen]);
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
@@ -5104,6 +5115,7 @@ export default function App() {
               </p>
               
               <input
+                ref={factoryResetInputRef}
                 type="password"
                 className="form-input"
                 placeholder="••••"
