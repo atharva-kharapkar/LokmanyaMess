@@ -766,6 +766,8 @@ export default function App() {
   const [newArchivePinInput, setNewArchivePinInput] = useState('');
   const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+  const [isFactoryResetAuthOpen, setIsFactoryResetAuthOpen] = useState(false);
+  const [factoryResetPinInput, setFactoryResetPinInput] = useState('');
   const [shortTermDays, setShortTermDays] = useState('10');
   const [shortTermMeals, setShortTermMeals] = useState('2');
 
@@ -833,6 +835,8 @@ export default function App() {
     setHistoryModalCustomer(null);
     setSelectedCustomerProfile(null);
     setIsBulkReminderOpen(false);
+    setIsFactoryResetAuthOpen(false);
+    setFactoryResetPinInput('');
   }, [currentTab]);
 
   useEffect(() => {
@@ -2009,11 +2013,11 @@ export default function App() {
 
       if (!editCustId) {
         const activeBranchCount = (db.customers || []).filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old').length;
-        if (activeBranchCount >= 320) {
+        if (activeBranchCount >= 325) {
           showToast(
             isMarathi 
-              ? 'या शाखेची ३२० ग्राहकांची मर्यादा संपली आहे!' 
-              : 'This branch has reached its capacity limit of 320 customers!', 
+              ? 'या शाखेची ३२५ ग्राहकांची मर्यादा संपली आहे!' 
+              : 'This branch has reached its capacity limit of 325 customers!', 
           'error'
           );
           return;
@@ -2101,7 +2105,11 @@ export default function App() {
       : "WARNING: Are you sure you want to permanently delete all customers, transactions, employees, salaries, and expenses? Settings and PINs will be preserved. This action cannot be undone!";
     
     if (!window.confirm(confirmMsg)) return;
+    setIsFactoryResetAuthOpen(true);
+  };
 
+  const runActualFactoryReset = async () => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
     try {
       await saveDb((currentDb) => {
         return {
@@ -3375,7 +3383,7 @@ export default function App() {
                   </div>
                   <div className="stat-info">
                     <div className="stat-label">{db.settings.lang === 'mr' ? 'एकूण ग्राहक' : 'Total Customers'}</div>
-                    <div className="stat-value">{metrics.totalCustomersCount} <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>/ 320</span></div>
+                    <div className="stat-value">{metrics.totalCustomersCount} <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>/ 325</span></div>
                   </div>
                 </div>
                 <div className="stat-card">
@@ -3699,15 +3707,18 @@ export default function App() {
                       return (
                         <div key={c.id} className={`customer-bar status-${status} ${hasDues ? 'has-dues' : 'no-dues'}`}>
                         {/* Left: Profile Photo */}
-                        <div className="customer-bar-avatar-container">
+                        <div 
+                          className="customer-bar-avatar-container" 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setSelectedCustomerProfile(c)}
+                          title={db.settings.lang === 'mr' ? 'प्रोफाइल पहा' : 'View Profile'}
+                        >
                           {c.photo ? (
                             <img 
                               src={c.photo} 
                               className="customer-bar-avatar" 
                               alt={c.name} 
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => setPreviewImage({ url: c.photo, name: c.name })}
-                              title={db.settings.lang === 'mr' ? 'फोटो मोठा करा' : 'Click to zoom'}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                             />
                           ) : (
                             <div className="customer-bar-avatar-placeholder">
@@ -3722,8 +3733,11 @@ export default function App() {
                             className="customer-bar-name"
                             style={{ 
                               color: isNameRed ? '#ff1e1e' : 'var(--text-primary)', 
-                              fontWeight: isNameRed ? '800' : '600'
+                              fontWeight: isNameRed ? '800' : '600',
+                              cursor: 'pointer'
                             }}
+                            onClick={() => setSelectedCustomerProfile(c)}
+                            title={db.settings.lang === 'mr' ? 'प्रोफाइल पहा' : 'View Profile'}
                           >
                             {c.name} {isNameRed && (db.settings.lang === 'mr' ? ` (${warningDays} दिवस थकीत!)` : ` (Due pending for ${warningDays} days)`)}
                           </div>
@@ -5065,6 +5079,84 @@ export default function App() {
         </div>
       )}
 
+      {/* FACTORY RESET AUTHENTICATION MODAL */}
+      {isFactoryResetAuthOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal-card" style={{ maxWidth: '400px', borderRadius: '16px', overflow: 'hidden' }}>
+            <div className="modal-header" style={{ borderBottom: 'none', padding: '20px 20px 10px' }}>
+              <span className="modal-title" style={{ fontSize: '18px', fontWeight: '800', color: 'var(--danger)' }}>
+                🚨 {db.settings.lang === 'mr' ? 'फॅक्टरी रीसेट अधिकार' : 'Factory Reset Authorization'}
+              </span>
+              <X className="modal-close" onClick={() => {
+                setIsFactoryResetAuthOpen(false);
+                setFactoryResetPinInput('');
+              }} />
+            </div>
+            
+            <div className="modal-body" style={{ padding: '10px 20px 20px', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--danger)' }}>
+                <span style={{ fontSize: '24px' }}>🔒</span>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '8px 0 20px', lineHeight: '1.5' }}>
+                {db.settings.lang === 'mr' 
+                  ? 'सर्व ग्राहक आणि व्यवहार डेटा डिलीट करण्यासाठी कृपया ४-अंकी सिक्युरिटी पासकोड प्रविष्ट करा.' 
+                  : 'Please enter your 4-digit security passcode to confirm deleting all database records.'}
+              </p>
+              
+              <input
+                type="password"
+                className="form-input"
+                placeholder="••••"
+                maxLength="4"
+                value={factoryResetPinInput}
+                onChange={(e) => setFactoryResetPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                autoFocus={true}
+                style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text' }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    if (await matchesArchiveSecret(factoryResetPinInput, db?.settings?.archivePasswordHash)) {
+                      setIsFactoryResetAuthOpen(false);
+                      setFactoryResetPinInput('');
+                      runActualFactoryReset();
+                    } else {
+                      showToast(db?.settings?.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                    }
+                  }
+                }}
+              />
+            </div>
+            
+            <div className="modal-footer" style={{ borderTop: 'none', padding: '10px 20px 20px', display: 'flex', gap: '10px' }}>
+              <button 
+                className="btn" 
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setIsFactoryResetAuthOpen(false);
+                  setFactoryResetPinInput('');
+                }}
+              >
+                {db.settings.lang === 'mr' ? 'रद्द करा' : 'Cancel'}
+              </button>
+              <button 
+                className="btn btn-danger" 
+                style={{ flex: 1, fontWeight: '700' }}
+                onClick={async () => {
+                  if (await matchesArchiveSecret(factoryResetPinInput, db?.settings?.archivePasswordHash)) {
+                    setIsFactoryResetAuthOpen(false);
+                    setFactoryResetPinInput('');
+                    runActualFactoryReset();
+                  } else {
+                    showToast(db?.settings?.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                  }
+                }}
+              >
+                {db.settings.lang === 'mr' ? 'रीसेट करा' : 'Confirm Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PAYMENT HISTORY MODAL */}
       {historyModalCustomer && (
         <div className="modal-overlay">
@@ -5304,7 +5396,9 @@ export default function App() {
                     <img 
                       src={selectedCustomerProfile.photo} 
                       alt={selectedCustomerProfile.name} 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} 
+                      onClick={() => setPreviewImage({ url: selectedCustomerProfile.photo, name: selectedCustomerProfile.name })}
+                      title={db.settings.lang === 'mr' ? 'फोटो मोठा करा' : 'Click to zoom'}
                     />
                   ) : (
                     <span style={{ fontSize: '32px', fontWeight: '800', color: '#fff' }}>
