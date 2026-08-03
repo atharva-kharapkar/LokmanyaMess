@@ -760,6 +760,7 @@ export default function App() {
   const collectionInputRef = useRef(null);
   const expenseInputRef = useRef(null);
   const factoryResetInputRef = useRef(null);
+  const factoryResetSectionInputRef = useRef(null);
   const [settingsPinInput, setSettingsPinInput] = useState('');
   const [archivePinInput, setArchivePinInput] = useState('');
   const [archivePinOwnerAuthInput, setArchivePinOwnerAuthInput] = useState('');
@@ -769,6 +770,9 @@ export default function App() {
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
   const [isFactoryResetAuthOpen, setIsFactoryResetAuthOpen] = useState(false);
   const [factoryResetPinInput, setFactoryResetPinInput] = useState('');
+  const [isFactoryResetSectionUnlocked, setIsFactoryResetSectionUnlocked] = useState(false);
+  const [isFactoryResetSectionAuthOpen, setIsFactoryResetSectionAuthOpen] = useState(false);
+  const [factoryResetSectionPinInput, setFactoryResetSectionPinInput] = useState('');
   const [shortTermDays, setShortTermDays] = useState('10');
   const [shortTermMeals, setShortTermMeals] = useState('2');
 
@@ -838,6 +842,9 @@ export default function App() {
     setIsBulkReminderOpen(false);
     setIsFactoryResetAuthOpen(false);
     setFactoryResetPinInput('');
+    setIsFactoryResetSectionUnlocked(false);
+    setIsFactoryResetSectionAuthOpen(false);
+    setFactoryResetSectionPinInput('');
   }, [currentTab]);
 
   useEffect(() => {
@@ -889,6 +896,16 @@ export default function App() {
       }, 50);
     }
   }, [isFactoryResetAuthOpen]);
+
+  useEffect(() => {
+    if (isFactoryResetSectionAuthOpen && factoryResetSectionInputRef.current) {
+      setTimeout(() => {
+        if (factoryResetSectionInputRef.current) {
+          factoryResetSectionInputRef.current.focus();
+        }
+      }, 50);
+    }
+  }, [isFactoryResetSectionAuthOpen]);
 
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
@@ -4977,23 +4994,45 @@ export default function App() {
                           </label>
                         </div>
                         <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-                          <button 
-                            className="btn btn-danger" 
-                            style={{ 
-                              backgroundColor: '#dc2626', 
-                              borderColor: '#dc2626', 
-                              color: '#ffffff',
-                              fontWeight: '600'
-                            }} 
-                            onClick={handleFactoryReset}
-                          >
-                            {db.settings.lang === 'mr' ? 'सर्व डेटा रीसेट करा (Factory Reset)' : 'Factory Reset (Delete All Data)'}
-                          </button>
-                          <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '4px' }}>
-                            {db.settings.lang === 'mr' 
-                              ? 'इशारा: यामुळे सर्व ग्राहक, पेमेंट आणि कर्मचाऱ्यांची माहिती डिलीट होईल. लॉगिन सेटिंग्ज सुरक्षित राहतील.' 
-                              : 'WARNING: This will permanently delete all customers, transactions, and employees from both local and cloud databases. Login credentials will remain safe.'}
-                          </div>
+                          {!isFactoryResetSectionUnlocked ? (
+                            <button
+                              type="button"
+                              className="btn btn-outline"
+                              style={{ fontWeight: '600', color: 'var(--primary)', borderColor: 'var(--primary)' }}
+                              onClick={() => setIsFactoryResetSectionAuthOpen(true)}
+                            >
+                              🔑 {db.settings.lang === 'mr' ? 'फॅक्टरी रीसेट पर्याय अनलॉक करा' : 'Unlock Factory Reset'}
+                            </button>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <button 
+                                  className="btn btn-danger" 
+                                  style={{ 
+                                    backgroundColor: '#dc2626', 
+                                    borderColor: '#dc2626', 
+                                    color: '#ffffff',
+                                    fontWeight: '600'
+                                  }} 
+                                  onClick={handleFactoryReset}
+                                >
+                                  {db.settings.lang === 'mr' ? 'सर्व डेटा रीसेट करा (Factory Reset)' : 'Factory Reset (Delete All Data)'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  onClick={() => setIsFactoryResetSectionUnlocked(false)}
+                                >
+                                  🔒 {db.settings.lang === 'mr' ? 'लॉक करा' : 'Lock'}
+                                </button>
+                              </div>
+                              <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '4px' }}>
+                                {db.settings.lang === 'mr' 
+                                  ? 'इशारा: यामुळे सर्व ग्राहक, पेमेंट आणि कर्मचाऱ्यांची माहिती डिलीट होईल. लॉगिन सेटिंग्ज सुरक्षित राहतील.' 
+                                  : 'WARNING: This will permanently delete all customers, transactions, and employees from both local and cloud databases. Login credentials will remain safe.'}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </>
@@ -5086,6 +5125,87 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FACTORY RESET SECTION UNLOCK MODAL */}
+      {isFactoryResetSectionAuthOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal-card" style={{ maxWidth: '400px', borderRadius: '16px', overflow: 'hidden' }}>
+            <div className="modal-header" style={{ borderBottom: 'none', padding: '20px 20px 10px' }}>
+              <span className="modal-title" style={{ fontSize: '18px', fontWeight: '800', color: 'var(--primary)' }}>
+                🔑 {db.settings.lang === 'mr' ? 'फॅक्टरी रीसेट अनलॉक करा' : 'Unlock Factory Reset'}
+              </span>
+              <X className="modal-close" onClick={() => {
+                setIsFactoryResetSectionAuthOpen(false);
+                setFactoryResetSectionPinInput('');
+              }} />
+            </div>
+            
+            <div className="modal-body" style={{ padding: '10px 20px 20px', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--primary)' }}>
+                <span style={{ fontSize: '24px' }}>🔒</span>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '8px 0 20px', lineHeight: '1.5' }}>
+                {db.settings.lang === 'mr' 
+                  ? 'फॅक्टरी रीसेट पर्याय उघडण्यासाठी कृपया ४-अंकी सिक्युरिटी पासकोड प्रविष्ट करा.' 
+                  : 'Please enter your 4-digit security passcode to unlock factory reset options.'}
+              </p>
+              
+              <input
+                ref={factoryResetSectionInputRef}
+                type="password"
+                className="form-input"
+                placeholder="••••"
+                maxLength="4"
+                value={factoryResetSectionPinInput}
+                onChange={(e) => setFactoryResetSectionPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                autoFocus={true}
+                style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text' }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    if (await matchesArchiveSecret(factoryResetSectionPinInput, db?.settings?.archivePasswordHash)) {
+                      setIsFactoryResetSectionAuthOpen(false);
+                      setFactoryResetSectionPinInput('');
+                      setIsFactoryResetSectionUnlocked(true);
+                      showToast(db?.settings?.lang === 'mr' ? 'फॅक्टरी रीसेट अनलॉक झाले!' : 'Factory Reset Unlocked!', 'success');
+                    } else {
+                      showToast(db?.settings?.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                    }
+                  }
+                }}
+              />
+            </div>
+            
+            <div className="modal-footer" style={{ borderTop: 'none', padding: '10px 20px 20px', display: 'flex', gap: '10px' }}>
+              <button 
+                className="btn" 
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setIsFactoryResetSectionAuthOpen(false);
+                  setFactoryResetSectionPinInput('');
+                }}
+              >
+                {db.settings.lang === 'mr' ? 'रद्द करा' : 'Cancel'}
+              </button>
+              <button 
+                className="btn btn-primary" 
+                style={{ flex: 1, fontWeight: '700' }}
+                onClick={async () => {
+                  if (await matchesArchiveSecret(factoryResetSectionPinInput, db?.settings?.archivePasswordHash)) {
+                    setIsFactoryResetSectionAuthOpen(false);
+                    setFactoryResetSectionPinInput('');
+                    setIsFactoryResetSectionUnlocked(true);
+                    showToast(db?.settings?.lang === 'mr' ? 'फॅक्टरी रीसेट अनलॉक झाले!' : 'Factory Reset Unlocked!', 'success');
+                  } else {
+                    showToast(db?.settings?.lang === 'mr' ? 'चुकीचा संकेतशब्द!' : 'Incorrect Passcode!', 'error');
+                  }
+                }}
+              >
+                {db.settings.lang === 'mr' ? 'अनलॉक करा' : 'Unlock'}
+              </button>
+            </div>
           </div>
         </div>
       )}
