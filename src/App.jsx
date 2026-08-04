@@ -888,7 +888,7 @@ export default function App() {
   }, [currentTab, isSettingsUnlocked, isArchiveUnlocked, isCollectionArchiveUnlocked, isExpenseArchiveUnlocked]);
 
   useEffect(() => {
-    if (isFactoryResetAuthOpen && factoryResetInputRef.current) {
+    if (isFactoryResetAuthOpen) {
       setTimeout(() => {
         if (factoryResetInputRef.current) {
           factoryResetInputRef.current.focus();
@@ -899,7 +899,7 @@ export default function App() {
   }, [isFactoryResetAuthOpen]);
 
   useEffect(() => {
-    if (isFactoryResetSectionAuthOpen && factoryResetSectionInputRef.current) {
+    if (isFactoryResetSectionAuthOpen) {
       setTimeout(() => {
         if (factoryResetSectionInputRef.current) {
           factoryResetSectionInputRef.current.focus();
