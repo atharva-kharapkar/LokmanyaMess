@@ -892,8 +892,9 @@ export default function App() {
       setTimeout(() => {
         if (factoryResetInputRef.current) {
           factoryResetInputRef.current.focus();
+          factoryResetInputRef.current.select();
         }
-      }, 50);
+      }, 200);
     }
   }, [isFactoryResetAuthOpen]);
 
@@ -902,8 +903,9 @@ export default function App() {
       setTimeout(() => {
         if (factoryResetSectionInputRef.current) {
           factoryResetSectionInputRef.current.focus();
+          factoryResetSectionInputRef.current.select();
         }
-      }, 50);
+      }, 200);
     }
   }, [isFactoryResetSectionAuthOpen]);
 
@@ -1885,6 +1887,18 @@ export default function App() {
 
   // Customers handlers
   const openAddCust = () => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    const activeBranchCount = (db.customers || []).filter(c => (c.branch || 'Branch 1') === activeBranch && c.status !== 'old').length;
+    if (activeBranchCount >= 325) {
+      showToast(
+        isMarathi 
+          ? 'नवीन ग्राहक जोडता येणार नाही. या शाखेची ३२५ ग्राहकांची मर्यादा पूर्ण झाली आहे!' 
+          : 'Cannot add new customer. This branch has reached its capacity limit of 325 customers!', 
+        'error'
+      );
+      return;
+    }
+
     setEditCustId(null);
     if (currentTab === 'shortterm') {
       setShortTermDays('10');
@@ -5154,6 +5168,7 @@ export default function App() {
               </p>
               
               <input
+                key="factory-reset-section-passcode-input"
                 ref={factoryResetSectionInputRef}
                 type="password"
                 className="form-input"
@@ -5235,6 +5250,7 @@ export default function App() {
               </p>
               
               <input
+                key="factory-reset-action-passcode-input"
                 ref={factoryResetInputRef}
                 type="password"
                 className="form-input"
