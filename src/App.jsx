@@ -5170,14 +5170,17 @@ export default function App() {
               <input
                 key="factory-reset-section-passcode-input"
                 ref={factoryResetSectionInputRef}
-                type="password"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="one-time-code"
                 className="form-input"
                 placeholder="••••"
                 maxLength="4"
                 value={factoryResetSectionPinInput}
                 onChange={(e) => setFactoryResetSectionPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 autoFocus={true}
-                style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text' }}
+                style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text', WebkitTextSecurity: 'disc', textSecurity: 'disc' }}
                 onKeyDown={async (e) => {
                   if (e.key === 'Enter') {
                     if (await matchesArchiveSecret(factoryResetSectionPinInput, db?.settings?.archivePasswordHash)) {
@@ -5252,14 +5255,17 @@ export default function App() {
               <input
                 key="factory-reset-action-passcode-input"
                 ref={factoryResetInputRef}
-                type="password"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="one-time-code"
                 className="form-input"
                 placeholder="••••"
                 maxLength="4"
                 value={factoryResetPinInput}
                 onChange={(e) => setFactoryResetPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 autoFocus={true}
-                style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text' }}
+                style={{ textAlign: 'center', fontSize: '22px', letterSpacing: '6px', marginBottom: '20px', padding: '10px', pointerEvents: 'auto', userSelect: 'text', WebkitTextSecurity: 'disc', textSecurity: 'disc' }}
                 onKeyDown={async (e) => {
                   if (e.key === 'Enter') {
                     if (await matchesArchiveSecret(factoryResetPinInput, db?.settings?.archivePasswordHash)) {
