@@ -3754,7 +3754,7 @@ export default function App() {
                         {/* Left: Profile Photo */}
                         <div 
                           className="customer-bar-avatar-container" 
-                          style={{ cursor: 'pointer', border: '1.5px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', width: '130px', height: '130px', flexShrink: 0 }}
+                          style={{ cursor: 'pointer', border: '1.5px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', width: '140px', height: '140px', flexShrink: 0 }}
                           onClick={() => setSelectedCustomerProfile(c)}
                           title={db.settings.lang === 'mr' ? 'प्रोफाइल पहा' : 'View Profile'}
                         >

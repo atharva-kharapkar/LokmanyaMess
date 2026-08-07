@@ -982,7 +982,7 @@ to {
 
 .customer-bar {
   display:grid;
-  grid-template-columns:146px 2fr 1.5fr 3.2fr 2.3fr;
+  grid-template-columns:156px 2fr 1.5fr 3.2fr 2.3fr;
   align-items:center;
   background-color:var(--card);
   border-radius:16px;
@@ -1020,8 +1020,8 @@ to {
   border-radius: 12px;
   padding: 4px;
   background-color: #fff;
-  width: 130px;
-  height: 130px;
+  width: 140px;
+  height: 140px;
   flex-shrink: 0;
 }
 
