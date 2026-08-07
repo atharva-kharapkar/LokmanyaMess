@@ -2155,6 +2155,55 @@ export default function App() {
     }
   };
 
+  const handleForceRestoreFromCloud = async () => {
+    const isMarathi = db.settings && db.settings.lang === 'mr';
+    if (!isCloudSyncAvailable) {
+      showToast(isMarathi ? 'क्लाउड सिंक उपलब्ध नाही.' : 'Cloud sync is not available.', 'error');
+      return;
+    }
+    if (!navigator.onLine) {
+      showToast(isMarathi ? 'तुम्ही ऑफलाइन आहात. कृपया इंटरनेट कनेक्शन तपासा.' : 'You are offline. Please check your internet connection.', 'error');
+      return;
+    }
+    
+    const confirmMsg = isMarathi
+      ? 'तुम्हाला नक्की क्लाउडवरून सर्व डेटा डाउनलोड करायचा आहे का? यामुळे या लॅपटॉपमधील स्थानिक डेटा बदलला जाईल.'
+      : 'Are you sure you want to download and restore all database records from the cloud? This will overwrite local data on this computer.';
+    
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      showToast(isMarathi ? 'क्लाउडवरून डेटा लोड होत आहे...' : 'Restoring data from cloud...', 'info');
+      
+      const [settingsSnap, customersSnap, txnsSnap, employeesSnap, salariesSnap, expensesSnap] = await Promise.all([
+        getDoc(doc(firestoreDb, 'desktop_config', 'app_settings')),
+        getDocs(collection(firestoreDb, 'desktop_customers')),
+        getDocs(collection(firestoreDb, 'desktop_transactions')),
+        getDocs(collection(firestoreDb, 'desktop_employees')),
+        getDocs(collection(firestoreDb, 'desktop_salaries')),
+        getDocs(collection(firestoreDb, 'desktop_expenses'))
+      ]);
+
+      const restoredDb = {
+        customers: customersSnap.docs.map(d => d.data()),
+        transactions: txnsSnap.docs.map(d => d.data()),
+        employees: employeesSnap.docs.map(d => d.data()),
+        salaries: salariesSnap.docs.map(d => d.data()),
+        expenses: expensesSnap.docs.map(d => d.data()),
+        settings: settingsSnap.exists() ? await secureSettings(settingsSnap.data()) : dbRef.current.settings
+      };
+
+      setDb(restoredDb);
+      dbRef.current = restoredDb;
+      applyLoadedSettings(restoredDb.settings);
+      await writeLocalBackup(restoredDb);
+      showToast(isMarathi ? 'क्लाउड डेटा यशस्वीरित्या रिस्टोर झाला!' : 'Database successfully restored from cloud!', 'success');
+    } catch (err) {
+      console.error('Error restoring database from cloud:', err);
+      showToast(isMarathi ? 'डेटा रिस्टोर करताना त्रुटी आली: ' + err.message : 'Failed to restore database from cloud: ' + err.message, 'error');
+    }
+  };
+
   const handleFactoryReset = async () => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
     const confirmMsg = isMarathi 
@@ -5085,6 +5134,27 @@ export default function App() {
                             />
                           </label>
                         </div>
+                        <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                          <div style={{ marginBottom: '12px' }}>
+                            <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', fontWeight: '700', color: 'var(--text)' }}>
+                              ☁️ {db.settings.lang === 'mr' ? 'क्लाउडवरून डेटा रिस्टोर करा' : 'Cloud Data Restore & Synchronization'}
+                            </h4>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '8px' }}>
+                              {db.settings.lang === 'mr' 
+                                ? 'दुसऱ्या कॉम्प्युटरवरील सर्व ग्राहक, पेमेंट्स आणि लाइव्ह डेटा या कॉम्प्युटरवर डाऊनलोड करण्यासाठी खालील बटण दाबा.' 
+                                : 'Use this option to sync and download all live customers, payments, and expenses from the cloud onto this laptop.'}
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              style={{ fontWeight: '600', padding: '6px 12px', fontSize: '12px' }}
+                              onClick={handleForceRestoreFromCloud}
+                            >
+                              🔄 {db.settings.lang === 'mr' ? 'क्लाउड डेटा आयात करा (Restore)' : 'Restore Data from Cloud'}
+                            </button>
+                          </div>
+                        </div>
+
                         <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                           {!isFactoryResetSectionUnlocked ? (
                             <button
