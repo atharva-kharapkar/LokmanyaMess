@@ -762,6 +762,7 @@ export default function App() {
   });
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
   const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
+  const loginPinInputRef = useRef(null);
   const settingsInputRef = useRef(null);
   const archiveInputRef = useRef(null);
   const collectionInputRef = useRef(null);
@@ -893,6 +894,17 @@ export default function App() {
       }, 50);
     }
   }, [currentTab, isSettingsUnlocked, isArchiveUnlocked, isCollectionArchiveUnlocked, isExpenseArchiveUnlocked]);
+
+  // Automatic focus for main login PIN input when loading finishes or returning to login screen
+  useEffect(() => {
+    if (!isLoggedIn && !firstRunModalVisible) {
+      setTimeout(() => {
+        if (loginPinInputRef.current) {
+          loginPinInputRef.current.focus();
+        }
+      }, 50);
+    }
+  }, [isLoggedIn, settingsLoaded, firstRunModalVisible]);
 
   useEffect(() => {
     if (isFactoryResetAuthOpen) {
@@ -3041,8 +3053,8 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <>
-        <div className="pin-screen">
-        <div className="pin-card" style={{ maxWidth: '500px', width: '90%', padding: '40px', transition: 'all 0.5s ease', background: 'rgba(30, 30, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+        <div className="pin-screen" onClick={() => loginPinInputRef.current?.focus()}>
+        <div className="pin-card" style={{ maxWidth: '500px', width: '90%', padding: '40px', transition: 'all 0.5s ease', background: 'rgba(30, 30, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.08)' }} onClick={(e) => e.stopPropagation()}>
           {/* Animated Logo Video or Static Logo */}
           <div className="pin-logo" style={{ width: '100%', aspectRatio: '16/9', margin: '0 auto 24px auto', borderRadius: '16px', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', boxShadow: 'var(--shadow-lg)' }}>
             {introPlayed ? (
@@ -3077,6 +3089,7 @@ export default function App() {
             <form onSubmit={handlePinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '300px', margin: '0 auto' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <input
+                  ref={loginPinInputRef}
                   type="password"
                   className="form-input"
                   placeholder="••••••"
