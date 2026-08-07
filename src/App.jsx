@@ -3847,7 +3847,7 @@ export default function App() {
                           </div>
                           <div className="financial-col">
                             <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>DEPOSITED</span>
-                            <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: 'var(--success)' }}>₹{displayedDeposited}</span>
+                            <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#008000' }}>₹{displayedDeposited}</span>
                           </div>
                           <div className="financial-col">
                             <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>REMAINING AMOUNT</span>
@@ -3856,7 +3856,7 @@ export default function App() {
                                 ₹{remaining} <span style={{ fontSize: '14px', color: '#F59E0B' }} title="Dues Pending">⚠️</span>
                               </span>
                             ) : (
-                              <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: 'var(--success)' }}>
+                              <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#008000' }}>
                                 ₹0
                               </span>
                             )}
