@@ -3852,7 +3852,7 @@ export default function App() {
                           <div className="financial-col">
                             <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>REMAINING AMOUNT</span>
                             {hasDues ? (
-                              <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#DC2626', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#FF0000', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                 ₹{remaining} <span style={{ fontSize: '14px', color: '#F59E0B' }} title="Dues Pending">⚠️</span>
                               </span>
                             ) : (
@@ -3957,7 +3957,7 @@ export default function App() {
                                   className="btn btn-sm btn-icon"
                                   title={t('deleteCust')}
                                   onClick={() => deleteCustomer(c.id)}
-                                  style={{ width: '32px', height: '32px', flex: '0 0 32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EF4444', border: '1px solid #EF4444', color: '#fff' }}
+                                  style={{ width: '32px', height: '32px', flex: '0 0 32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FF0000', border: '1px solid #FF0000', color: '#fff' }}
                                 >
                                   <Trash2 size={12} />
                                 </button>
