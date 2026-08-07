@@ -2546,13 +2546,13 @@ export default function App() {
   const openWhatsAppWithTypedMessage = useCallback(({ phoneDigits, message }) => {
     const encodedMessage = encodeURIComponent(String(message ?? ''));
 
-    const whatsappDesktopDeepLink = `whatsapp://send?phone=${phoneDigits}&text=${encodedMessage}`;
     const whatsappWebUrl = `https://wa.me/${phoneDigits}?text=${encodedMessage}`;
     const mode = dbRef.current.settings?.whatsappMode || 'web';
 
     if (isElectron) {
       if (mode === 'desktop') {
-        window.open(whatsappDesktopDeepLink, '_blank');
+        // Open in the default system web browser, which automatically opens the installed WhatsApp Desktop app
+        window.open(whatsappWebUrl, '_blank');
       } else {
         // Open inside the dedicated WhatsApp Web window in Electron
         window.open(whatsappWebUrl, 'whatsapp_share_tab');
