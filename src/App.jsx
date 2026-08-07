@@ -20,7 +20,10 @@ import {
   EyeOff,
   RotateCcw,
   Coins,
-  TrendingUp
+  TrendingUp,
+  Phone,
+  MapPin,
+  CreditCard
 } from 'lucide-react';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, getDoc, query, limit } from 'firebase/firestore';
 import { db as firestoreDb, firebaseBootError } from './firebase';
@@ -3751,7 +3754,7 @@ export default function App() {
                         {/* Left: Profile Photo */}
                         <div 
                           className="customer-bar-avatar-container" 
-                          style={{ cursor: 'pointer' }}
+                          style={{ cursor: 'pointer', border: '1.5px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', width: '76px', height: '76px', flexShrink: 0 }}
                           onClick={() => setSelectedCustomerProfile(c)}
                           title={db.settings.lang === 'mr' ? 'प्रोफाइल पहा' : 'View Profile'}
                         >
@@ -3760,40 +3763,31 @@ export default function App() {
                               src={c.photo} 
                               className="customer-bar-avatar" 
                               alt={c.name} 
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                              style={{ width: '100%', height: '100%', borderRadius: '8px', objectFit: 'cover', border: 'none', boxShadow: 'none' }} 
                             />
                           ) : (
-                            <div className="customer-bar-avatar-placeholder">
+                            <div className="customer-bar-avatar-placeholder" style={{ width: '100%', height: '100%', borderRadius: '8px', border: 'none', backgroundColor: 'var(--border)', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '24px', fontWeight: '800' }}>
                               {(c.name || 'C').charAt(0).toUpperCase()}
                             </div>
                           )}
                         </div>
 
                         {/* Middle-Left: Basic Info */}
-                        <div className="customer-bar-info">
+                        <div className="customer-bar-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignSelf: 'center' }}>
                           <div 
                             className="customer-bar-name"
                             style={{ 
-                              color: isNameRed ? '#ff1e1e' : 'var(--text-primary)', 
-                              fontWeight: isNameRed ? '800' : '600',
-                              cursor: 'pointer'
+                              fontSize: '18px',
+                              color: '#111827', 
+                              fontWeight: '800',
+                              cursor: 'pointer',
+                              textTransform: 'lowercase'
                             }}
                             onClick={() => setSelectedCustomerProfile(c)}
                             title={db.settings.lang === 'mr' ? 'प्रोफाइल पहा' : 'View Profile'}
                           >
-                            {c.name} {isNameRed && (db.settings.lang === 'mr' ? ` (${warningDays} दिवस थकीत!)` : ` (Due pending for ${warningDays} days)`)}
+                            {c.name}
                           </div>
-                          {(() => {
-                            const limit = Number(c.amount || 0) * Number(db.settings.duesLimit || 1.5);
-                            if (remaining > limit) {
-                              return (
-                                <div style={{ display: 'inline-block', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', fontSize: '11px', fontWeight: '800', padding: '3px 8px', borderRadius: '4px', border: '1px solid currentColor', marginTop: '4px', width: 'fit-content' }}>
-                                  🚨 {db.settings.lang === 'mr' ? 'अति-थकबाकी इशारा (High Overdue!)' : 'High Overdue Alert!'}
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
                           {hasDues && daysPendingDues > 0 && (
                             <div style={{ color: '#ff1e1e', fontSize: '12px', fontWeight: '800', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                               ⚠️ {db.settings.lang === 'mr' 
@@ -3801,15 +3795,29 @@ export default function App() {
                                 : `Due is pending from last ${daysPendingDues} days`}
                             </div>
                           )}
-                          <div className="customer-bar-subinfo">📞 {c.phone}</div>
-                          {c.addr ? <div className="customer-bar-subinfo">📍 {c.addr}</div> : <div className="customer-bar-subinfo" style={{ color: '#ef4444', fontWeight: '600' }}>📍 No Address</div>}
-                          {c.aadhar && <div className="customer-bar-subinfo">🪪 {t('aadharCard')}: {c.aadhar}</div>}
+                          <div className="customer-bar-subinfo" style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', marginTop: '2px' }}>
+                            <Phone size={13} style={{ color: '#EF4444', marginRight: '6px', flexShrink: 0 }} /> {c.phone}
+                          </div>
+                          <div className="customer-bar-subinfo" style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', marginTop: '2px' }}>
+                            <MapPin size={13} style={{ color: '#EC4899', marginRight: '6px', flexShrink: 0 }} /> {c.addr || 'No Address'}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', marginTop: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
+                              <CreditCard size={13} style={{ color: '#2563EB', marginRight: '6px', flexShrink: 0 }} /> 
+                              Aadhar Card No.:
+                            </div>
+                            <div style={{ paddingLeft: '19px', fontSize: '13px', color: '#111827', fontWeight: '600', marginTop: '1px' }}>
+                              {c.aadhar || 'N/A'}
+                            </div>
+                          </div>
                         </div>
 
                         {/* Middle: Plan details */}
-                        <div className="customer-bar-plan">
-                          <div className="customer-bar-label">{t('planCycle')}</div>
-                          <div className="customer-bar-val">
+                        <div className="customer-bar-plan" style={{ display: 'flex', flexDirection: 'column', alignSelf: 'center' }}>
+                          <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                            PLAN & CYCLE
+                          </div>
+                          <div style={{ fontSize: '16px', fontWeight: '800', color: '#111827', marginBottom: '6px' }}>
                             {c.category === 'shortterm' 
                               ? (db.settings.lang === 'mr' 
                                   ? `शॉर्ट-टर्म (${c.shortTermDays || '10'} दिवस)` 
@@ -3823,112 +3831,138 @@ export default function App() {
                                       : t('custom'))
                             }
                           </div>
-                          <div className="customer-bar-subval">{t('started')}: {c.joinDate}</div>
-                          <div className="customer-bar-subval">{t('expires')}: {expiryStr(c)}</div>
+                          <div style={{ fontSize: '13px', color: '#111827', fontWeight: '600', marginBottom: '4px' }}>
+                            Started: {c.joinDate}
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#111827', fontWeight: '600' }}>
+                            Expires: {expiryStr(c)}
+                          </div>
                         </div>
 
                         {/* Middle-Right: Fees & Dues */}
                         <div className="customer-bar-financials">
                           <div className="financial-col">
-                            <span className="customer-bar-label">{t('fee')}</span>
-                            <span className="customer-bar-val">₹{c.amount}</span>
+                            <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>SUBSCRIPTION FEE</span>
+                            <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#111827' }}>₹{c.amount}</span>
                           </div>
                           <div className="financial-col">
-                            <span className="customer-bar-label">{t('deposited')}</span>
-                            <span className="customer-bar-val" style={{ color: 'var(--success)', fontWeight: '700' }}>₹{displayedDeposited}</span>
+                            <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>DEPOSITED</span>
+                            <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: 'var(--success)' }}>₹{displayedDeposited}</span>
                           </div>
                           <div className="financial-col">
-                            <span className="customer-bar-label">{t('remaining')}</span>
+                            <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>REMAINING AMOUNT</span>
                             {hasDues ? (
-                              <span className="customer-bar-val" style={{ color: 'var(--danger)', fontWeight: '800' }}>
-                                ₹{remaining} <span className="warning-dot" title="Dues Pending">⚠️</span>
+                              <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#DC2626', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                ₹{remaining} <span style={{ fontSize: '14px', color: '#F59E0B' }} title="Dues Pending">⚠️</span>
                               </span>
                             ) : (
-                              <span className="customer-bar-val" style={{ color: 'var(--success)', fontWeight: '800' }}>
-                                ₹0 <span className="check-dot" title="Fully Paid">✓</span>
+                              <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: 'var(--success)' }}>
+                                ₹0
                               </span>
                             )}
                           </div>
                         </div>
 
                         {/* Right: Status & Actions */}
-                        <div className="customer-bar-actions-panel">
-                          <div className="badge-row">
+                        <div className="customer-bar-actions-panel" style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <div className="badge-row" style={{ display: 'flex', gap: '6px', marginBottom: '2px' }}>
                             {c.status === 'old' ? (
-                              <span className="badge badge-archived">
-                                {db.settings.lang === 'mr' ? 'संग्रहित' : 'archived'}
+                              <span style={{ backgroundColor: '#E5E7EB', color: '#374151', padding: '4px 10px', borderRadius: '9999px', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase' }}>
+                                Archived
                               </span>
                             ) : (
-                              <span className={`badge badge-${status}`}>
-                                {status === 'active' && (db.settings.lang === 'mr' ? 'सक्रिय' : 'active')}
-                                {status === 'expired' && (db.settings.lang === 'mr' ? 'मुदत संपली' : 'expired')}
-                                {status === 'expiring' && (db.settings.lang === 'mr' ? 'लवकरच संपणार' : 'expiring')}
+                              <span style={{ 
+                                backgroundColor: status === 'active' ? '#D1FAE5' : '#FEE2E2', 
+                                color: status === 'active' ? '#065F46' : '#B91C1C', 
+                                padding: '4px 10px', 
+                                borderRadius: '9999px', 
+                                fontSize: '11px', 
+                                fontWeight: '700', 
+                                textTransform: 'uppercase' 
+                              }}>
+                                {status === 'active' ? (db.settings.lang === 'mr' ? 'सक्रिय' : 'Active') : (db.settings.lang === 'mr' ? 'मुदत संपली' : 'Expired')}
                               </span>
                             )}
-                            <span className={`badge ${hasDues ? 'badge-pending' : 'badge-active'}`}>
-                              {hasDues ? t('duesPending') : t('fullyPaid')}
+                            <span style={{ 
+                              backgroundColor: hasDues ? '#DBEAFE' : '#D1FAE5', 
+                              color: hasDues ? '#1E3A8A' : '#065F46', 
+                              padding: '4px 10px', 
+                              borderRadius: '9999px', 
+                              fontSize: '11px', 
+                              fontWeight: '700', 
+                              textTransform: 'uppercase' 
+                            }}>
+                              {hasDues ? (db.settings.lang === 'mr' ? 'थकबाकी' : 'Dues Pending') : (db.settings.lang === 'mr' ? 'पूर्ण भरले' : 'Fully Paid')}
                             </span>
                           </div>
-                          <div className="action-button-row">
-                            {c.status === 'old' && role === 'owner' && (
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', maxWidth: '240px' }}>
+                            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                              {c.status === 'old' && role === 'owner' ? (
+                                <button
+                                  className="btn btn-sm btn-success"
+                                  title={db.settings.lang === 'mr' ? 'पुनर्संचयित करा' : 'Restore Customer'}
+                                  onClick={() => restoreCustomer(c.id)}
+                                  style={{ flex: 1, height: '32px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                                >
+                                  <RotateCcw size={12} />
+                                  Restore
+                                </button>
+                              ) : (
+                                c.status !== 'old' && (
+                                  <button
+                                    className="btn btn-sm btn-success"
+                                    title={db.settings.lang === 'mr' ? 'पेमेंट नोंदवा' : 'Record Payment'}
+                                    onClick={() => openPayModal(c)}
+                                    style={{ flex: 1, height: '32px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', backgroundColor: '#008000', borderColor: '#008000', color: '#fff' }}
+                                  >
+                                    <span style={{ fontSize: '14px', fontWeight: '800' }}>₹</span>
+                                    Pay
+                                  </button>
+                                )
+                              )}
                               <button
-                                className="btn btn-sm btn-success"
-                                title={db.settings.lang === 'mr' ? 'पुनर्संचयित करा' : 'Restore Customer'}
-                                onClick={() => restoreCustomer(c.id)}
-                                style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
+                                className="btn btn-sm"
+                                title={db.settings.lang === 'mr' ? 'पेमेंट इतिहास' : 'Payment History'}
+                                onClick={() => openHistoryModal(c)}
+                                style={{ flex: 1, height: '32px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', backgroundColor: '#fff', border: '1px solid #D1D5DB', color: '#1F2937' }}
                               >
-                                <RotateCcw size={12} style={{ marginRight: '2px' }} />
-                                {db.settings.lang === 'mr' ? 'पुनर्संचयित' : 'Restore'}
+                                <History size={12} />
+                                History
                               </button>
-                            )}
-                            {c.status !== 'old' && (
+                            </div>
+                            
+                            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
                               <button
-                                className="btn btn-sm btn-success"
-                                title={db.settings.lang === 'mr' ? 'पेमेंट नोंदवा' : 'Record Payment'}
-                                onClick={() => openPayModal(c)}
-                                style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
+                                className="btn btn-sm"
+                                title={db.settings.lang === 'mr' ? 'WhatsApp आठवण' : 'WhatsApp Reminder'}
+                                onClick={() => sendWhatsAppReminder(c)}
+                                style={{ flex: '1 1 0%', height: '32px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', backgroundColor: '#fff', border: '1px solid #D1D5DB', color: '#1F2937' }}
                               >
-                                <span style={{ marginRight: '2px', fontSize: '14px', fontWeight: '700' }}>₹</span>
-                                {db.settings.lang === 'mr' ? 'भरा' : 'Pay'}
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#25D366" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                                WhatsApp
                               </button>
-                            )}
-                            <button
-                              className="btn btn-sm"
-                              title={db.settings.lang === 'mr' ? 'पेमेंट इतिहास' : 'Payment History'}
-                              onClick={() => openHistoryModal(c)}
-                              style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
-                            >
-                              <History size={12} style={{ marginRight: '2px' }} />
-                              {db.settings.lang === 'mr' ? 'इतिहास' : 'History'}
-                            </button>
-                            {/* WhatsApp Reminder (single) */}
-                            <button
-                              className="btn btn-sm"
-                              title={db.settings.lang === 'mr' ? 'WhatsApp आठवण' : 'WhatsApp Reminder'}
-                              onClick={() => sendWhatsAppReminder(c)}
-                              style={{ height: '32px', padding: '0 10px', fontSize: '12px' }}
-                            >
-                              <Bell size={12} style={{ marginRight: '4px' }} />
-                              {db.settings.lang === 'mr' ? 'व्हाट्सएप' : 'WhatsApp'}
-                            </button>
-
-                            <button
-                              className="btn btn-sm btn-icon"
-                              title={t('editProfile')}
-                              onClick={() => openEditCust(c)}
-                            >
-                              <Edit size={14} />
-                            </button>
-                            {role === 'owner' && (
+                              
                               <button
                                 className="btn btn-sm btn-icon"
-                                title={t('deleteCust')}
-                                onClick={() => deleteCustomer(c.id)}
-                                style={{ backgroundColor: '#FF0000', color: '#fff', border: '1px solid #FF0000' }}
+                                title={t('editProfile')}
+                                onClick={() => openEditCust(c)}
+                                style={{ width: '32px', height: '32px', flex: '0 0 32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', border: '1px solid #D1D5DB', color: '#1F2937' }}
                               >
-                                <Trash2 size={14} />
+                                <Edit size={12} />
                               </button>
-                            )}
+                              
+                              {role === 'owner' && (
+                                <button
+                                  className="btn btn-sm btn-icon"
+                                  title={t('deleteCust')}
+                                  onClick={() => deleteCustomer(c.id)}
+                                  style={{ width: '32px', height: '32px', flex: '0 0 32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#EF4444', border: '1px solid #EF4444', color: '#fff' }}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
