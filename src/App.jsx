@@ -1593,6 +1593,7 @@ export default function App() {
     setPinInput('');
     setIsSettingsUnlocked(false);
     setIsArchiveUnlocked(false);
+    setCurrentTab('customers');
   };
 
   const handlePinSubmit = async (e) => {
@@ -3223,15 +3224,17 @@ export default function App() {
             <TrendingUp size={18} />
             <span>{t('expenses')}</span>
           </div>
-          <div
-            className={`sidebar-item ${currentTab === 'oldcustomers' ? 'active' : ''}`}
-            onClick={() => {
-              setCurrentTab('oldcustomers');
-            }}
-          >
-            <History size={18} />
-            <span>{t('oldcustomers')}</span>
-          </div>
+          {role === 'owner' && (
+            <div
+              className={`sidebar-item ${currentTab === 'oldcustomers' ? 'active' : ''}`}
+              onClick={() => {
+                setCurrentTab('oldcustomers');
+              }}
+            >
+              <History size={18} />
+              <span>{t('oldcustomers')}</span>
+            </div>
+          )}
 
 
           {role === 'owner' && (
@@ -4388,14 +4391,16 @@ export default function App() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <span style={{ fontWeight: '800', color: 'var(--danger)', fontSize: '15px' }}>₹{exp.amount}</span>
-                          <button 
-                            className="btn btn-sm btn-icon btn-danger" 
-                            title={db.settings.lang === 'mr' ? 'खर्च हटवा' : 'Delete Expense'}
-                            onClick={() => deleteExpense(exp.id)}
-                            style={{ width: '28px', height: '28px' }}
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          {isOwnerRole(role) && (
+                            <button 
+                              className="btn btn-sm btn-icon btn-danger" 
+                              title={db.settings.lang === 'mr' ? 'खर्च हटवा' : 'Delete Expense'}
+                              onClick={() => deleteExpense(exp.id)}
+                              style={{ width: '28px', height: '28px' }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -4493,13 +4498,15 @@ export default function App() {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                   <span style={{ fontWeight: '700', color: 'var(--danger)', fontSize: '13px' }}>₹{exp.amount}</span>
-                                  <button 
-                                    className="btn btn-sm btn-icon btn-danger" 
-                                    onClick={() => deleteExpense(exp.id)}
-                                    style={{ width: '22px', height: '22px', padding: 0 }}
-                                  >
-                                    <Trash2 size={10} />
-                                  </button>
+                                  {isOwnerRole(role) && (
+                                    <button 
+                                      className="btn btn-sm btn-icon btn-danger" 
+                                      onClick={() => deleteExpense(exp.id)}
+                                      style={{ width: '22px', height: '22px', padding: 0 }}
+                                    >
+                                      <Trash2 size={10} />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ))}
