@@ -755,6 +755,7 @@ export default function App() {
   const [paymentPhoneInput, setPaymentPhoneInput] = useState('');
   const [whatsappDuesTemplateInput, setWhatsappDuesTemplateInput] = useState('');
   const [duesLimitInput, setDuesLimitInput] = useState('1.5');
+  const [boundBranch, setBoundBranch] = useState(() => localStorage.getItem('mess_bound_branch') || 'All');
   const [activeBranch, setActiveBranch] = useState(() => {
     const bound = localStorage.getItem('mess_bound_branch') || 'All';
     return (bound && bound !== 'All') ? bound : 'Branch 1';
@@ -1680,11 +1681,10 @@ export default function App() {
 
   // Lock active branch for non-owner roles on bound laptops
   useEffect(() => {
-    const bound = localStorage.getItem('mess_bound_branch') || 'All';
-    if (role !== 'owner' && bound !== 'All' && activeBranch !== bound) {
-      setActiveBranch(bound);
+    if (role !== 'owner' && boundBranch !== 'All' && activeBranch !== boundBranch) {
+      setActiveBranch(boundBranch);
     }
-  }, [role, activeBranch]);
+  }, [role, activeBranch, boundBranch]);
 
   // Enumerate video devices on mount
   useEffect(() => {
@@ -4751,7 +4751,7 @@ export default function App() {
                           <select
                             className="form-select"
                             value={activeBranch}
-                            disabled={(localStorage.getItem('mess_bound_branch') || 'All') !== 'All'}
+                            disabled={boundBranch !== 'All'}
                             onChange={(e) => {
                               setActiveBranch(e.target.value);
                               showToast(db.settings.lang === 'mr' ? 'शाखा बदलली!' : 'Active branch updated!', 'success');
@@ -4768,10 +4768,11 @@ export default function App() {
                           </label>
                           <select
                             className="form-select"
-                            value={localStorage.getItem('mess_bound_branch') || 'All'}
+                            value={boundBranch}
                             onChange={(e) => {
                               const val = e.target.value;
                               localStorage.setItem('mess_bound_branch', val);
+                              setBoundBranch(val);
                               if (val !== 'All') {
                                 setActiveBranch(val);
                               }
@@ -4781,8 +4782,6 @@ export default function App() {
                                   : 'Device branch binding updated successfully!', 
                                 'success'
                               );
-                              // Trigger a dummy state change to refresh disabled select UI
-                              setActiveBranch(val === 'All' ? activeBranch : val);
                             }}
                           >
                             <option value="All">{db.settings.lang === 'mr' ? 'पूर्ण प्रवेश (Unbound)' : 'Unbound (All Access)'}</option>
