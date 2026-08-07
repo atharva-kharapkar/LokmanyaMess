@@ -4169,96 +4169,98 @@ export default function App() {
                 </div>
 
               {/* Past Months' Collections Archive Area */}
-              <div className="card-section" style={{ marginTop: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 className="section-title" style={{ margin: 0 }}>
-                    📂 {db.settings.lang === 'mr' ? 'मागील महिन्यांचे जमा रेकॉर्ड (संग्रह)' : "Past Months' Collections Archive"}
-                  </h3>
-                  {!isCollectionArchiveUnlocked ? (
-                    <span className="badge badge-expired">{db.settings.lang === 'mr' ? 'लॉक केलेले' : 'Locked'}</span>
-                  ) : (
-                    <button className="btn btn-sm" onClick={() => setIsCollectionArchiveUnlocked(false)}>
-                      🔒 {db.settings.lang === 'mr' ? 'लॉक करा' : 'Lock Archive'}
-                    </button>
-                  )}
-                </div>
-
-                {!isCollectionArchiveUnlocked ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px', backgroundColor: '#f8f9fc', borderRadius: '12px', border: '1px solid var(--border)', gap: '12px' }}>
-                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-                      {db.settings.lang === 'mr' ? 'मागील महिन्यांचे जमा रेकॉर्ड पाहण्यासाठी पासवर्ड टाका.' : 'Please enter the archive passcode to view past months\' collections.'}
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        key={`collection-passcode-input-${currentTab}-${isCollectionArchiveUnlocked}`}
-                        ref={collectionInputRef}
-                        type="password"
-                        className="form-input"
-                        placeholder="Passcode"
-                        maxLength="4"
-                        value={collectionArchivePinInput}
-                        onChange={(e) => setCollectionArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        autoFocus={true}
-                        style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text', pointerEvents: 'auto' }}
-                      />
-                      <button 
-                        className="btn btn-primary"
-                        onClick={async () => {
-                          if (!db.settings.archivePasswordHash) {
-                            showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये आर्काइव्ह पासकोड सेट करा.' : 'Please set an archive passcode in Settings first.', 'error');
-                            return;
-                          }
-                          if (await matchesArchiveSecret(collectionArchivePinInput, db.settings.archivePasswordHash)) {
-                            setIsCollectionArchiveUnlocked(true);
-                            setCollectionArchivePinInput('');
-                          } else {
-                            showToast(db.settings.lang === 'mr' ? 'चुकीचा पासवर्ड!' : 'Incorrect passcode!', 'error');
-                            setCollectionArchivePinInput('');
-                          }
-                        }}
-                      >
-                        {db.settings.lang === 'mr' ? 'अनलॉक' : 'Unlock'}
+              {role === 'owner' && (
+                <div className="card-section" style={{ marginTop: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 className="section-title" style={{ margin: 0 }}>
+                      📂 {db.settings.lang === 'mr' ? 'मागील महिन्यांचे जमा रेकॉर्ड (संग्रह)' : "Past Months' Collections Archive"}
+                    </h3>
+                    {!isCollectionArchiveUnlocked ? (
+                      <span className="badge badge-expired">{db.settings.lang === 'mr' ? 'लॉक केलेले' : 'Locked'}</span>
+                    ) : (
+                      <button className="btn btn-sm" onClick={() => setIsCollectionArchiveUnlocked(false)}>
+                        🔒 {db.settings.lang === 'mr' ? 'लॉक करा' : 'Lock Archive'}
                       </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {archiveCollectionMonths.map(monthGroup => {
-                      return (
-                        <div key={monthGroup.monthStr} style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '12px 18px', borderBottom: '1px solid var(--border)' }}>
-                            <span style={{ fontWeight: '700', color: 'var(--text)' }}>
-                              📂 {monthGroup.monthLabel}
-                            </span>
-                            <span style={{ fontWeight: '800', color: 'var(--success)' }}>
-                              Total Received: ₹{monthGroup.total}
-                            </span>
-                          </div>
-                          <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '8px', backgroundColor: '#fff' }}>
-                            {monthGroup.items.map((tx, idx) => (
-                              <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: idx === monthGroup.items.length - 1 ? 'none' : '1px solid var(--border)' }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: '600', fontSize: '13px' }}>{tx.custName} ({tx.paymentMode})</div>
-                                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>📅 {tx.date}</div>
-                                  {tx.note && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Note: {tx.note}</div>}
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                  <span style={{ fontWeight: '700', color: 'var(--success)', fontSize: '13px' }}>₹{tx.amount}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {archiveCollectionMonths.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
-                        {db.settings.lang === 'mr' ? 'संग्रहात कोणतेही रेकॉर्ड सापडले नाही.' : 'No archived collection months found.'}
-                      </div>
                     )}
                   </div>
-                )}
-              </div>
+
+                  {!isCollectionArchiveUnlocked ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px', backgroundColor: '#f8f9fc', borderRadius: '12px', border: '1px solid var(--border)', gap: '12px' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                        {db.settings.lang === 'mr' ? 'मागील महिन्यांचे जमा रेकॉर्ड पाहण्यासाठी पासवर्ड टाका.' : 'Please enter the archive passcode to view past months\' collections.'}
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          key={`collection-passcode-input-${currentTab}-${isCollectionArchiveUnlocked}`}
+                          ref={collectionInputRef}
+                          type="password"
+                          className="form-input"
+                          placeholder="Passcode"
+                          maxLength="4"
+                          value={collectionArchivePinInput}
+                          onChange={(e) => setCollectionArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          autoFocus={true}
+                          style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text', pointerEvents: 'auto' }}
+                        />
+                        <button 
+                          className="btn btn-primary"
+                          onClick={async () => {
+                            if (!db.settings.archivePasswordHash) {
+                              showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये आर्काइव्ह पासकोड सेट करा.' : 'Please set an archive passcode in Settings first.', 'error');
+                              return;
+                            }
+                            if (await matchesArchiveSecret(collectionArchivePinInput, db.settings.archivePasswordHash)) {
+                              setIsCollectionArchiveUnlocked(true);
+                              setCollectionArchivePinInput('');
+                            } else {
+                              showToast(db.settings.lang === 'mr' ? 'चुकीचा पासवर्ड!' : 'Incorrect passcode!', 'error');
+                              setCollectionArchivePinInput('');
+                            }
+                          }}
+                        >
+                          {db.settings.lang === 'mr' ? 'अनलॉक' : 'Unlock'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {archiveCollectionMonths.map(monthGroup => {
+                        return (
+                          <div key={monthGroup.monthStr} style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '12px 18px', borderBottom: '1px solid var(--border)' }}>
+                              <span style={{ fontWeight: '700', color: 'var(--text)' }}>
+                                📂 {monthGroup.monthLabel}
+                              </span>
+                              <span style={{ fontWeight: '800', color: 'var(--success)' }}>
+                                Total Received: ₹{monthGroup.total}
+                              </span>
+                            </div>
+                            <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '8px', backgroundColor: '#fff' }}>
+                              {monthGroup.items.map((tx, idx) => (
+                                <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: idx === monthGroup.items.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: '600', fontSize: '13px' }}>{tx.custName} ({tx.paymentMode})</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>📅 {tx.date}</div>
+                                    {tx.note && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Note: {tx.note}</div>}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontWeight: '700', color: 'var(--success)', fontSize: '13px' }}>₹{tx.amount}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {archiveCollectionMonths.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                          {db.settings.lang === 'mr' ? 'संग्रहात कोणतेही रेकॉर्ड सापडले नाही.' : 'No archived collection months found.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             </div>
           )}
@@ -4424,104 +4426,106 @@ export default function App() {
               </div>
 
               {/* Past Months' Expense Archive Area */}
-              <div className="card-section" style={{ marginTop: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 className="section-title" style={{ margin: 0 }}>
-                    📂 {db.settings.lang === 'mr' ? 'मागील महिन्यांचे खर्च रेकॉर्ड (संग्रह)' : "Past Months' Expense Archive"}
-                  </h3>
-                  {!isExpenseArchiveUnlocked ? (
-                    <span className="badge badge-expired">{db.settings.lang === 'mr' ? 'लॉक केलेले' : 'Locked'}</span>
-                  ) : (
-                    <button className="btn btn-sm" onClick={() => setIsExpenseArchiveUnlocked(false)}>
-                      🔒 {db.settings.lang === 'mr' ? 'लॉक करा' : 'Lock Archive'}
-                    </button>
-                  )}
-                </div>
-
-                {!isExpenseArchiveUnlocked ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px', backgroundColor: '#f8f9fc', borderRadius: '12px', border: '1px solid var(--border)', gap: '12px' }}>
-                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-                      {db.settings.lang === 'mr' ? 'मागील महिन्यांचे खर्च पाहण्यासाठी पासवर्ड टाका.' : 'Please enter the archive passcode to view past months\' expenses.'}
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        key={`expense-passcode-input-${currentTab}-${isExpenseArchiveUnlocked}`}
-                        ref={expenseInputRef}
-                        type="password"
-                        className="form-input"
-                        placeholder="Passcode"
-                        maxLength="4"
-                        value={expenseArchivePinInput}
-                        onChange={(e) => setExpenseArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        autoFocus={true}
-                        style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text', pointerEvents: 'auto' }}
-                      />
-                      <button 
-                        className="btn btn-primary"
-                        onClick={async () => {
-                          if (!db.settings.archivePasswordHash) {
-                            showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये आर्काइव्ह पासकोड सेट करा.' : 'Please set an archive passcode in Settings first.', 'error');
-                            return;
-                          }
-                          if (await matchesArchiveSecret(expenseArchivePinInput, db.settings.archivePasswordHash)) {
-                            setIsExpenseArchiveUnlocked(true);
-                            setExpenseArchivePinInput('');
-                          } else {
-                            showToast(db.settings.lang === 'mr' ? 'चुकीचा पासवर्ड!' : 'Incorrect passcode!', 'error');
-                            setExpenseArchivePinInput('');
-                          }
-                        }}
-                      >
-                        {db.settings.lang === 'mr' ? 'अनलॉक' : 'Unlock'}
+              {role === 'owner' && (
+                <div className="card-section" style={{ marginTop: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 className="section-title" style={{ margin: 0 }}>
+                      📂 {db.settings.lang === 'mr' ? 'मागील महिन्यांचे खर्च रेकॉर्ड (संग्रह)' : "Past Months' Expense Archive"}
+                    </h3>
+                    {!isExpenseArchiveUnlocked ? (
+                      <span className="badge badge-expired">{db.settings.lang === 'mr' ? 'लॉक केलेले' : 'Locked'}</span>
+                    ) : (
+                      <button className="btn btn-sm" onClick={() => setIsExpenseArchiveUnlocked(false)}>
+                        🔒 {db.settings.lang === 'mr' ? 'लॉक करा' : 'Lock Archive'}
                       </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {archiveExpenseMonths.map(monthGroup => {
-                      return (
-                        <div key={monthGroup.monthStr} style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '12px 18px', borderBottom: '1px solid var(--border)' }}>
-                            <span style={{ fontWeight: '700', color: 'var(--text)' }}>
-                              📂 {monthGroup.monthLabel}
-                            </span>
-                            <span style={{ fontWeight: '800', color: 'var(--danger)' }}>
-                              Total: ₹{monthGroup.total}
-                            </span>
-                          </div>
-                          <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '8px', backgroundColor: '#fff' }}>
-                            {monthGroup.items.map((exp, idx) => (
-                              <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: idx === monthGroup.items.length - 1 ? 'none' : '1px solid var(--border)' }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: '600', fontSize: '13px' }}>{exp.note}</div>
-                                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>📅 {exp.date}</div>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                  <span style={{ fontWeight: '700', color: 'var(--danger)', fontSize: '13px' }}>₹{exp.amount}</span>
-                                  {isOwnerRole(role) && (
-                                    <button 
-                                      className="btn btn-sm btn-icon btn-danger" 
-                                      onClick={() => deleteExpense(exp.id)}
-                                      style={{ width: '22px', height: '22px', padding: 0 }}
-                                    >
-                                      <Trash2 size={10} />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {archiveExpenseMonths.length === 0 && (
-                      <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
-                        {db.settings.lang === 'mr' ? 'संग्रहात कोणतेही रेकॉर्ड सापडले नाही.' : 'No archived expense months found.'}
-                      </div>
                     )}
                   </div>
-                )}
-              </div>
+
+                  {!isExpenseArchiveUnlocked ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '30px', backgroundColor: '#f8f9fc', borderRadius: '12px', border: '1px solid var(--border)', gap: '12px' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                        {db.settings.lang === 'mr' ? 'मागील महिन्यांचे खर्च पाहण्यासाठी पासवर्ड टाका.' : 'Please enter the archive passcode to view past months\' expenses.'}
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          key={`expense-passcode-input-${currentTab}-${isExpenseArchiveUnlocked}`}
+                          ref={expenseInputRef}
+                          type="password"
+                          className="form-input"
+                          placeholder="Passcode"
+                          maxLength="4"
+                          value={expenseArchivePinInput}
+                          onChange={(e) => setExpenseArchivePinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          autoFocus={true}
+                          style={{ width: '120px', textAlign: 'center', WebkitUserSelect: 'text', userSelect: 'text', pointerEvents: 'auto' }}
+                        />
+                        <button 
+                          className="btn btn-primary"
+                          onClick={async () => {
+                            if (!db.settings.archivePasswordHash) {
+                              showToast(db.settings.lang === 'mr' ? 'कृपया सेटिंग्जमध्ये आर्काइव्ह पासकोड सेट करा.' : 'Please set an archive passcode in Settings first.', 'error');
+                              return;
+                            }
+                            if (await matchesArchiveSecret(expenseArchivePinInput, db.settings.archivePasswordHash)) {
+                              setIsExpenseArchiveUnlocked(true);
+                              setExpenseArchivePinInput('');
+                            } else {
+                              showToast(db.settings.lang === 'mr' ? 'चुकीचा पासवर्ड!' : 'Incorrect passcode!', 'error');
+                              setExpenseArchivePinInput('');
+                            }
+                          }}
+                        >
+                          {db.settings.lang === 'mr' ? 'अनलॉक' : 'Unlock'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {archiveExpenseMonths.map(monthGroup => {
+                        return (
+                          <div key={monthGroup.monthStr} style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '12px 18px', borderBottom: '1px solid var(--border)' }}>
+                              <span style={{ fontWeight: '700', color: 'var(--text)' }}>
+                                📂 {monthGroup.monthLabel}
+                              </span>
+                              <span style={{ fontWeight: '800', color: 'var(--danger)' }}>
+                                Total: ₹{monthGroup.total}
+                              </span>
+                            </div>
+                            <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '8px', backgroundColor: '#fff' }}>
+                              {monthGroup.items.map((exp, idx) => (
+                                <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: idx === monthGroup.items.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: '600', fontSize: '13px' }}>{exp.note}</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>📅 {exp.date}</div>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontWeight: '700', color: 'var(--danger)', fontSize: '13px' }}>₹{exp.amount}</span>
+                                    {isOwnerRole(role) && (
+                                      <button 
+                                        className="btn btn-sm btn-icon btn-danger" 
+                                        onClick={() => deleteExpense(exp.id)}
+                                        style={{ width: '22px', height: '22px', padding: 0 }}
+                                      >
+                                        <Trash2 size={10} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {archiveExpenseMonths.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                          {db.settings.lang === 'mr' ? 'संग्रहात कोणतेही रेकॉर्ड सापडले नाही.' : 'No archived expense months found.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
