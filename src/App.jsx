@@ -3764,6 +3764,9 @@ export default function App() {
                       const warningDays = getDueWarningDays(c);
                       const isNameRed = warningDays > 0;
                       const daysPendingDues = getDaysPendingDues(c);
+                      const isShortTerm = c.category === 'shortterm';
+                      const isGracePeriodOver = isShortTerm ? daysPendingDues > 2 : daysPendingDues > 6;
+                      const shouldShowDuesWarning = hasDues && isGracePeriodOver;
                       
                       return (
                         <div key={c.id} className={`customer-bar status-${status} ${hasDues ? 'has-dues' : 'no-dues'}`}>
@@ -3793,16 +3796,16 @@ export default function App() {
                           <div 
                             className="customer-bar-name"
                             style={{ 
-                              fontSize: '18px',
-                              color: '#111827', 
+                              fontSize: '23px',
+                              color: shouldShowDuesWarning ? '#FF0000' : '#111827', 
                               fontWeight: '800',
-                              textTransform: 'lowercase'
+                              textTransform: 'capitalize'
                             }}
                           >
                             {c.name}
                           </div>
-                          {hasDues && daysPendingDues > 0 && (
-                            <div style={{ color: '#ff1e1e', fontSize: '12px', fontWeight: '800', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          {shouldShowDuesWarning && (
+                            <div style={{ color: '#ff1e1e', fontSize: '16px', fontWeight: '900', marginTop: '2px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                               ⚠️ {db.settings.lang === 'mr' 
                                 ? `मागील ${daysPendingDues} दिवसांपासून थकीत रक्कम बाकी आहे` 
                                 : `Due is pending from last ${daysPendingDues} days`}
