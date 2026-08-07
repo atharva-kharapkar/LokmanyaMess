@@ -1995,19 +1995,7 @@ export default function App() {
       
       const cleanPhone = '+' + digits;
 
-      // Aadhar Card validation: if provided, must be exactly 12 digits
-      if (custForm.aadhar && custForm.aadhar.trim()) {
-        const aadharClean = custForm.aadhar.replace(/\D/g, '');
-        if (aadharClean.length !== 12) {
-          showToast(
-            isMarathi 
-              ? 'आधार कार्ड नंबर अचूक १२ अंकी असावा.' 
-              : 'Aadhar card number must be exactly 12 digits.', 
-            'error'
-          );
-          return;
-        }
-      }
+
 
       // Date format validation (must be valid YYYY-MM-DD)
       if (!isValidDate(custForm.joinDate)) {
@@ -3754,9 +3742,9 @@ export default function App() {
                         {/* Left: Profile Photo */}
                         <div 
                           className="customer-bar-avatar-container" 
-                          style={{ cursor: 'pointer', border: '1.5px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', width: '140px', height: '140px', flexShrink: 0 }}
-                          onClick={() => setSelectedCustomerProfile(c)}
-                          title={db.settings.lang === 'mr' ? 'प्रोफाइल पहा' : 'View Profile'}
+                          style={{ cursor: c.photo ? 'pointer' : 'default', border: '1.5px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', width: '140px', height: '140px', flexShrink: 0 }}
+                          onClick={() => c.photo && setPreviewImage({ url: c.photo, name: c.name })}
+                          title={c.photo ? (db.settings.lang === 'mr' ? 'फोटो मोठा करा' : 'Click to enlarge') : ''}
                         >
                           {c.photo ? (
                             <img 
@@ -3780,11 +3768,8 @@ export default function App() {
                               fontSize: '18px',
                               color: '#111827', 
                               fontWeight: '800',
-                              cursor: 'pointer',
                               textTransform: 'lowercase'
                             }}
-                            onClick={() => setSelectedCustomerProfile(c)}
-                            title={db.settings.lang === 'mr' ? 'प्रोफाइल पहा' : 'View Profile'}
                           >
                             {c.name}
                           </div>
@@ -3800,15 +3785,6 @@ export default function App() {
                           </div>
                           <div className="customer-bar-subinfo" style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500', marginTop: '2px' }}>
                             <MapPin size={13} style={{ color: '#EC4899', marginRight: '6px', flexShrink: 0 }} /> {c.addr || 'No Address'}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', marginTop: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: '500' }}>
-                              <CreditCard size={13} style={{ color: '#2563EB', marginRight: '6px', flexShrink: 0 }} /> 
-                              Aadhar Card No.:
-                            </div>
-                            <div style={{ paddingLeft: '19px', fontSize: '13px', color: '#111827', fontWeight: '600', marginTop: '1px' }}>
-                              {c.aadhar || 'N/A'}
-                            </div>
                           </div>
                         </div>
 
@@ -5785,32 +5761,20 @@ export default function App() {
                   autoFocus
                 />
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">{t('phoneNo')} *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. 9876543210"
-                    value={custForm.phone}
-                    inputMode="numeric"
-                    maxLength="10"
-                    onChange={(e) => {
-                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
-                      setCustForm({ ...custForm, phone: digitsOnly });
-                    }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t('aadharCard')}</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    maxLength="12"
-                    value={custForm.aadhar}
-                    onChange={(e) => setCustForm({ ...custForm, aadhar: e.target.value.replace(/\D/g, '') })}
-                  />
-                </div>
+              <div className="form-group">
+                <label className="form-label">{t('phoneNo')} *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. 9876543210"
+                  value={custForm.phone}
+                  inputMode="numeric"
+                  maxLength="10"
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                    setCustForm({ ...custForm, phone: digitsOnly });
+                  }}
+                />
               </div>
               {currentTab === 'shortterm' ? (
                 <>
