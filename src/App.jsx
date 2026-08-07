@@ -746,6 +746,13 @@ export default function App() {
   const [newBranch1PinInput, setNewBranch1PinInput] = useState('');
   const [newBranch2PinInput, setNewBranch2PinInput] = useState('');
 
+  // Initial startup / first-run settings states
+  const [firstRunPrompted, setFirstRunPrompted] = useState(false);
+  const [firstRunModalVisible, setFirstRunModalVisible] = useState(false);
+  const [firstRunPinInput, setFirstRunPinInput] = useState('');
+  const [firstRunPinError, setFirstRunPinError] = useState('');
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
   const [toast, setToast] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [messNameInput, setMessNameInput] = useState('');
@@ -1163,11 +1170,6 @@ export default function App() {
   }, [db.settings]);
 
   // First-run flow: if Owner PIN is not configured, show an in-app modal to set it
-  const [firstRunPrompted, setFirstRunPrompted] = useState(false);
-  const [firstRunModalVisible, setFirstRunModalVisible] = useState(false);
-  const [firstRunPinInput, setFirstRunPinInput] = useState('');
-  const [firstRunPinError, setFirstRunPinError] = useState('');
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   useEffect(() => {
     if (!settingsLoaded) return;
