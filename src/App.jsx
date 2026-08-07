@@ -755,7 +755,10 @@ export default function App() {
   const [paymentPhoneInput, setPaymentPhoneInput] = useState('');
   const [whatsappDuesTemplateInput, setWhatsappDuesTemplateInput] = useState('');
   const [duesLimitInput, setDuesLimitInput] = useState('1.5');
-  const [activeBranch, setActiveBranch] = useState('Branch 1');
+  const [activeBranch, setActiveBranch] = useState(() => {
+    const bound = localStorage.getItem('mess_bound_branch') || 'All';
+    return (bound && bound !== 'All') ? bound : 'Branch 1';
+  });
   const [isArchiveUnlocked, setIsArchiveUnlocked] = useState(false);
   const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
   const settingsInputRef = useRef(null);
@@ -1621,6 +1624,12 @@ export default function App() {
 
     // 2. Branch 1 PIN Check
     if (await matchesSecret(cleanedPin, db.settings.branch1PinHash, PIN_LENGTH)) {
+      const bound = localStorage.getItem('mess_bound_branch') || 'All';
+      if (bound === 'Branch 2') {
+        setPinError(isMarathi ? 'हा लॅपटॉप फक्त शाखा २ साठी मर्यादित आहे.' : 'This device is restricted to Branch 2 only.');
+        setPinInput('');
+        return;
+      }
       setIsLoggedIn(true);
       setRole('branch_staff');
       setActiveBranch('Branch 1');
@@ -1632,6 +1641,12 @@ export default function App() {
 
     // 3. Branch 2 PIN Check
     if (await matchesSecret(cleanedPin, db.settings.branch2PinHash, PIN_LENGTH)) {
+      const bound = localStorage.getItem('mess_bound_branch') || 'All';
+      if (bound === 'Branch 1') {
+        setPinError(isMarathi ? 'हा लॅपटॉप फक्त शाखा १ साठी मर्यादित आहे.' : 'This device is restricted to Branch 1 only.');
+        setPinInput('');
+        return;
+      }
       setIsLoggedIn(true);
       setRole('branch_staff');
       setActiveBranch('Branch 2');
@@ -1661,6 +1676,14 @@ export default function App() {
       }
     }
   }, [isLoggedIn, introPlayed]);
+
+  // Lock active branch for non-owner roles on bound laptops
+  useEffect(() => {
+    const bound = localStorage.getItem('mess_bound_branch') || 'All';
+    if (role !== 'owner' && bound !== 'All' && activeBranch !== bound) {
+      setActiveBranch(bound);
+    }
+  }, [role, activeBranch]);
 
   // Enumerate video devices on mount
   useEffect(() => {
@@ -3211,13 +3234,15 @@ export default function App() {
           </div>
 
 
-          <div
-            className={`sidebar-item ${currentTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setCurrentTab('settings')}
-          >
-            <Settings size={18} />
-            <span>{t('settings')}</span>
-          </div>
+          {role === 'owner' && (
+            <div
+              className={`sidebar-item ${currentTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setCurrentTab('settings')}
+            >
+              <Settings size={18} />
+              <span>{t('settings')}</span>
+            </div>
+          )}
         </div>
         <div className="sidebar-footer">
           <button className="logout-btn" onClick={handleLogout}>
@@ -4694,8 +4719,8 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="form-row">
-                        <div className="form-group" style={{ maxWidth: '50%' }}>
+                      <div className="form-row" style={{ display: 'flex', gap: '16px' }}>
+                        <div className="form-group" style={{ flex: 1 }}>
                           <label className="form-label">{t('langPreference')}</label>
                           <select
                             className="form-select"
@@ -4707,11 +4732,12 @@ export default function App() {
                           </select>
                         </div>
                         
-                        <div className="form-group" style={{ maxWidth: '50%' }}>
+                        <div className="form-group" style={{ flex: 1 }}>
                           <label className="form-label">{db.settings.lang === 'mr' ? 'या कॉम्प्युटरसाठी कार्यरत शाखा' : 'Active Branch for this Laptop'}</label>
                           <select
                             className="form-select"
                             value={activeBranch}
+                            disabled={(localStorage.getItem('mess_bound_branch') || 'All') !== 'All'}
                             onChange={(e) => {
                               setActiveBranch(e.target.value);
                               showToast(db.settings.lang === 'mr' ? 'शाखा बदलली!' : 'Active branch updated!', 'success');
@@ -4719,6 +4745,35 @@ export default function App() {
                           >
                             <option value="Branch 1">Branch 1 (Mess 1)</option>
                             <option value="Branch 2">Branch 2 (Mess 2)</option>
+                          </select>
+                        </div>
+
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label className="form-label">
+                            {db.settings.lang === 'mr' ? 'या कॉम्प्युटरचे शाखा बंधन' : 'Device Branch Binding'}
+                          </label>
+                          <select
+                            className="form-select"
+                            value={localStorage.getItem('mess_bound_branch') || 'All'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              localStorage.setItem('mess_bound_branch', val);
+                              if (val !== 'All') {
+                                setActiveBranch(val);
+                              }
+                              showToast(
+                                db.settings.lang === 'mr' 
+                                  ? 'कॉम्प्युटरचे शाखा बंधन यशस्वीरित्या अद्ययावत केले!' 
+                                  : 'Device branch binding updated successfully!', 
+                                'success'
+                              );
+                              // Trigger a dummy state change to refresh disabled select UI
+                              setActiveBranch(val === 'All' ? activeBranch : val);
+                            }}
+                          >
+                            <option value="All">{db.settings.lang === 'mr' ? 'पूर्ण प्रवेश (Unbound)' : 'Unbound (All Access)'}</option>
+                            <option value="Branch 1">{db.settings.lang === 'mr' ? 'फक्त शाखा १ (Branch 1)' : 'Lock to Branch 1'}</option>
+                            <option value="Branch 2">{db.settings.lang === 'mr' ? 'फक्त शाखा २ (Branch 2)' : 'Lock to Branch 2'}</option>
                           </select>
                         </div>
                       </div>
