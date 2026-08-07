@@ -1292,7 +1292,7 @@ export default function App() {
           (Array.isArray(localData.employees) && localData.employees.length > 0) ||
           (Array.isArray(localData.expenses) && localData.expenses.length > 0) ||
           (Array.isArray(localData.transactions) && localData.transactions.length > 0) ||
-          (localData.settings && Object.keys(localData.settings).length > 0)
+          (localData.settings && localData.settings.ownerPinHash && localData.settings.ownerPinHash !== '')
         );
 
         if (hasLocalContent) {
