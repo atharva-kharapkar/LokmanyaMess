@@ -2546,19 +2546,21 @@ export default function App() {
   const openWhatsAppWithTypedMessage = useCallback(({ phoneDigits, message }) => {
     const encodedMessage = encodeURIComponent(String(message ?? ''));
 
-    // Desktop deep link (pre-fills message; user must press Send)
     const whatsappDesktopDeepLink = `whatsapp://send?phone=${phoneDigits}&text=${encodedMessage}`;
-    // Web fallback (pre-fills message)
     const whatsappWebUrl = `https://wa.me/${phoneDigits}?text=${encodedMessage}`;
+    const mode = dbRef.current.settings?.whatsappMode || 'web';
 
     if (isElectron) {
-      // In Electron: ONLY open the installed desktop app deep-link. 
-      // Do not schedule fallback to WhatsApp Web to avoid opening two windows.
-      window.open(whatsappDesktopDeepLink, '_blank');
+      if (mode === 'desktop') {
+        window.open(whatsappDesktopDeepLink, '_blank');
+      } else {
+        // Open inside the dedicated WhatsApp Web window in Electron
+        window.open(whatsappWebUrl, 'whatsapp_share_tab');
+      }
       return;
     }
 
-    // Browser: go directly to WhatsApp Web.
+    // Browser fallback
     window.open(whatsappWebUrl, 'whatsapp_share_tab');
   }, []);
 
@@ -4764,6 +4766,34 @@ export default function App() {
                           <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                             Placeholder tokens: <code>[Name]</code>, <code>[Dues]</code>, <code>[Amount]</code>, <code>[PrevDues]</code>, <code>[CurrentDues]</code>, <code>[Date]</code>, <code>[UpiLink]</code>, <code>[MessName]</code>
                           </span>
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group" style={{ width: '100%' }}>
+                          <label className="form-label">
+                            {db.settings.lang === 'mr' ? 'व्हॉट्सॲप मेसेजिंग प्रकार' : 'WhatsApp Messaging Mode'}
+                          </label>
+                          <select
+                            className="form-select"
+                            value={db.settings?.whatsappMode || 'web'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              saveSettingField('whatsappMode', val, { label: 'WhatsApp Mode' });
+                            }}
+                          >
+                            <option value="web">
+                              {db.settings.lang === 'mr' ? 'व्हॉट्सॲप वेब (ॲपच्या आत उघडते - शिफारस केलेले)' : 'WhatsApp Web (Built-in Window - Recommended)'}
+                            </option>
+                            <option value="desktop">
+                              {db.settings.lang === 'mr' ? 'व्हॉट्सॲप डेस्कटॉप ॲप्लिकेशन (संगणक ॲप आवश्यक)' : 'WhatsApp Desktop App (Requires Windows app installed)'}
+                            </option>
+                          </select>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                            {db.settings.lang === 'mr'
+                              ? 'टीप: "व्हॉट्सॲप वेब" वापरल्याने कोणत्याही बाह्य सॉफ्टवेअरशिवाय मेसेज यशस्वीपणे पाठवले जातात.'
+                              : 'Note: "WhatsApp Web" loads internally inside the app, ensuring message delivery without needing any external desktop software.'}
+                          </div>
                         </div>
                       </div>
 
