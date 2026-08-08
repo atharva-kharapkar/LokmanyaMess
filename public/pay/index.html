@@ -526,7 +526,10 @@
     const d = params.get('d');
     if (d) {
       try {
-        const base64 = d.replace(/-/g, '+').replace(/_/g, '/');
+        let base64 = d.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) {
+          base64 += '=';
+        }
         const decodedStr = decodeURIComponent(escape(atob(base64)));
         const payload = JSON.parse(decodedStr);
         if (payload.pa) pa = payload.pa;
