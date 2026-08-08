@@ -31,10 +31,7 @@ Offline Cache Capability: Allows data entry during network failures; data will a
 4. Owner Mobile Dashboard (PWA)
 Real-Time Analytics: Responsive mobile-friendly dashboard for Android & iOS via a permanent secure free link (e.g., lokmanyamess.web.app).
 Read-Only Permission: The owner can monitor daily collections, monthly revenue metrics, active user counts, and graphs, but cannot edit or delete data on mobile.
-5. Transactional SMS Alerts & Smart UPI Billing
-Automated SMS Receipts: Triggers automatic SMS updates (via Fast2SMS/Msg91 API) for payment receipts or due reminders.
-Tap-to-Pay UPI Integration: Embeds a dynamic UPI payment link pre-filled with the owner’s UPI ID and the customer’s exact pending dues. Customers pay via GPay, PhonePe, or Paytm in 1 click.
-6. "Old Customers" Protected Archive (Soft Delete & Vault)
+5. "Old Customers" Protected Archive (Soft Delete & Vault)
 Soft Delete Archiving: Deleting any customer from Dine-in, Tiffin, or Short-term sections moves them and their payment ledger to a hidden "Old Customers" archive.
 Password Gate: Access to this archive is blocked behind an Admin Password managed in settings.
 Developer Master Key: To set or change the Archive Password, the owner must enter a hardcoded Developer Master Key (Backend Password) that only you control, ensuring system maintenance lock-in.

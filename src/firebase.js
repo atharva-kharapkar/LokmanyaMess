@@ -12,7 +12,9 @@ let app = null;
 let db = null;
 let firebaseBootError = null;
 
-if (hasFirebaseConfig) {
+const isCypress = typeof window !== 'undefined' && window.Cypress;
+
+if (hasFirebaseConfig && !isCypress) {
   try {
     app = initializeApp(firebaseConfig);
     db = initializeFirestore(app, {
@@ -24,7 +26,7 @@ if (hasFirebaseConfig) {
     firebaseBootError = error;
   }
 } else {
-  firebaseBootError = new Error('Firebase configuration is incomplete.');
+  firebaseBootError = new Error(isCypress ? 'Firebase disabled in test environment.' : 'Firebase configuration is incomplete.');
 }
 
 if (firebaseBootError) {

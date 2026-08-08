@@ -1,0 +1,81 @@
+{
+  "sessionId": "7245b8d5-9ef6-4b0a-8b8f-012148de72b5",
+  "name": "Marketing agent",
+  "createdAt": "2026-08-04T20:08:56.757Z",
+  "filename": "7245b8d5-9ef6-4b0a-8b8f-012148de72b5.json",
+  "geminiStarted": true,
+  "messages": [
+    {
+      "id": "3d9bfc97-120b-43b0-9f48-8085cb51889d",
+      "role": "user",
+      "content": "You are Atharv Kharapkar's Autonomous Job Search & Recruiter Outreach Agent. Your primary objective is to search for relevant software engineer, data analyst, or IT administrator roles, find hiring manager emails, and send personalized pitch emails.\n\nKey Project Context:\n- Lokmanya Mess: Production offline-first Electron + React app with Firebase sync, NPCI-compliant UPI payments, and automated WhatsApp payment reminders (80% dues recovery boost).\n- TruScholar: Marketing Data Analyst (reduced manual reporting by 30% using Power BI, Tableau, and SQL).\n\nCore Instructions:\n1. Run the local job scout script located at 'scripts/job_scout/job_scout.py' to find jobs, draft cold emails matching the job descriptions, and prompt the user for confirmation.\n2. Alternatively, use web search tools to manually scour LinkedIn, Indeed, and Google Jobs for Amravati-based or remote Indian opportunities.\n3. Generate hyper-personalized cold emails connecting the target company's job requirements directly with Atharv's product shipping experience.\n4. Prepare and queue the emails with Atharv's resume PDF attached.\n5. Never send any email to an HR or recruiter without final user review and confirmation to maintain professional quality and avoid spam.",
+      "status": "pending",
+      "model": "gemini-2.5-flash",
+      "client_type": "gemini-bridge",
+      "parent_message_id": null,
+      "created_at": "2026-08-04T20:27:09.216+00:00",
+      "sender": "ios",
+      "is_cancelled": false
+    },
+    {
+      "id": "080c1fcb-6563-43ad-a08b-22acb6fa8e16",
+      "role": "agent",
+      "content": "node:internal/modules/cjs/loader:1479\r\n  throw err;\r\n  ^\r\n\r\nError: Cannot find module 'C:\\Users\\USER\\Desktop\\LokmanyaMess\\node_modules\\npm\\bin\\npm-prefix.js'\r\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)\r\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)\r\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)\r\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)\r\n    at Module._load (node:internal/modules/cjs/loader:1262:25)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47 {\r\n  code: 'MODULE_NOT_FOUND',\r\n  requireStack: []\r\n}\r\n\r\nNode.js v24.15.0\r\nnode:internal/modules/cjs/loader:1479\r\n  throw err;\r\n  ^\r\n\r\nError: Cannot find module 'C:\\Users\\USER\\Desktop\\LokmanyaMess\\node_modules\\npm\\bin\\npx-cli.js'\r\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)\r\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)\r\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)\r\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)\r\n    at Module._load (node:internal/modules/cjs/loader:1262:25)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47 {\r\n  code: 'MODULE_NOT_FOUND',\r\n  requireStack: []\r\n}\r\n\r\nNode.js v24.15.0",
+      "status": "error",
+      "model": "gemini-2.5-flash",
+      "client_type": "gemini-bridge",
+      "parent_message_id": "3d9bfc97-120b-43b0-9f48-8085cb51889d",
+      "created_at": "2026-08-04T20:27:15.270Z",
+      "sender": "macOS",
+      "is_cancelled": false
+    },
+    {
+      "id": "b6df3e10-2f25-49d2-b0ab-2b18188c52f9",
+      "role": "user",
+      "content": "You are Atharv Kharapkar's Autonomous Job Search & Recruiter Outreach Agent. Your primary objective is to search for relevant software engineer, data analyst, or IT administrator roles, find hiring manager emails, and send personalized pitch emails.\n\nKey Project Context:\n- Lokmanya Mess: Production offline-first Electron + React app with Firebase sync, NPCI-compliant UPI payments, and automated WhatsApp payment reminders (80% dues recovery boost).\n- TruScholar: Marketing Data Analyst (reduced manual reporting by 30% using Power BI, Tableau, and SQL).\n\nCore Instructions:\n1. Run the local job scout script located at 'scripts/job_scout/job_scout.py' to find jobs, draft cold emails matching the job descriptions, and prompt the user for confirmation.\n2. Alternatively, use web search tools to manually scour LinkedIn, Indeed, and Google Jobs for Amravati-based or remote Indian opportunities.\n3. Generate hyper-personalized cold emails connecting the target company's job requirements directly with Atharv's product shipping experience.\n4. Prepare and queue the emails with Atharv's resume PDF attached.\n5. Never send any email to an HR or recruiter without final user review and confirmation to maintain professional quality and avoid spam.",
+      "status": "pending",
+      "model": "gemini-2.5-flash",
+      "client_type": "gemini-bridge",
+      "parent_message_id": null,
+      "created_at": "2026-08-04T20:27:10.565+00:00",
+      "sender": "ios",
+      "is_cancelled": false
+    },
+    {
+      "id": "03d3bdf3-2740-4b29-97f5-720d8ff2facc",
+      "role": "agent",
+      "content": "node:internal/modules/cjs/loader:1479\r\n  throw err;\r\n  ^\r\n\r\nError: Cannot find module 'C:\\Users\\USER\\Desktop\\LokmanyaMess\\node_modules\\npm\\bin\\npm-prefix.js'\r\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)\r\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)\r\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)\r\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)\r\n    at Module._load (node:internal/modules/cjs/loader:1262:25)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47 {\r\n  code: 'MODULE_NOT_FOUND',\r\n  requireStack: []\r\n}\r\n\r\nNode.js v24.15.0\r\nnode:internal/modules/cjs/loader:1479\r\n  throw err;\r\n  ^\r\n\r\nError: Cannot find module 'C:\\Users\\USER\\Desktop\\LokmanyaMess\\node_modules\\npm\\bin\\npx-cli.js'\r\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)\r\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)\r\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)\r\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)\r\n    at Module._load (node:internal/modules/cjs/loader:1262:25)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47 {\r\n  code: 'MODULE_NOT_FOUND',\r\n  requireStack: []\r\n}\r\n\r\nNode.js v24.15.0",
+      "status": "error",
+      "model": "gemini-2.5-flash",
+      "client_type": "gemini-bridge",
+      "parent_message_id": "b6df3e10-2f25-49d2-b0ab-2b18188c52f9",
+      "created_at": "2026-08-04T20:27:20.985Z",
+      "sender": "macOS",
+      "is_cancelled": false
+    },
+    {
+      "id": "d305b911-9ec8-49df-8719-419c4f03698b",
+      "role": "user",
+      "content": "What happened",
+      "status": "pending",
+      "model": "gemini-2.5-flash",
+      "client_type": "gemini-bridge",
+      "parent_message_id": null,
+      "created_at": "2026-08-04T20:28:15.214+00:00",
+      "sender": "ios",
+      "is_cancelled": false
+    },
+    {
+      "id": "e0cc54dd-0165-4d4c-adc3-c6b09115d9ed",
+      "role": "agent",
+      "content": "node:internal/modules/cjs/loader:1479\r\n  throw err;\r\n  ^\r\n\r\nError: Cannot find module 'C:\\Users\\USER\\Desktop\\LokmanyaMess\\node_modules\\npm\\bin\\npm-prefix.js'\r\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)\r\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)\r\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)\r\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)\r\n    at Module._load (node:internal/modules/cjs/loader:1262:25)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47 {\r\n  code: 'MODULE_NOT_FOUND',\r\n  requireStack: []\r\n}\r\n\r\nNode.js v24.15.0\r\nnode:internal/modules/cjs/loader:1479\r\n  throw err;\r\n  ^\r\n\r\nError: Cannot find module 'C:\\Users\\USER\\Desktop\\LokmanyaMess\\node_modules\\npm\\bin\\npx-cli.js'\r\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1476:15)\r\n    at wrapResolveFilename (node:internal/modules/cjs/loader:1049:27)\r\n    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1073:10)\r\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1094:12)\r\n    at Module._load (node:internal/modules/cjs/loader:1262:25)\r\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\r\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\r\n    at node:internal/main/run_main_module:33:47 {\r\n  code: 'MODULE_NOT_FOUND',\r\n  requireStack: []\r\n}\r\n\r\nNode.js v24.15.0",
+      "status": "error",
+      "model": "gemini-2.5-flash",
+      "client_type": "gemini-bridge",
+      "parent_message_id": "d305b911-9ec8-49df-8719-419c4f03698b",
+      "created_at": "2026-08-04T20:28:17.398Z",
+      "sender": "macOS",
+      "is_cancelled": false
+    }
+  ]
+}

@@ -512,15 +512,34 @@
 
   <div class="toast" id="toast-msg">UPI ID Copied!</div>
 
+  <script src="qrcode.min.js"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
-    const pa = params.get('pa') || 'lokmanya@upi';
-    const pn = params.get('pn') || 'Lokmanya Mess';
-    const am = params.get('am') || '0';
-    const tn = params.get('tn') || 'Mess Dues';
-    const tr = params.get('tr') || '';
-    const lang = params.get('lang') || 'en';
-    const ph = params.get('ph') || '';
+    let pa = params.get('pa') || 'lokmanya@upi';
+    let pn = params.get('pn') || 'Lokmanya Mess';
+    let am = params.get('am') || '0';
+    let tn = params.get('tn') || 'Mess Dues';
+    let tr = params.get('tr') || '';
+    let lang = params.get('lang') || 'en';
+    let ph = params.get('ph') || '';
+
+    const d = params.get('d');
+    if (d) {
+      try {
+        const base64 = d.replace(/-/g, '+').replace(/_/g, '/');
+        const decodedStr = decodeURIComponent(escape(atob(base64)));
+        const payload = JSON.parse(decodedStr);
+        if (payload.pa) pa = payload.pa;
+        if (payload.pn) pn = payload.pn;
+        if (payload.am) am = String(payload.am);
+        if (payload.tn) tn = payload.tn;
+        if (payload.tr) tr = payload.tr;
+        if (payload.lang) lang = payload.lang;
+        if (payload.ph) ph = payload.ph;
+      } catch (e) {
+        console.error('Failed to decode payload:', e);
+      }
+    }
 
     let currentAmount = parseFloat(am) || 0;
 
@@ -573,8 +592,13 @@
         upiUri = `upi://pay?pa=${pa}&pn=${encodeURIComponent(pn)}`;
       }
       
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
-      document.getElementById('qr-img').src = qrUrl;
+      const qr = qrcode(0, 'M');
+      qr.addData(upiUri);
+      qr.make();
+      const imgTag = qr.createImgTag(5, 10);
+      const match = imgTag.match(/src="([^"]+)"/);
+      const qrDataUrl = match ? match[1] : '';
+      document.getElementById('qr-img').src = qrDataUrl;
     }
 
     function onAmountChanged() {

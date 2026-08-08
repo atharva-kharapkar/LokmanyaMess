@@ -110,5 +110,9 @@ service cloud.firestore {
       // Example future rule:
       // allow read, write: if isSignedIn() && isSettings();
     }
+
+    match /desktop_archives/{docId} {
+      allow read, write: if false;
+    }
   }
 }

@@ -19,6 +19,9 @@ let mainWindow;
 let whatsappWindow = null;
 
 function isSafeExternalUrl(rawUrl) {
+  if (typeof rawUrl === 'string' && rawUrl.startsWith('whatsapp://')) {
+    return true;
+  }
   try {
     const parsed = new URL(rawUrl);
     return ['https:', 'http:', 'whatsapp:'].includes(parsed.protocol);
@@ -292,3 +295,12 @@ ipcMain.handle('save-csv', async (event, { content, defaultName }) => {
     return { success: false, error: e.message };
   }
 });
+
+ipcMain.handle('open-external', async (event, url) => {
+  if (isSafeExternalUrl(url)) {
+    require('electron').shell.openExternal(url);
+    return { success: true };
+  }
+  return { success: false, error: 'Unsafe URL' };
+});
+
