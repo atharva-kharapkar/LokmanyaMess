@@ -78,6 +78,7 @@ export default function App() {
     transactions: [],
     salaries: [],
     expenses: [],
+    archives: [],
     settings: {
       lang: 'en',
       upiId: '',
@@ -1920,8 +1921,8 @@ export default function App() {
     const { prevDues, currentDues } = getCustomerDuesBreakdown(customer);
 
     const defaultTemplate = db.settings?.lang === 'mr'
-      ? 'नमस्कार [Name], तुमची थकीत रक्कम ₹[Dues] आहे. (मागील थकबाकी: ₹[PrevDues], चालू महिना: ₹[CurrentDues]). कृपया पेमेंट करा: [UpiLink] - [MessName]'
-      : 'Dear [Name], your pending dues are Rs [Dues]. (Previous Balance: Rs [PrevDues], Current Month: Rs [CurrentDues]). Please pay here: [UpiLink] - [MessName]';
+      ? 'नमस्कार [Name],\n\nतुमची [MessName] ची थकबाकी ₹[Dues] आहे.\n(मागील थकबाकी: ₹[PrevDues], चालू महिना: ₹[CurrentDues])\n\nपेमेंट करण्यासाठी कृपया खालील लिंकवर क्लिक करा:\n[UpiLink]\n\nधन्यवाद,\n[MessName]'
+      : 'Hi [Name],\n\nYour pending dues for [MessName] are Rs [Dues].\n(Previous Balance: Rs [PrevDues], Current Month: Rs [CurrentDues])\n\nPlease pay here using any UPI app:\n[UpiLink]\n\nThank you,\n[MessName]';
     const template = String(db.settings?.whatsappDuesTemplate || defaultTemplate);
 
     if (template.trim()) {
@@ -2497,7 +2498,7 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <>
-        <div className="pin-screen" onClick={() => loginPinInputRef.current?.focus()}>
+        <div className="pin-screen" data-testid="login-pin-screen" onClick={() => loginPinInputRef.current?.focus()}>
         <div className="pin-card" style={{ maxWidth: '500px', width: '90%', padding: '40px', transition: 'all 0.5s ease', background: 'rgba(30, 30, 36, 0.95)', border: '1px solid rgba(255, 255, 255, 0.08)' }} onClick={(e) => e.stopPropagation()}>
           {/* Animated Logo Video or Static Logo */}
           <div className="pin-logo" style={{ width: '100%', aspectRatio: '16/9', margin: '0 auto 24px auto', borderRadius: '16px', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', boxShadow: 'var(--shadow-lg)' }}>
@@ -2536,6 +2537,7 @@ export default function App() {
                   ref={loginPinInputRef}
                   type="password"
                   className="form-input"
+                  data-testid="login-pin-input"
                   placeholder="••••••"
                   maxLength="6"
                   value={pinInput}
@@ -2614,12 +2616,13 @@ export default function App() {
 
       {firstRunModalVisible && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="first-run-modal-card" style={{ width: 420, maxWidth: '92%', background: 'var(--card)', padding: 20, borderRadius: 12, boxShadow: 'var(--shadow-lg)' }}>
+          <div className="first-run-modal-card" data-testid="first-run-modal-card" style={{ width: 420, maxWidth: '92%', background: 'var(--card)', padding: 20, borderRadius: 12, boxShadow: 'var(--shadow-lg)' }}>
             <h3 style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'प्रवेश सेटअप' : 'Initial Setup'}</h3>
             <p style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'कृपया या संगणकासाठी 6-अंकी मालक PIN सेट करा.' : 'Please set a 6-digit Owner PIN for this device.'}</p>
             <input
               type="password"
               className="first-run-modal-input"
+              data-testid="first-run-pin-input"
               value={firstRunPinInput}
               maxLength={6}
               onChange={(e) => setFirstRunPinInput(e.target.value.replace(/\D/g, ''))}
@@ -2641,12 +2644,13 @@ export default function App() {
     <div className="app-container">
       {firstRunModalVisible && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="first-run-modal-card" style={{ width: 420, maxWidth: '92%', background: 'var(--card)', padding: 20, borderRadius: 12, boxShadow: 'var(--shadow-lg)' }}>
+          <div className="first-run-modal-card" data-testid="first-run-modal-card" style={{ width: 420, maxWidth: '92%', background: 'var(--card)', padding: 20, borderRadius: 12, boxShadow: 'var(--shadow-lg)' }}>
             <h3 style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'प्रवेश सेटअप' : 'Initial Setup'}</h3>
             <p style={{ marginTop: 0 }}>{db.settings && db.settings.lang === 'mr' ? 'कृपया या संगणकासाठी 6-अंकी मालक PIN सेट करा.' : 'Please set a 6-digit Owner PIN for this device.'}</p>
             <input
               type="password"
               className="first-run-modal-input"
+              data-testid="first-run-pin-input"
               value={firstRunPinInput}
               maxLength={6}
               onChange={(e) => setFirstRunPinInput(e.target.value.replace(/\D/g, ''))}
@@ -4056,6 +4060,7 @@ export default function App() {
                   <input
                     key={`settings-passcode-input-${currentTab}-${isSettingsUnlocked}`}
                     id="settings-passcode-input"
+                    data-testid="settings-passcode-input"
                     ref={settingsInputRef}
                     type="password"
                     className="form-input"
@@ -4079,6 +4084,7 @@ export default function App() {
                   />
                   <button
                     id="settings-passcode-unlock-btn"
+                    data-testid="settings-passcode-unlock-btn"
                     className="btn btn-primary"
                     style={{ width: '100%', padding: '12px', fontWeight: '700' }}
                     onClick={async () => {
@@ -4162,6 +4168,7 @@ export default function App() {
                           <input
                             type="text"
                             id="settings-upi-input"
+                            data-testid="settings-upi-input"
                             className="form-input"
                             value={upiIdInput}
                             onChange={(e) => setUpiIdInput(e.target.value)}
@@ -4181,6 +4188,7 @@ export default function App() {
                           <input
                             type="text"
                             id="settings-phone-input"
+                            data-testid="settings-phone-input"
                             className="form-input"
                             value={paymentPhoneInput}
                             onChange={(e) => setPaymentPhoneInput(e.target.value.replace(/\D/g, ''))}
@@ -4495,6 +4503,7 @@ export default function App() {
                               <input
                                 type="password"
                                 id="settings-archive-owner-pin-input"
+                                data-testid="settings-archive-owner-pin-input"
                                 className="form-input"
                                 maxLength="6"
                                 placeholder="******"
@@ -4509,6 +4518,7 @@ export default function App() {
                               <input
                                 type="password"
                                 id="settings-archive-new-input2"
+                                data-testid="settings-archive-new-input2"
                                 className="form-input"
                                 maxLength="4"
                                 placeholder={db.settings.lang === 'mr' ? 'नवीन पासवर्ड (४-अंकी)' : 'New Passcode (4-digit)'}
@@ -4813,6 +4823,7 @@ export default function App() {
               <input
                 key="factory-reset-section-passcode-input"
                 id="factory-reset-unlock-input"
+                data-testid="factory-reset-unlock-input"
                 ref={factoryResetSectionInputRef}
                 type="text"
                 inputMode="numeric"
@@ -4899,6 +4910,7 @@ export default function App() {
               <input
                 key="factory-reset-action-passcode-input"
                 id="factory-reset-confirm-input"
+                data-testid="factory-reset-confirm-input"
                 ref={factoryResetInputRef}
                 type="text"
                 inputMode="numeric"
@@ -5391,6 +5403,7 @@ export default function App() {
                 <input
                   type="text"
                   id="customer-name-input"
+                  data-testid="customer-name-input"
                   className="form-input"
                   value={custForm.name}
                   onChange={(e) => setCustForm({ ...custForm, name: e.target.value })}
@@ -5402,6 +5415,7 @@ export default function App() {
                 <input
                   type="text"
                   id="customer-phone-input"
+                  data-testid="customer-phone-input"
                   className="form-input"
                   placeholder="e.g. 9876543210"
                   value={custForm.phone}
@@ -5491,6 +5505,7 @@ export default function App() {
                     <input
                       type="text"
                       id="customer-fee-input"
+                      data-testid="customer-fee-input"
                       inputMode="numeric"
                       className="form-input"
                       value={custForm.amount}
@@ -5506,6 +5521,7 @@ export default function App() {
                 <input
                   type="text"
                   id="customer-deposited-input"
+                  data-testid="customer-deposited-input"
                   inputMode="numeric"
                   className="form-input"
                   value={custForm.deposited}
@@ -5533,24 +5549,19 @@ export default function App() {
                 />
               </div>
 
-              {currentTab !== 'shortterm' && (
-                <div className="form-group">
-                  <label className="form-label">
-                    {db.settings.lang === 'mr' ? 'बिलिंग सुरू होण्याची तारीख (पर्यायी)' : 'Billing Start Date (Optional)'}
-                  </label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={custForm.billingStartDate || ''}
-                    onChange={(e) => setCustForm({ ...custForm, billingStartDate: e.target.value })}
-                  />
-                  <small style={{ color: 'var(--text-secondary)', fontSize: '11px', display: 'block', marginTop: '4px', lineHeight: '1.4' }}>
-                    {db.settings.lang === 'mr' 
-                      ? 'नवीन सिस्टीममध्ये बिलिंग ज्या तारखेपासून सुरू करायचे आहे ती तारीख निवडा (उदा. चालू महिन्याची पहिली तारीख). रिकामे ठेवल्यास प्रवेश तारखेपासून हिशोब होईल.' 
-                      : 'Choose the date when billing should start in this new system (e.g. 1st of current month). Leave blank to bill from Joining Date.'}
-                  </small>
-                </div>
-              )}
+              <div className="form-group">
+                <label className="form-label">
+                  {db.settings.lang === 'mr' ? 'आधार कार्ड नंबर (ऐच्छिक)' : 'Aadhar Card Number (Optional)'}
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder={db.settings.lang === 'mr' ? 'उदा. १२३४५६७८९०१२' : 'e.g. 123456789012'}
+                  value={custForm.aadhar || ''}
+                  maxLength="12"
+                  onChange={(e) => setCustForm({ ...custForm, aadhar: e.target.value.replace(/\D/g, '') })}
+                />
+              </div>
               <div className="form-group">
                 <label className="form-label">
                   {currentTab === 'tiffin' 
