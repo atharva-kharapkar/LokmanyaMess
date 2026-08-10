@@ -3308,7 +3308,7 @@ export default function App() {
                           <div 
                             className="customer-bar-name"
                             style={{ 
-                              fontSize: '23px',
+                              fontSize: '20px',
                               color: shouldShowDuesWarning ? '#FF0000' : '#111827', 
                               fontWeight: '800',
                               textTransform: 'capitalize'
