@@ -18,7 +18,24 @@ export const toLocalYYYYMMDD = (d) => {
   return `${year}-${month}-${day}`;
 };
 
-export const normalizeText = (value) => String(value ?? '').trim().replace(/\s+/g, ' ');
+export const formatDisplayDate = (dateVal) => {
+  if (!dateVal) return '';
+  if (dateVal instanceof Date) {
+    const year = dateVal.getFullYear();
+    const month = String(dateVal.getMonth() + 1).padStart(2, '0');
+    const day = String(dateVal.getDate()).padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+  const str = String(dateVal).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str;
+  const parts = str.split('-');
+  if (parts.length === 3) {
+    return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+  }
+  return str;
+};
+
+export const normalizeText = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 export const isBlank = (value) => normalizeText(value).length === 0;
 export const isExactDigits = (value, length) => new RegExp(`^\\d{${length}}$`).test(String(value ?? ''));
 export const isArchivePinValid = (value) => /^\d{4}$/.test(String(value ?? ''));
@@ -211,10 +228,36 @@ export function getEffectiveJoinDate(c) {
   return c.billingStartDate || c.joinDate || '';
 }
 
+export function getAdjustedStartDate(c, todayMidnight = null) {
+  if (!todayMidnight) {
+    const today = new Date();
+    todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return new Date();
+  
+  let adjusted = parseLocalDate(refDate);
+  
+  if (c.totalPausedDays) {
+    adjusted.setDate(adjusted.getDate() + c.totalPausedDays);
+  }
+  
+  if (c.isPaused && c.pauseStartDate) {
+    const pauseStart = parseLocalDate(c.pauseStartDate);
+    const currentPauseDays = Math.max(0, Math.round((todayMidnight - pauseStart) / 86400000));
+    adjusted.setDate(adjusted.getDate() + currentPauseDays);
+  }
+  
+  return adjusted;
+}
+
 export function getExpiryDate(c, optionalPlan) {
   const refDate = getEffectiveJoinDate(c);
   if (!refDate) return new Date();
-  const startDate = parseLocalDate(refDate);
+  
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = getAdjustedStartDate(c, todayMidnight);
 
   if (typeof c === 'object' && c.category === 'shortterm') {
     const durationDays = Number(c.shortTermDays || 10);
@@ -223,9 +266,27 @@ export function getExpiryDate(c, optionalPlan) {
     return expiryDate;
   }
 
-  const daysPerCycle = PLAN_DAYS[(typeof c === 'object' ? c.plan : optionalPlan)] || 30;
-  const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const planName = typeof c === 'object' ? c.plan : optionalPlan;
+
+  if (!planName || planName === 'Monthly') {
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const startDay = startDate.getDate();
+
+    let elapsedMonths = (todayMidnight.getFullYear() - startYear) * 12 + (todayMidnight.getMonth() - startMonth);
+    if (todayMidnight.getDate() < startDay) {
+      elapsedMonths -= 1;
+    }
+    if (elapsedMonths < 0) elapsedMonths = 0;
+
+    const totalMonths = startMonth + elapsedMonths + 1;
+    const targetYear = startYear + Math.floor(totalMonths / 12);
+    const targetMonth = totalMonths % 12;
+
+    return new Date(targetYear, targetMonth, startDay);
+  }
+
+  const daysPerCycle = PLAN_DAYS[planName] || 30;
   const elapsedTime = todayMidnight - startDate;
   const elapsedDays = Math.round(elapsedTime / 86400000);
   let elapsedCycles = 0;
@@ -253,7 +314,7 @@ export function expiryStr(c) {
   const joinDate = typeof c === 'string' ? c : c.joinDate;
   if (!joinDate) return '';
   const d = getExpiryDate(c, typeof c === 'string' ? arguments[1] : undefined);
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDisplayDate(d);
 }
 
 export const TRANSLATIONS = {
@@ -409,15 +470,17 @@ export const TRANSLATIONS = {
 
 export function getCustomerDues(c) {
   if (!c) return 0;
+  const planAmount = Number(c.amount || 0);
+  const depositedAmount = Number(c.deposited || 0);
   if (c.category === 'shortterm') {
-    return Math.max(0, Number(c.amount || 0) - Number(c.deposited || 0));
+    return Math.max(0, planAmount - depositedAmount);
   }
   const refDate = getEffectiveJoinDate(c);
   if (!refDate) return 0;
   const daysPerCycle = PLAN_DAYS[c.plan] || 30;
-  const startDate = parseLocalDate(refDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = getAdjustedStartDate(c, todayMidnight);
   
   const elapsedTime = todayMidnight - startDate;
   const elapsedDays = Math.round(elapsedTime / 86400000);
@@ -428,22 +491,23 @@ export function getCustomerDues(c) {
   }
   
   const totalCyclesEntered = elapsedCycles + 1;
-  const totalOwed = totalCyclesEntered * c.amount;
-  return Math.max(0, totalOwed - (c.deposited || 0));
+  const totalOwed = totalCyclesEntered * planAmount;
+  return Math.max(0, totalOwed - depositedAmount);
 }
 
-export function getCustomerDuesBreakdown(c) {
-  if (!c) return { prevDues: 0, currentDues: 0, totalDues: 0 };
+export function getCurrentCycleDeposited(c) {
+  if (!c) return 0;
+  const planAmount = Number(c.amount || 0);
+  const depositedAmount = Number(c.deposited || 0);
   if (c.category === 'shortterm') {
-    const totalDues = Math.max(0, Number(c.amount || 0) - Number(c.deposited || 0));
-    return { prevDues: 0, currentDues: totalDues, totalDues };
+    return Math.min(planAmount, depositedAmount);
   }
   const refDate = getEffectiveJoinDate(c);
-  if (!refDate) return { prevDues: 0, currentDues: 0, totalDues: 0 };
+  if (!refDate) return depositedAmount;
   const daysPerCycle = PLAN_DAYS[c.plan] || 30;
-  const startDate = parseLocalDate(refDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = getAdjustedStartDate(c, todayMidnight);
   
   const elapsedTime = todayMidnight - startDate;
   const elapsedDays = Math.round(elapsedTime / 86400000);
@@ -453,18 +517,46 @@ export function getCustomerDuesBreakdown(c) {
     elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
   }
   
-  const completedCyclesAmount = elapsedCycles * c.amount;
-  const currentCycleFee = c.amount;
-  const deposited = Number(c.deposited || 0);
+  const pastCyclesCost = elapsedCycles * planAmount;
+  const currentMonthPaid = Math.max(0, depositedAmount - pastCyclesCost);
+  return Math.min(planAmount, currentMonthPaid);
+}
 
-  const prevDues = Math.max(0, completedCyclesAmount - deposited);
-  const totalDues = Math.max(0, (completedCyclesAmount + currentCycleFee) - deposited);
+export function getCustomerDuesBreakdown(c) {
+  if (!c) return { prevDues: 0, currentDues: 0, totalDues: 0 };
+  const planAmount = Number(c.amount || 0);
+  const depositedAmount = Number(c.deposited || 0);
+  if (c.category === 'shortterm') {
+    const totalDues = Math.max(0, planAmount - depositedAmount);
+    return { prevDues: 0, currentDues: totalDues, totalDues };
+  }
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return { prevDues: 0, currentDues: 0, totalDues: 0 };
+  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = getAdjustedStartDate(c, todayMidnight);
+  
+  const elapsedTime = todayMidnight - startDate;
+  const elapsedDays = Math.round(elapsedTime / 86400000);
+  
+  let elapsedCycles = 0;
+  if (elapsedDays > 0) {
+    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
+  }
+  
+  const completedCyclesAmount = elapsedCycles * planAmount;
+  const currentCycleFee = planAmount;
+
+  const prevDues = Math.max(0, completedCyclesAmount - depositedAmount);
+  const totalDues = Math.max(0, (completedCyclesAmount + currentCycleFee) - depositedAmount);
   const currentDues = Math.max(0, totalDues - prevDues);
 
   return { prevDues, currentDues, totalDues };
 }
 
 export function computeStatus(c) {
+  if (c && c.isPaused) return 'paused';
   const refDate = getEffectiveJoinDate(c);
   if (!c || !refDate) return 'expired';
   
@@ -475,10 +567,12 @@ export function computeStatus(c) {
     return 'expired';
   }
 
+  const planAmount = Number(c.amount || 0);
+  const depositedAmount = Number(c.deposited || 0);
   const daysPerCycle = PLAN_DAYS[c.plan] || 30;
-  const startDate = parseLocalDate(refDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = getAdjustedStartDate(c, todayMidnight);
   
   const elapsedTime = todayMidnight - startDate;
   const elapsedDays = Math.round(elapsedTime / 86400000);
@@ -488,15 +582,14 @@ export function computeStatus(c) {
     elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
   }
   
-  const completedCyclesAmount = elapsedCycles * c.amount;
-  const hasPaidPastCycles = (c.deposited || 0) >= completedCyclesAmount;
+  const completedCyclesAmount = elapsedCycles * planAmount;
+  const hasPaidPastCycles = depositedAmount >= completedCyclesAmount;
   
   if (!hasPaidPastCycles) {
     return 'expired';
   }
   
-  const currentCycleExpiry = new Date(startDate);
-  currentCycleExpiry.setDate(startDate.getDate() + (elapsedCycles + 1) * daysPerCycle);
+  const currentCycleExpiry = getExpiryDate(c);
   const diffTime = currentCycleExpiry - todayMidnight;
   const days = Math.round(diffTime / 86400000);
   
@@ -521,9 +614,9 @@ export function getDueWarningDays(c) {
   const remaining = getCustomerDues(c);
   if (remaining <= 0) return 0;
 
-  const startDate = parseLocalDate(refDate);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startDate = getAdjustedStartDate(c, todayMidnight);
   const elapsedTime = todayMidnight - startDate;
   const elapsedDays = Math.max(0, Math.round(elapsedTime / 86400000));
 
@@ -545,7 +638,7 @@ export function getDaysPendingDues(c) {
 
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const startDate = parseLocalDate(refDate);
+  const startDate = getAdjustedStartDate(c, todayMidnight);
 
   if (c.category === 'shortterm') {
     const diffTime = todayMidnight - startDate;
@@ -588,6 +681,15 @@ export function sanitizeImportedDbHelper(rawDb) {
     const customer = ensureObject(item, `customers[${index}]`);
     if (typeof customer.id !== 'string' || customer.id.trim() === '') {
       throw new Error(`customers[${index}] is missing a valid id.`);
+    }
+    
+    // Auto-migrate legacy meal selections to mealType & mealSlot if needed
+    if (!customer.mealType && (customer.mealSelection || customer.tiffinPlan)) {
+      const sourceStr = String(customer.mealSelection || customer.tiffinPlan).toUpperCase();
+      if (sourceStr.includes('1') && sourceStr.includes('HALF')) customer.mealType = '1_TIME_HALF';
+      else if (sourceStr.includes('2') && sourceStr.includes('HALF')) customer.mealType = '2_TIME_HALF';
+      else if (sourceStr.includes('1')) customer.mealType = '1_TIME_FULL';
+      else if (sourceStr.includes('2')) customer.mealType = '2_TIME_FULL';
     }
     return customer;
   });

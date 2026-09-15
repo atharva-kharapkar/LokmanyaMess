@@ -111,3 +111,8 @@ Desktop.ini
 
 # Local scratch files and temporary research artifacts
 /scratch/
+
+# Local Database Dumps & Installers
+lokmanya_mess_db.json
+*.exe
+

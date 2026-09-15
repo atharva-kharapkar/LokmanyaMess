@@ -7,6 +7,19 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
+function getAllFiles(dirPath, arrayOfFiles = []) {
+  const files = fs.readdirSync(dirPath);
+  files.forEach((file) => {
+    const fullPath = path.join(dirPath, file);
+    if (fs.statSync(fullPath).isDirectory()) {
+      getAllFiles(fullPath, arrayOfFiles);
+    } else if (file.endsWith('.js') || file.endsWith('.jsx')) {
+      arrayOfFiles.push(fullPath);
+    }
+  });
+  return arrayOfFiles;
+}
+
 function assertIncludes(content, snippet, label) {
   if (!content.includes(snippet)) {
     throw new Error(`Missing ${label}`);
@@ -21,7 +34,9 @@ function assertExcludes(content, snippet, label) {
 
 try {
   const packageJson = JSON.parse(read('package.json'));
-  const appJsx = read(path.join('src', 'App.jsx'));
+  const srcFiles = getAllFiles(path.join(root, 'src'));
+  const allAppCode = srcFiles.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+
   const mainJs = read('main.js');
   const preloadJs = read('preload.js');
   const firestoreRules = read('firestore.rules');
@@ -31,12 +46,12 @@ try {
     throw new Error('package.json is missing the check:security script');
   }
 
-  assertExcludes(appJsx, 'LKMESSDEV2026', 'hardcoded developer master key');
-  assertIncludes(appJsx, 'const updateArchivePasscodeWithOwnerPin = useCallback(async () => {', 'owner PIN archive passcode updater');
-  assertIncludes(appJsx, 'await matchesSecret(cleanedOwnerPin, db.settings.ownerPinHash, PIN_LENGTH)', 'owner PIN verification');
-  assertIncludes(appJsx, 'function sanitizeImportedDb(rawDb) {', 'backup import sanitizer');
-  assertIncludes(appJsx, "if (file.size > 5 * 1024 * 1024)", 'backup file size limit');
-  assertIncludes(appJsx, 'const sanitizedImport = sanitizeImportedDb(parsed);', 'sanitized backup import');
+  assertExcludes(allAppCode, 'LKMESSDEV2026', 'hardcoded developer master key');
+  assertIncludes(allAppCode, 'const updateArchivePasscodeWithOwnerPin = useCallback(async () => {', 'owner PIN archive passcode updater');
+  assertIncludes(allAppCode, 'await matchesSecret(cleanedOwnerPin, db.settings.ownerPinHash, PIN_LENGTH)', 'owner PIN verification');
+  assertIncludes(allAppCode, 'function sanitizeImportedDb(rawDb) {', 'backup import sanitizer');
+  assertIncludes(allAppCode, "if (file.size > 5 * 1024 * 1024)", 'backup file size limit');
+  assertIncludes(allAppCode, 'const sanitizedImport = sanitizeImportedDb(parsed);', 'sanitized backup import');
 
   assertIncludes(mainJs, 'function isAllowedWhatsAppUrl(rawUrl) {', 'WhatsApp allowlist helper');
   assertIncludes(mainJs, "['web.whatsapp.com', 'api.whatsapp.com', 'wa.me'].includes(parsed.hostname)", 'WhatsApp hostname allowlist');
@@ -44,10 +59,10 @@ try {
   assertIncludes(mainJs, "mainWindow.webContents.on('will-navigate'", 'navigation guard');
 
   assertIncludes(preloadJs, "contextBridge.exposeInMainWorld('electronAPI'", 'context bridge usage');
-  assertIncludes(appJsx, "Owner access is required to delete this transaction.", 'owner-only transaction delete guard');
-  assertIncludes(appJsx, "Owner access is required to modify customers.", 'owner-only customer guard');
-  assertIncludes(appJsx, "Owner access is required to restore customers.", 'owner-only restore guard');
-  assertIncludes(appJsx, "Owner access is required to delete expenses.", 'owner-only expense guard');
+  assertIncludes(allAppCode, "Owner access is required to delete this transaction.", 'owner-only transaction delete guard');
+  assertIncludes(allAppCode, "Owner access is required to modify customers.", 'owner-only customer guard');
+  assertIncludes(allAppCode, "Owner access is required to restore customers.", 'owner-only restore guard');
+  assertIncludes(allAppCode, "Owner access is required to delete expenses.", 'owner-only expense guard');
   assertIncludes(firestoreRules, "allow read, write: if false;", 'deny-by-default Firestore rules');
   assertIncludes(firestoreRules, "match /desktop_customers/{docId}", 'customers rules block');
   if (firebaseJson.firestore?.rules !== 'firestore.rules') {

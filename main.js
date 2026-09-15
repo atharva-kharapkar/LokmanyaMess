@@ -3,7 +3,11 @@ const path = require('path');
 const fs = require('fs');
 
 // Runtime flags
-const isDev = !app.isPackaged;
+const isDev = false;
+
+// Force Indian English locale so native date inputs render DD/MM/YYYY
+app.commandLine.appendSwitch('lang', 'en-GB');
+app.setName('Lokmanya Mess');
 
 // Global crash handlers for the main process — log and show a dialog so the app doesn't silently exit
 process.on('uncaughtException', (err) => {
@@ -144,7 +148,7 @@ mainWindow.webContents.on("console-message", (event, level, message) => {
 // Load application
 if (isDev) {
   console.log("========== DEV MODE ==========");
-  mainWindow.loadURL("http://localhost:5173");
+  mainWindow.loadURL("http://localhost:4173");
 } else {
   const indexPath = path.join(__dirname, "dist", "index.html");
 
@@ -162,23 +166,12 @@ if (isDev) {
 }
 }
 app.whenReady().then(() => {
-  if (!isDev) {
-    session.defaultSession.clearCache().catch((error) => {
-      console.error('Failed to clear HTTP cache on startup:', error);
-    });
-    session.defaultSession.clearStorageData({
-      storages: ['serviceworkers', 'cachestorage']
-    }).catch((error) => {
-      console.error('Failed to clear stale offline shell data on startup:', error);
-    });
-  }
-
   // Permission handler: only allow camera/microphone for trusted origins (dev server or packaged file://)
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     try {
       const url = webContents.getURL();
       if (permission === 'media') {
-        if ((isDev && url.startsWith('http://localhost:5173')) || (!isDev && url.startsWith('file://'))) {
+        if ((isDev && (url.startsWith('http://localhost:5173') || url.startsWith('http://localhost:4173'))) || (!isDev && url.startsWith('file://'))) {
           callback(true);
           return;
         }
@@ -207,6 +200,55 @@ const getDbPath = () => {
     fs.mkdirSync(dbDir, { recursive: true });
   }
   return path.join(dbDir, 'database.json');
+};
+
+const getBackupsDir = () => {
+  const userDataPath = app.getPath('userData');
+  const backupDir = path.join(userDataPath, 'data', 'backups');
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+  return backupDir;
+};
+
+// Non-blocking background daily backup
+const ensureDailyBackup = (safeData) => {
+  setImmediate(() => {
+    try {
+      if (!safeData || typeof safeData !== 'object') return;
+      if ((!safeData.customers || safeData.customers.length === 0) && (!safeData.transactions || safeData.transactions.length === 0)) {
+        return;
+      }
+      const backupDir = getBackupsDir();
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayBackupPath = path.join(backupDir, `lokmanya_backup_${todayStr}.json`);
+
+      if (!fs.existsSync(todayBackupPath)) {
+        fs.writeFileSync(todayBackupPath, JSON.stringify(safeData), 'utf8');
+        console.log(`[Backup] Created daily rolling backup for ${todayStr}`);
+      }
+
+      // Prune backups older than 30 days asynchronously
+      fs.readdir(backupDir, (err, files) => {
+        if (err || !Array.isArray(files)) return;
+        const now = Date.now();
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+
+        files.forEach((file) => {
+          if (file.startsWith('lokmanya_backup_') && file.endsWith('.json')) {
+            const filePath = path.join(backupDir, file);
+            fs.stat(filePath, (statErr, stats) => {
+              if (!statErr && stats && now - stats.mtimeMs > thirtyDaysMs) {
+                fs.unlink(filePath, () => {});
+              }
+            });
+          }
+        });
+      });
+    } catch (err) {
+      console.warn('[Backup] Daily backup check error:', err);
+    }
+  });
 };
 
 ipcMain.handle('read-database', async () => {
@@ -239,6 +281,8 @@ ipcMain.handle('read-database', async () => {
     if (!parsed.settings || typeof parsed.settings !== 'object') parsed.settings = defaultDb.settings;
     if (!parsed.expenses) parsed.expenses = [];
     if (!parsed.archives) parsed.archives = [];
+    
+    ensureDailyBackup(parsed);
     return parsed;
   } catch (e) {
     console.error("Error reading database:", e);
@@ -266,10 +310,84 @@ ipcMain.handle('write-database', async (event, data) => {
       settings: (data.settings && typeof data.settings === 'object') ? data.settings : { lang: 'en' }
     };
     fs.writeFileSync(dbPath, JSON.stringify(safeData, null, 2), 'utf8');
+    ensureDailyBackup(safeData);
     return { success: true };
   } catch (e) {
     console.error("Error writing database:", e);
     return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('list-backups', async () => {
+  try {
+    const backupDir = getBackupsDir();
+    if (!fs.existsSync(backupDir)) return [];
+    const files = fs.readdirSync(backupDir);
+    const backups = files
+      .filter((file) => file.startsWith('lokmanya_backup_') && file.endsWith('.json'))
+      .map((file) => {
+        const filePath = path.join(backupDir, file);
+        const stats = fs.statSync(filePath);
+        const dateMatch = file.match(/lokmanya_backup_(\d{4}-\d{2}-\d{2})\.json/);
+        const dateStr = dateMatch ? dateMatch[1] : stats.mtime.toISOString().split('T')[0];
+        return {
+          filename: file,
+          date: dateStr,
+          sizeKb: Math.round(stats.size / 1024) || 1,
+          modifiedAt: stats.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return backups;
+  } catch (err) {
+    console.error('Error listing backups:', err);
+    return [];
+  }
+});
+
+ipcMain.handle('restore-backup', async (event, filename) => {
+  try {
+    const backupDir = getBackupsDir();
+    const backupPath = path.join(backupDir, filename);
+    if (!fs.existsSync(backupPath)) {
+      return { success: false, error: 'Backup file not found' };
+    }
+    const content = fs.readFileSync(backupPath, 'utf8');
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== 'object') {
+      return { success: false, error: 'Invalid backup content' };
+    }
+
+    const dbPath = getDbPath();
+    fs.writeFileSync(dbPath, JSON.stringify(parsed, null, 2), 'utf8');
+    return { success: true, data: parsed };
+  } catch (err) {
+    console.error('Error restoring backup:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('export-backup', async () => {
+  if (!mainWindow) return { success: false };
+  const dbPath = getDbPath();
+  if (!fs.existsSync(dbPath)) return { success: false, error: 'Database file does not exist' };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export USB / Offline Backup',
+    defaultPath: path.join(app.getPath('downloads'), `lokmanya_mess_backup_${todayStr}.json`),
+    filters: [{ name: 'JSON Backup Files', extensions: ['json'] }]
+  });
+
+  if (!filePath) return { success: false, canceled: true };
+
+  try {
+    const data = fs.readFileSync(dbPath, 'utf8');
+    fs.writeFileSync(filePath, data, 'utf8');
+    return { success: true, filePath };
+  } catch (err) {
+    console.error('Error exporting backup:', err);
+    return { success: false, error: err.message };
   }
 });
 
@@ -303,4 +421,5 @@ ipcMain.handle('open-external', async (event, url) => {
   }
   return { success: false, error: 'Unsafe URL' };
 });
+
 
