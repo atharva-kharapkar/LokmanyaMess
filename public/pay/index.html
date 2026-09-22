@@ -629,16 +629,16 @@
     updateUpiLinks();
 
     function payWith(app) {
-      let targetUrl = upiUri;
-      const isAndroid = /Android/i.test(navigator.userAgent);
       const prefill = document.getElementById('prefill-checkbox').checked;
+      let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
+      if (prefill) {
+        uriParams += `&am=${currentAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(tn)}`;
+      }
+
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      let targetUrl = `upi://pay?${uriParams}`;
       
       if (isAndroid) {
-        let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
-        if (prefill) {
-          uriParams += `&am=${currentAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(tn)}`;
-        }
-        
         if (app === 'gpay') {
           targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
         } else if (app === 'phonepe') {
@@ -651,21 +651,8 @@
           targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
         }
       } else {
-        // iOS URL Schemas
-        let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
-        if (prefill) {
-          uriParams += `&am=${currentAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(tn)}`;
-        }
-
-        if (app === 'gpay') {
-          targetUrl = `gpay://upi/pay?${uriParams}`;
-        } else if (app === 'phonepe') {
-          targetUrl = `phonepe://pay?${uriParams}`;
-        } else if (app === 'paytm') {
-          targetUrl = `paytmmp://pay?${uriParams}`;
-        } else if (app === 'slice') {
-          targetUrl = `slice://upi/pay?${uriParams}`;
-        }
+        // Universal NPCI upi:// scheme for iOS (bypasses merchant signature checks in PhonePe/GPay)
+        targetUrl = `upi://pay?${uriParams}`;
       }
 
       window.location.href = targetUrl;
