@@ -85,7 +85,7 @@ export function buildCustomerReminderMessage(customer, duesAmount, settings = {}
 export function openWhatsAppWithTypedMessage(phone, message, mode = 'desktop') {
   const cleanPhone = normalizeWhatsAppPhone(phone);
   const encodedMsg = encodeURIComponent(message || '');
-  let url = `https://wa.me/${cleanPhone}?text=${encodedMsg}`;
+  let url = `whatsapp://send?phone=${cleanPhone}&text=${encodedMsg}`;
   if (mode === 'web') {
     url = `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
   }
