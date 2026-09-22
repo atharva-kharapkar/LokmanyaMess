@@ -630,9 +630,16 @@
 
     function payWith(app) {
       const prefill = document.getElementById('prefill-checkbox').checked;
-      let uriParams = `pa=${pa}&pn=${encodeURIComponent(pn)}`;
-      if (prefill) {
-        uriParams += `&am=${currentAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(tn)}`;
+      
+      // Auto-copy VPA to clipboard as instant fallback for personal account transfers
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pa).catch(() => {});
+      }
+
+      // Construct clean P2P URI parameters (omit pn/tn merchant fields to prevent PhonePe verification failure on personal VPAs)
+      let uriParams = `pa=${pa}`;
+      if (prefill && currentAmount > 0) {
+        uriParams += `&am=${currentAmount.toFixed(2)}&cu=INR`;
       }
 
       const isAndroid = /Android/i.test(navigator.userAgent);
@@ -651,7 +658,7 @@
           targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
         }
       } else {
-        // App-specific iOS URL Schemas (prompts 'Open in PhonePe / GPay / Paytm' instead of WhatsApp)
+        // iOS URL Schemas
         if (app === 'phonepe') {
           targetUrl = `phonepe://pay?${uriParams}`;
         } else if (app === 'gpay') {
@@ -664,6 +671,11 @@
           targetUrl = `upi://pay?${uriParams}`;
         }
       }
+
+      const toast = document.getElementById('toast-msg');
+      toast.textContent = isMarathi ? "UPI आयडी कॉपी केला! ॲप उघडत आहे..." : "UPI ID Copied! Opening App...";
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
 
       window.location.href = targetUrl;
     }
