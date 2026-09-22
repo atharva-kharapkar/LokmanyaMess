@@ -64,7 +64,7 @@ export function buildCustomerReminderMessage(customer, duesAmount, settings = {}
   try {
     const encodedPayload = btoa(JSON.stringify(payloadObj));
     const nonce = Math.random().toString(36).substring(2, 9);
-    payUrl = `https://lokmanya-mess.vercel.app/pay/?d=${encodedPayload}&r=${nonce}`;
+    payUrl = `https://atharva-kharapkar.github.io/LokmanyaMess/public/pay/?d=${encodedPayload}&r=${nonce}`;
   } catch (err) {
     payUrl = `UPI ID: ${upiId}`;
   }
