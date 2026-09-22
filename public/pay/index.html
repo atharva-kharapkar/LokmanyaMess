@@ -651,8 +651,18 @@
           targetUrl = `intent://pay?${uriParams}#Intent;scheme=upi;package=in.org.npci.upiapp;end`;
         }
       } else {
-        // Universal NPCI upi:// scheme for iOS (bypasses merchant signature checks in PhonePe/GPay)
-        targetUrl = `upi://pay?${uriParams}`;
+        // App-specific iOS URL Schemas (prompts 'Open in PhonePe / GPay / Paytm' instead of WhatsApp)
+        if (app === 'phonepe') {
+          targetUrl = `phonepe://pay?${uriParams}`;
+        } else if (app === 'gpay') {
+          targetUrl = `gpay://upi/pay?${uriParams}`;
+        } else if (app === 'paytm') {
+          targetUrl = `paytmmp://pay?${uriParams}`;
+        } else if (app === 'slice') {
+          targetUrl = `slice://upi/pay?${uriParams}`;
+        } else {
+          targetUrl = `upi://pay?${uriParams}`;
+        }
       }
 
       window.location.href = targetUrl;
