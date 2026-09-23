@@ -1,10 +1,21 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
-export default function PhotoPreviewModal({ previewImage, onClose }) {
+export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClose }) {
   if (!previewImage) return null;
 
+  const handleClose = onClose || (() => setPreviewImage && setPreviewImage(null));
   const imageUrl = previewImage.url || (typeof previewImage === 'string' ? previewImage : '');
-  const imageName = previewImage.name || 'Photo';
+  const imageName = previewImage.name || 'Profile Photo';
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose]);
 
   return (
     <div 
@@ -12,42 +23,44 @@ export default function PhotoPreviewModal({ previewImage, onClose }) {
       style={{ 
         position: 'fixed', 
         inset: 0, 
-        background: 'rgba(0,0,0,0.75)', 
+        background: 'rgba(0, 0, 0, 0.82)', 
         zIndex: 3000, 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        backdropFilter: 'blur(5px)'
+        backdropFilter: 'blur(8px)',
+        padding: '16px',
+        animation: 'fadeIn 0.2s ease-out'
       }}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div 
         style={{ 
           position: 'relative', 
           background: 'var(--card)', 
-          padding: '16px', 
-          borderRadius: '16px', 
-          boxShadow: 'var(--shadow-lg)', 
-          maxWidth: '90%', 
+          padding: '20px', 
+          borderRadius: '20px', 
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4)', 
+          maxWidth: '92vw', 
           width: '420px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          border: '1px solid rgba(255,255,255,0.1)'
+          border: '1px solid rgba(255, 255, 255, 0.15)'
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <button 
-          onClick={onClose}
+          onClick={handleClose}
           style={{
             position: 'absolute',
-            top: '-16px',
-            right: '-16px',
-            width: '36px',
-            height: '36px',
+            top: '-14px',
+            right: '-14px',
+            width: '38px',
+            height: '38px',
             borderRadius: '50%',
             background: 'var(--card)',
-            border: '1px solid var(--border)',
+            border: '2px solid var(--border)',
             color: 'var(--text)',
             display: 'flex',
             alignItems: 'center',
@@ -58,18 +71,32 @@ export default function PhotoPreviewModal({ previewImage, onClose }) {
             fontWeight: 'bold',
             zIndex: 10
           }}
+          title="Close (Esc)"
         >
           ✕
         </button>
-        <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#f0f0f0', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '1px solid var(--border)' }}>
+
+        <div style={{ 
+          width: '100%', 
+          aspectRatio: '1 / 1', 
+          borderRadius: '16px', 
+          overflow: 'hidden', 
+          backgroundColor: '#f8fafc', 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          border: '1px solid var(--border)',
+          boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)'
+        }}>
           <img 
             src={imageUrl} 
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
             alt={imageName} 
           />
         </div>
-        {previewImage.name && (
-          <div style={{ marginTop: '14px', fontSize: '16px', fontWeight: '700', color: 'var(--text)', textAlign: 'center' }}>
+
+        {imageName && (
+          <div style={{ marginTop: '16px', fontSize: '18px', fontWeight: '800', color: 'var(--text)', textAlign: 'center', letterSpacing: '-0.3px' }}>
             {imageName}
           </div>
         )}
