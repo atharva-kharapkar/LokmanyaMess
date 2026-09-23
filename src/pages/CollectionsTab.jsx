@@ -3,6 +3,7 @@ import { Coins, Trash2, Lock } from 'lucide-react';
 import { formatDisplayDate } from '../utils/formatters';
 import FinancialArchiveLockModal from '../components/modals/FinancialArchiveLockModal';
 import { useFinancialArchive } from '../features/financialArchive/useFinancialArchive';
+import SectionCollectionBreakdown from '../components/collections/SectionCollectionBreakdown';
 
 export default function CollectionsTab({
   db = { customers: [], transactions: [], expenses: [], settings: {} },
@@ -35,7 +36,7 @@ export default function CollectionsTab({
           </div>
           <div className="stat-info">
             <div className="stat-label">{isMarathi ? 'आजची एकूण जमा' : "Today's Collections"}</div>
-            <div className="stat-value" style={{ color: 'var(--success)' }}>₹{todayCollectionTotal}</div>
+            <div className="stat-value" style={{ color: 'var(--success)' }}>₹{todayCollectionTotal || 0}</div>
           </div>
         </div>
 
@@ -45,10 +46,17 @@ export default function CollectionsTab({
           </div>
           <div className="stat-info">
             <div className="stat-label">{isMarathi ? 'चालू महिन्याची एकूण जमा' : "Current Month's Collections"}</div>
-            <div className="stat-value" style={{ color: 'var(--success)' }}>₹{currentMonthCollectionTotal}</div>
+            <div className="stat-value" style={{ color: 'var(--success)' }}>₹{currentMonthCollectionTotal || 0}</div>
           </div>
         </div>
       </div>
+
+      {/* Section-Wise 1-Month Collections Breakdown (Tiffin vs Dine-In) */}
+      <SectionCollectionBreakdown
+        filteredTxns={filteredTxns}
+        db={db}
+        isMarathi={isMarathi}
+      />
 
       {/* Main Ledger */}
       <div className="card-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -100,13 +108,14 @@ export default function CollectionsTab({
         {/* Transactions List */}
         <div style={{ maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', backgroundColor: '#f8f9fc' }}>
           {(filteredTxns || []).map(tx => {
+            if (!tx) return null;
             const cust = tx.customer;
             return (
               <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '6px' }}>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {cust && cust.photo ? (
-                      <img src={cust.photo} alt={tx.custName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={cust.photo} alt={tx.custName || 'Customer'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--primary)' }}>
                         {(tx.custName || 'C').charAt(0).toUpperCase()}
@@ -153,7 +162,7 @@ export default function CollectionsTab({
 
         <div className="card" style={{ margin: 0, padding: '16px', backgroundColor: 'var(--success-light)', borderColor: '#1d9e7533', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontWeight: '700', fontSize: '15px', color: '#085041' }}>{isMarathi ? 'एकूण जमा:' : 'Total Collections:'}</span>
-          <span style={{ fontWeight: '800', fontSize: '20px', color: 'var(--success)' }}>₹{filteredTxnsTotal}</span>
+          <span style={{ fontWeight: '800', fontSize: '20px', color: 'var(--success)' }}>₹{filteredTxnsTotal || 0}</span>
         </div>
       </div>
 
