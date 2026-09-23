@@ -36,9 +36,9 @@ const CustomerCard = memo(function CustomerCard({
       {/* Column 1: Profile Photo */}
       <div 
         className="customer-bar-avatar-container" 
-        style={{ cursor: c.photo ? 'pointer' : 'default', border: '1.5px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', width: '140px', height: '140px', flexShrink: 0 }}
-        onClick={() => c.photo && onEnlargePhoto({ url: c.photo, name: c.name })}
-        title={c.photo ? (isMarathi ? 'फोटो मोठा करा' : 'Click to enlarge') : ''}
+        style={{ cursor: 'pointer', border: '1.5px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', width: '140px', height: '140px', flexShrink: 0 }}
+        onClick={() => typeof onEnlargePhoto === 'function' && onEnlargePhoto({ url: c.photo || '', name: c.name || 'Customer' })}
+        title={isMarathi ? 'फोटो मोठा करा' : 'Click to enlarge'}
       >
         {c.photo ? (
           <img 

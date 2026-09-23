@@ -21,7 +21,8 @@ export default function CollectionsTab({
   filteredTxnsTotal,
   onDeleteTxn,
   deleteTransaction,
-  showToast
+  showToast,
+  onEnlargePhoto
 }) {
   const isMarathi = db.settings?.lang === 'mr';
   const archive = useFinancialArchive({ db, role, showToast });
@@ -113,7 +114,11 @@ export default function CollectionsTab({
             return (
               <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '6px' }}>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div 
+                    style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                    onClick={() => typeof onEnlargePhoto === 'function' && onEnlargePhoto({ url: cust?.photo || '', name: tx.custName || 'Customer' })}
+                    title={isMarathi ? 'फोटो मोठा करा' : 'Click to enlarge photo'}
+                  >
                     {cust && cust.photo ? (
                       <img src={cust.photo} alt={tx.custName || 'Customer'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -123,7 +128,10 @@ export default function CollectionsTab({
                     )}
                   </div>
                   <div>
-                    <div style={{ fontWeight: '700', fontSize: '14px', color: 'var(--primary)' }}>
+                    <div 
+                      style={{ fontWeight: '700', fontSize: '14px', color: 'var(--primary)', cursor: 'pointer' }}
+                      onClick={() => typeof onEnlargePhoto === 'function' && onEnlargePhoto({ url: cust?.photo || '', name: tx.custName || 'Customer' })}
+                    >
                       {tx.custName}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>

@@ -11,11 +11,9 @@ export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClo
     ? previewImage 
     : (previewImage && typeof previewImage.url === 'string' ? previewImage.url : '');
 
-  const imageName = (previewImage && typeof previewImage.name === 'string') 
+  const imageName = (previewImage && typeof previewImage.name === 'string' && previewImage.name.trim()) 
     ? previewImage.name 
-    : 'Profile Photo';
-
-  if (!imageUrl) return null;
+    : 'Customer Profile';
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -26,6 +24,8 @@ export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClo
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleClose]);
+
+  const initialChar = (imageName || 'C').charAt(0).toUpperCase();
 
   return (
     <div 
@@ -48,8 +48,8 @@ export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClo
         style={{ 
           position: 'relative', 
           background: 'var(--card)', 
-          padding: '20px', 
-          borderRadius: '20px', 
+          padding: '24px', 
+          borderRadius: '24px', 
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4)', 
           maxWidth: '92vw', 
           width: '420px',
@@ -90,7 +90,7 @@ export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClo
         <div style={{ 
           width: '100%', 
           aspectRatio: '1 / 1', 
-          borderRadius: '16px', 
+          borderRadius: '20px', 
           overflow: 'hidden', 
           backgroundColor: '#f8fafc', 
           display: 'flex', 
@@ -99,15 +99,33 @@ export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClo
           border: '1px solid var(--border)',
           boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)'
         }}>
-          <img 
-            src={imageUrl} 
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-            alt={imageName} 
-          />
+          {imageUrl ? (
+            <img 
+              src={imageUrl} 
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              alt={imageName} 
+            />
+          ) : (
+            <div 
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                backgroundColor: 'var(--primary-light)', 
+                color: 'var(--primary)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                fontSize: '96px', 
+                fontWeight: '800' 
+              }}
+            >
+              {initialChar}
+            </div>
+          )}
         </div>
 
         {imageName && (
-          <div style={{ marginTop: '16px', fontSize: '18px', fontWeight: '800', color: 'var(--text)', textAlign: 'center', letterSpacing: '-0.3px' }}>
+          <div style={{ marginTop: '18px', fontSize: '20px', fontWeight: '800', color: 'var(--text)', textAlign: 'center', letterSpacing: '-0.3px' }}>
             {imageName}
           </div>
         )}
