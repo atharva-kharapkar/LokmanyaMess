@@ -192,7 +192,7 @@ export default function DashboardTab({
               const status = computeStatus(c);
               const dues = getCustomerDues(c);
               const hasDues = dues > 0;
-              const displayedDeposited = getCurrentCycleDeposited(c);
+              const displayedDeposited = typeof defaultGetCurrentCycleDeposited === 'function' ? defaultGetCurrentCycleDeposited(c) : (c?.deposited || 0);
               const warningDays = getDueWarningDays(c);
               const daysPendingDues = getDaysPendingDues(c);
               const isShortTerm = c.category === 'shortterm';
