@@ -3,9 +3,19 @@ import React, { useEffect } from 'react';
 export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClose }) {
   if (!previewImage) return null;
 
-  const handleClose = onClose || (() => setPreviewImage && setPreviewImage(null));
-  const imageUrl = previewImage.url || (typeof previewImage === 'string' ? previewImage : '');
-  const imageName = previewImage.name || 'Profile Photo';
+  const handleClose = typeof onClose === 'function' 
+    ? onClose 
+    : () => typeof setPreviewImage === 'function' && setPreviewImage(null);
+
+  const imageUrl = typeof previewImage === 'string' 
+    ? previewImage 
+    : (previewImage && typeof previewImage.url === 'string' ? previewImage.url : '');
+
+  const imageName = (previewImage && typeof previewImage.name === 'string') 
+    ? previewImage.name 
+    : 'Profile Photo';
+
+  if (!imageUrl) return null;
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -51,6 +61,7 @@ export default function PhotoPreviewModal({ previewImage, setPreviewImage, onClo
         onClick={(e) => e.stopPropagation()}
       >
         <button 
+          type="button"
           onClick={handleClose}
           style={{
             position: 'absolute',

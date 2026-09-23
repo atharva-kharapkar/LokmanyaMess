@@ -4,9 +4,10 @@ import { Utensils, ShoppingBag } from 'lucide-react';
 export default function SectionCollectionBreakdown({
   filteredTxns = [],
   db = { customers: [] },
-  isMarathi
+  isMarathi = false
 }) {
-  const customers = db.customers || [];
+  const safeTxns = Array.isArray(filteredTxns) ? filteredTxns : [];
+  const customers = Array.isArray(db?.customers) ? db.customers : [];
 
   // Group transactions by customer category
   let tiffinTotal = 0;
@@ -14,16 +15,18 @@ export default function SectionCollectionBreakdown({
   let dineInTotal = 0;
   let dineInTxCount = 0;
 
-  filteredTxns.forEach((tx) => {
-    const cust = tx.customer || customers.find(c => c.id === tx.customerId || c.name === tx.custName || c.phone === tx.custPhone);
+  safeTxns.forEach((tx) => {
+    if (!tx) return;
+    const cust = tx.customer || customers.find(c => c && (c.id === tx.customerId || c.name === tx.custName || c.phone === tx.custPhone));
     const category = cust?.category || 'tiffin';
     const amt = Number(tx.amount || 0);
+    const safeAmt = isNaN(amt) ? 0 : amt;
 
     if (category === 'tiffin') {
-      tiffinTotal += amt;
+      tiffinTotal += safeAmt;
       tiffinTxCount += 1;
     } else {
-      dineInTotal += amt;
+      dineInTotal += safeAmt;
       dineInTxCount += 1;
     }
   });

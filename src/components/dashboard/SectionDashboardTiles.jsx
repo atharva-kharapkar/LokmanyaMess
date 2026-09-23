@@ -5,31 +5,62 @@ export default function SectionDashboardTiles({
   allCustomers = [],
   computeStatus,
   getCustomerDues,
-  categoryFilter,
+  categoryFilter = 'all',
   setCategoryFilter,
-  dashboardFilter,
+  dashboardFilter = 'all',
   setDashboardFilter,
-  isMarathi
+  isMarathi = false
 }) {
-  // Separate metrics by section
-  const tiffinCusts = allCustomers.filter(c => c.category === 'tiffin');
-  const dineInCusts = allCustomers.filter(c => c.category === 'dinein');
+  const safeCustomers = Array.isArray(allCustomers) ? allCustomers : [];
 
-  const getMetricsForList = (list) => {
-    const total = list.length;
-    const active = list.filter(c => computeStatus(c) === 'active').length;
-    const expiring = list.filter(c => {
-      const s = computeStatus(c);
+  const safeComputeStatus = typeof computeStatus === 'function'
+    ? computeStatus
+    : () => 'active';
+
+  const safeGetCustomerDues = typeof getCustomerDues === 'function'
+    ? getCustomerDues
+    : () => 0;
+
+  const safeSetCategoryFilter = typeof setCategoryFilter === 'function'
+    ? setCategoryFilter
+    : () => {};
+
+  const safeSetDashboardFilter = typeof setDashboardFilter === 'function'
+    ? setDashboardFilter
+    : () => {};
+
+  // Separate metrics by section
+  const tiffinCusts = safeCustomers.filter(c => c && c.category === 'tiffin');
+  const dineInCusts = safeCustomers.filter(c => c && c.category === 'dinein');
+
+  const getMetricsForList = (list = []) => {
+    const safeList = Array.isArray(list) ? list : [];
+    const total = safeList.length;
+    
+    const active = safeList.filter(c => c && safeComputeStatus(c) === 'active').length;
+    
+    const expiring = safeList.filter(c => {
+      if (!c) return false;
+      const s = safeComputeStatus(c);
       return s === 'expiring' || s === 'expired';
     }).length;
-    const duesCusts = list.filter(c => getCustomerDues(c) > 0);
+
+    const duesCusts = safeList.filter(c => {
+      if (!c) return false;
+      const d = safeGetCustomerDues(c);
+      return typeof d === 'number' ? d > 0 : Number(d || 0) > 0;
+    });
+
     const duesCount = duesCusts.length;
-    const totalDuesAmount = duesCusts.reduce((sum, c) => sum + getCustomerDues(c), 0);
+    const totalDuesAmount = duesCusts.reduce((sum, c) => {
+      const val = Number(safeGetCustomerDues(c));
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0);
 
     return { total, active, expiring, duesCount, totalDuesAmount };
   };
 
-  const allMetrics = getMetricsForList(allCustomers);
+  const allMetrics = getMetricsForList(safeCustomers);
   const tiffinMetrics = getMetricsForList(tiffinCusts);
   const dineInMetrics = getMetricsForList(dineInCusts);
 
@@ -62,15 +93,17 @@ export default function SectionDashboardTiles({
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button
+            type="button"
             className={`btn btn-sm ${categoryFilter === 'all' ? 'btn-primary' : ''}`}
-            onClick={() => setCategoryFilter('all')}
+            onClick={() => safeSetCategoryFilter('all')}
             style={{ borderRadius: '8px', padding: '6px 14px', fontWeight: '700' }}
           >
             🌐 {isMarathi ? 'सर्व एकत्र' : 'All Sections'} ({allMetrics.total})
           </button>
           <button
+            type="button"
             className={`btn btn-sm ${categoryFilter === 'tiffin' ? 'btn-primary' : ''}`}
-            onClick={() => setCategoryFilter('tiffin')}
+            onClick={() => safeSetCategoryFilter('tiffin')}
             style={{ 
               borderRadius: '8px', 
               padding: '6px 14px', 
@@ -83,8 +116,9 @@ export default function SectionDashboardTiles({
             🍱 {isMarathi ? 'टिफिन विभाग' : 'Tiffin Section'} ({tiffinMetrics.total})
           </button>
           <button
+            type="button"
             className={`btn btn-sm ${categoryFilter === 'dinein' ? 'btn-primary' : ''}`}
-            onClick={() => setCategoryFilter('dinein')}
+            onClick={() => safeSetCategoryFilter('dinein')}
             style={{ 
               borderRadius: '8px', 
               padding: '6px 14px', 
@@ -111,7 +145,7 @@ export default function SectionDashboardTiles({
         {/* 1. Total Customers Card */}
         <div 
           className="stat-card" 
-          onClick={() => setDashboardFilter(dashboardFilter === 'all' ? 'action' : 'all')}
+          onClick={() => safeSetDashboardFilter(dashboardFilter === 'all' ? 'action' : 'all')}
           style={{ cursor: 'pointer', border: dashboardFilter === 'all' ? '2px solid var(--primary)' : '1px solid var(--border)' }}
         >
           <div className="stat-icon" style={{ backgroundColor: 'rgba(216, 90, 48, 0.1)', color: 'var(--primary)' }}>
@@ -134,7 +168,7 @@ export default function SectionDashboardTiles({
         {/* 2. Active Members Card */}
         <div 
           className="stat-card"
-          onClick={() => setDashboardFilter(dashboardFilter === 'active' ? 'all' : 'active')}
+          onClick={() => safeSetDashboardFilter(dashboardFilter === 'active' ? 'all' : 'active')}
           style={{ cursor: 'pointer', border: dashboardFilter === 'active' ? '2px solid #3b82f6' : '1px solid var(--border)' }}
         >
           <div className="stat-icon" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
@@ -152,7 +186,7 @@ export default function SectionDashboardTiles({
         {/* 3. Expiring Soon / Expired Card */}
         <div 
           className="stat-card"
-          onClick={() => setDashboardFilter(dashboardFilter === 'expiring' ? 'all' : 'expiring')}
+          onClick={() => safeSetDashboardFilter(dashboardFilter === 'expiring' ? 'all' : 'expiring')}
           style={{ cursor: 'pointer', border: dashboardFilter === 'expiring' ? '2px solid #ef4444' : '1px solid var(--border)' }}
         >
           <div className="stat-icon" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
@@ -170,7 +204,7 @@ export default function SectionDashboardTiles({
         {/* 4. Remaining Dues Card */}
         <div 
           className="stat-card"
-          onClick={() => setDashboardFilter(dashboardFilter === 'dues' ? 'all' : 'dues')}
+          onClick={() => safeSetDashboardFilter(dashboardFilter === 'dues' ? 'all' : 'dues')}
           style={{ cursor: 'pointer', border: dashboardFilter === 'dues' ? '2px solid #f59e0b' : '1px solid var(--border)' }}
         >
           <div className="stat-icon" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
@@ -179,10 +213,10 @@ export default function SectionDashboardTiles({
           <div className="stat-info">
             <div className="stat-label">{isMarathi ? 'बाकी थकबाकी' : 'REMAINING DUES'}</div>
             <div className="stat-value" style={{ color: '#f59e0b' }}>
-              ₹{currentMetrics.totalDuesAmount} <span style={{ fontSize: '12px', fontWeight: 'normal' }}>({currentMetrics.duesCount})</span>
+              ₹{currentMetrics.totalDuesAmount.toLocaleString('en-IN')} <span style={{ fontSize: '12px', fontWeight: 'normal' }}>({currentMetrics.duesCount})</span>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              🍱 ₹{tiffinMetrics.totalDuesAmount} | 🍽️ ₹{dineInMetrics.totalDuesAmount}
+              🍱 ₹{tiffinMetrics.totalDuesAmount.toLocaleString('en-IN')} | 🍽️ ₹{dineInMetrics.totalDuesAmount.toLocaleString('en-IN')}
             </div>
           </div>
         </div>
