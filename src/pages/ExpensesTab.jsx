@@ -12,7 +12,9 @@ export default function ExpensesTab({
   expenseForm,
   setExpenseForm,
   onSaveExpense,
+  handleSaveExpense,
   onDeleteExpense,
+  handleDeleteExpense,
   expenseFilter,
   setExpenseFilter,
   expStartDate,
@@ -26,6 +28,8 @@ export default function ExpensesTab({
 }) {
   const isMarathi = db?.settings?.lang === 'mr';
   const archive = useFinancialArchive({ db, role, showToast });
+  const saveFn = onSaveExpense || handleSaveExpense;
+  const deleteFn = onDeleteExpense || handleDeleteExpense;
 
   return (
     <div className="tab-panel animate-fade">
@@ -56,7 +60,7 @@ export default function ExpensesTab({
         {/* Left: Add Expense Form */}
         <div className="card-section">
           <h3 className="section-title">{isMarathi ? 'नवीन खर्च नोंदवा' : 'Record New Expense'}</h3>
-          <form onSubmit={onSaveExpense} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <form onSubmit={saveFn} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="form-group">
               <label className="form-label">{isMarathi ? 'रक्कम (रुपये) *' : 'Amount (Rs) *'}</label>
               <input
@@ -135,8 +139,8 @@ export default function ExpensesTab({
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={{ fontWeight: '800', color: 'var(--danger)', fontSize: '15px' }}>₹{exp.amount}</span>
-                  {role === 'owner' && (
-                    <button className="btn btn-sm btn-icon btn-danger" onClick={() => onDeleteExpense(exp.id)}>
+                  {(role === 'owner' || !role) && (
+                    <button className="btn btn-sm btn-icon btn-danger" onClick={() => deleteFn && deleteFn(exp.id)} title={isMarathi ? 'खर्च हटवा' : 'Delete expense'}>
                       <Trash2 size={12} />
                     </button>
                   )}
