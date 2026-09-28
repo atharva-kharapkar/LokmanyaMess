@@ -46,8 +46,8 @@ export default function FinancialArchiveLockModal({
           </h3>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
             {isMarathi
-              ? 'मागील महिन्यांचे जमा किंवा खर्चाचे रेकॉर्ड्स पाहण्यासाठी कृपया मालक PIN टाका.'
-              : 'Please enter the Owner PIN to unlock past months\' financial records.'}
+              ? 'मागील महिन्यांचे रेकॉर्ड्स अनलॉक करण्यासाठी ६-अंकी मालक PIN किंवा ४-अंकी पासकोड टाका.'
+              : 'Enter 6-Digit Owner PIN or 4-Digit Archive Passcode to unlock.'}
           </p>
         </div>
 
@@ -57,10 +57,10 @@ export default function FinancialArchiveLockModal({
             type="password"
             className="form-input"
             maxLength="6"
-            placeholder="••••••"
+            placeholder="PIN / Passcode"
             value={pinInput}
             onChange={(e) => {
-              setPinInput(e.target.value.slice(0, 6));
+              setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6));
               if (pinError && setPinError) setPinError('');
             }}
             onKeyDown={(e) => {
