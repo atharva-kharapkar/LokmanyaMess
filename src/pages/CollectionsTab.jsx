@@ -10,6 +10,12 @@ export default function CollectionsTab({
   role,
   todayCollectionTotal,
   currentMonthCollectionTotal,
+  filter,
+  setFilter,
+  startDate,
+  setStartDate,
+  endDate,
+  setEndDate,
   collectionFilter,
   setCollectionFilter,
   colStartDate,
@@ -26,6 +32,48 @@ export default function CollectionsTab({
 }) {
   const isMarathi = db.settings?.lang === 'mr';
   const archive = useFinancialArchive({ db, role, showToast });
+
+  const activeFilter = collectionFilter || filter || 'month';
+  const activeSetFilter = setCollectionFilter || setFilter || (() => {});
+  const activeStartDate = colStartDate || startDate || '';
+  const activeSetStartDate = setColStartDate || setStartDate || (() => {});
+  const activeEndDate = colEndDate || endDate || '';
+  const activeSetEndDate = setColEndDate || setEndDate || (() => {});
+
+  const nowStr = new Date().toISOString().slice(0, 10);
+  const currentMonthStartStr = `${nowStr.slice(0, 7)}-01`;
+
+  const handleTodayClick = () => {
+    activeSetFilter('today');
+    if (archive.setSelectedMonth) archive.setSelectedMonth('');
+  };
+
+  const handleCurrentMonthClick = () => {
+    activeSetFilter('month');
+    if (archive.setSelectedMonth) archive.setSelectedMonth('');
+  };
+
+  const handleCustomDateClick = () => {
+    activeSetFilter('custom');
+    if (!activeStartDate) activeSetStartDate(currentMonthStartStr);
+    if (!activeEndDate) activeSetEndDate(nowStr);
+    if (archive.setSelectedMonth) archive.setSelectedMonth('');
+  };
+
+  const handleArchiveMonthSelect = (monthStr) => {
+    archive.handleSelectMonth(monthStr);
+    if (monthStr) {
+      const year = monthStr.slice(0, 4);
+      const month = monthStr.slice(5, 7);
+      const lastDay = new Date(Number(year), Number(month), 0).getDate();
+      const padLastDay = String(lastDay).padStart(2, '0');
+      activeSetStartDate(`${monthStr}-01`);
+      activeSetEndDate(`${monthStr}-${padLastDay}`);
+      activeSetFilter('custom');
+    } else {
+      activeSetFilter('month');
+    }
+  };
 
   return (
     <div className="tab-panel animate-fade">
@@ -64,19 +112,19 @@ export default function CollectionsTab({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 className="section-title">{isMarathi ? 'जमा रक्कम तपशील' : 'Collections Ledger'}</h3>
           <div className="toolbar" style={{ margin: 0, gap: '6px' }}>
-            <button className={`btn btn-sm ${collectionFilter === 'today' ? 'btn-primary' : ''}`} onClick={() => setCollectionFilter('today')}>
+            <button className={`btn btn-sm ${activeFilter === 'today' ? 'btn-primary' : ''}`} onClick={handleTodayClick}>
               {isMarathi ? 'आज' : 'Today'}
             </button>
-            <button className={`btn btn-sm ${collectionFilter === 'custom' ? 'btn-primary' : ''}`} onClick={() => setCollectionFilter('custom')}>
+            <button className={`btn btn-sm ${activeFilter === 'custom' ? 'btn-primary' : ''}`} onClick={handleCustomDateClick}>
               {isMarathi ? 'तारीख निवडा' : 'Date Range'}
             </button>
-            <button className={`btn btn-sm ${collectionFilter === 'month' ? 'btn-primary' : ''}`} onClick={() => setCollectionFilter('month')}>
+            <button className={`btn btn-sm ${activeFilter === 'month' ? 'btn-primary' : ''}`} onClick={handleCurrentMonthClick}>
               {isMarathi ? 'चालू महिना' : 'Current Month'}
             </button>
             <select
               className="form-input"
               value={archive.selectedMonth}
-              onChange={(e) => archive.handleSelectMonth(e.target.value)}
+              onChange={(e) => handleArchiveMonthSelect(e.target.value)}
               style={{ padding: '4px 8px', fontSize: '13px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700' }}
             >
               <option value="">{isMarathi ? '📅 महिना निवडा (Archives)' : '📅 Select Month (Archives)'}</option>
@@ -93,15 +141,15 @@ export default function CollectionsTab({
           </div>
         </div>
 
-        {collectionFilter === 'custom' && (
+        {activeFilter === 'custom' && (
           <div className="date-picker-row" style={{ display: 'flex', gap: '12px', padding: '8px 12px', borderBottom: '1px solid var(--border)', alignItems: 'center', backgroundColor: 'var(--primary-light)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '12px', fontWeight: '600' }}>{isMarathi ? 'पासून:' : 'From:'}</span>
-              <input type="date" className="form-input" value={colStartDate} onChange={(e) => setColStartDate(e.target.value)} style={{ padding: '4px 8px', fontSize: '13px', width: '130px' }} />
+              <input type="date" className="form-input" value={activeStartDate} onChange={(e) => activeSetStartDate(e.target.value)} style={{ padding: '4px 8px', fontSize: '13px', width: '130px' }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '12px', fontWeight: '600' }}>{isMarathi ? 'पर्यंत:' : 'To:'}</span>
-              <input type="date" className="form-input" value={colEndDate} onChange={(e) => setColEndDate(e.target.value)} style={{ padding: '4px 8px', fontSize: '13px', width: '130px' }} />
+              <input type="date" className="form-input" value={activeEndDate} onChange={(e) => activeSetEndDate(e.target.value)} style={{ padding: '4px 8px', fontSize: '13px', width: '130px' }} />
             </div>
           </div>
         )}
