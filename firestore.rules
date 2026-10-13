@@ -100,5 +100,9 @@ service cloud.firestore {
     match /desktop_archives/{docId} {
       allow read, write: if true;
     }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

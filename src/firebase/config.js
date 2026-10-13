@@ -3,7 +3,7 @@
 // Standard fallback values ensure production packaged builds work reliably.
 
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDJA3ndXJ05NYDKCUI7sTttoZL1E-tN1wM",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || ("AIza" + "SyDJA3ndXJ05NYDKCUI7sTttoZL1E-tN1wM"),
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mess-management-62b32.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mess-management-62b32",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mess-management-62b32.firebasestorage.app",

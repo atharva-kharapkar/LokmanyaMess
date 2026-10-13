@@ -127,13 +127,26 @@ export function useDatabase(showToast, applyLoadedSettings) {
         });
 
         setDb((prevDb) => {
-          if (JSON.stringify(prevDb[localKey] || []) === JSON.stringify(items)) {
+          const localItems = prevDb[localKey] || [];
+          const map = new Map();
+          localItems.forEach((item) => {
+            if (item && item.id) map.set(item.id, item);
+          });
+          items.forEach((item) => {
+            if (item && item.id) {
+              const local = map.get(item.id);
+              map.set(item.id, { ...(local || {}), ...item });
+            }
+          });
+          const merged = Array.from(map.values());
+
+          if (JSON.stringify(localItems) === JSON.stringify(merged)) {
             return prevDb;
           }
 
           const nextDb = {
             ...prevDb,
-            [localKey]: items
+            [localKey]: merged
           };
           dbRef.current = nextDb;
 

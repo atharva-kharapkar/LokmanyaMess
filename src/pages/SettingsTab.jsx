@@ -1,6 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { Save, Lock, Key, Building, Download, Upload, Database, FileText, Trash2, CloudDownload, CloudUpload } from 'lucide-react';
-import { PIN_LENGTH, isArchivePinValid, hashSecret, matchesSecret } from '../utils/helpers';
+import { PIN_LENGTH, isArchivePinValid, hashSecret, matchesSecret, sanitizeImportedDbHelper } from '../utils/helpers';
+
+function sanitizeImportedDb(rawDb) {
+  return sanitizeImportedDbHelper(rawDb);
+}
 
 export default function SettingsTab({
   db = { customers: [], transactions: [], expenses: [], settings: {} },
@@ -126,15 +130,33 @@ export default function SettingsTab({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 5 * 1024 * 1024) {
+      showToast(isMarathi ? 'फाइल खूप मोठी आहे (कमाल 5MB).' : 'File too large (max 5MB).', 'error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         const content = event.target.result;
         let importedList = [];
 
+        let isFullBackup = false;
+        let parsedBackup = null;
+
         if (file.name.endsWith('.json')) {
           const parsed = JSON.parse(content);
-          importedList = Array.isArray(parsed) ? parsed : (parsed.customers || []);
+          if (!Array.isArray(parsed) && parsed && typeof parsed === 'object') {
+            const sanitizedImport = sanitizeImportedDb(parsed);
+            if (Array.isArray(sanitizedImport.transactions) || Array.isArray(sanitizedImport.expenses) || Array.isArray(sanitizedImport.employees)) {
+              isFullBackup = true;
+              parsedBackup = sanitizedImport;
+            }
+            importedList = Array.isArray(sanitizedImport.customers) ? sanitizedImport.customers : [];
+          } else if (Array.isArray(parsed)) {
+            importedList = parsed;
+          }
         } else if (file.name.endsWith('.csv')) {
           const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
           if (lines.length > 1) {
@@ -170,7 +192,7 @@ export default function SettingsTab({
           }
         }
 
-        if (!importedList.length) {
+        if (!importedList.length && !isFullBackup) {
           showToast(isMarathi ? 'फाइलमध्ये वैध ग्राहक डेटा आढळला नाही.' : 'No valid customer data found in file.', 'error');
           return;
         }
@@ -240,18 +262,57 @@ export default function SettingsTab({
         const finalCustomerList = Array.from(custMap.values());
 
         if (typeof saveDb === 'function') {
-          await saveDb((currentDb) => ({
-            ...currentDb,
-            customers: finalCustomerList
-          }));
+          await saveDb((currentDb) => {
+            const nextDb = {
+              ...currentDb,
+              customers: finalCustomerList
+            };
+            if (isFullBackup && parsedBackup) {
+              if (Array.isArray(parsedBackup.transactions) && parsedBackup.transactions.length > 0) {
+                const txMap = new Map((nextDb.transactions || []).map(t => [t.id, t]));
+                parsedBackup.transactions.forEach(t => { if (t && t.id) txMap.set(t.id, t); });
+                nextDb.transactions = Array.from(txMap.values());
+              }
+              if (Array.isArray(parsedBackup.expenses) && parsedBackup.expenses.length > 0) {
+                const expMap = new Map((nextDb.expenses || []).map(e => [e.id, e]));
+                parsedBackup.expenses.forEach(e => { if (e && e.id) expMap.set(e.id, e); });
+                nextDb.expenses = Array.from(expMap.values());
+              }
+              if (Array.isArray(parsedBackup.salaries) && parsedBackup.salaries.length > 0) {
+                const salMap = new Map((nextDb.salaries || []).map(s => [s.id, s]));
+                parsedBackup.salaries.forEach(s => { if (s && s.id) salMap.set(s.id, s); });
+                nextDb.salaries = Array.from(salMap.values());
+              }
+              if (Array.isArray(parsedBackup.employees) && parsedBackup.employees.length > 0) {
+                const empMap = new Map((nextDb.employees || []).map(e => [e.id, e]));
+                parsedBackup.employees.forEach(e => { if (e && e.id) empMap.set(e.id, e); });
+                nextDb.employees = Array.from(empMap.values());
+              }
+              if (Array.isArray(parsedBackup.archives) && parsedBackup.archives.length > 0) {
+                const archMap = new Map((nextDb.archives || []).map(a => [a.id, a]));
+                parsedBackup.archives.forEach(a => { if (a && a.id) archMap.set(a.id, a); });
+                nextDb.archives = Array.from(archMap.values());
+              }
+            }
+            return nextDb;
+          });
         }
 
-        showToast(
-          isMarathi
-            ? `आयात पूर्ण! ${addedCount} नवीन जोडले, ${updatedCount} अद्ययावत केले.`
-            : `Import finished! ${addedCount} new added, ${updatedCount} updated.`,
-          'success'
-        );
+        if (isFullBackup) {
+          showToast(
+            isMarathi
+              ? `संपूर्ण बॅकअप यशस्वीरीत्या आयात झाला! ग्राहक आणि व्यवहार पूर्ववत झाले.`
+              : `Full backup imported! Customers and transactions restored successfully.`,
+            'success'
+          );
+        } else {
+          showToast(
+            isMarathi
+              ? `आयात पूर्ण! ${addedCount} नवीन जोडले, ${updatedCount} अद्ययावत केले.`
+              : `Import finished! ${addedCount} new added, ${updatedCount} updated.`,
+            'success'
+          );
+        }
       } catch (err) {
         console.error("Import error:", err);
         showToast(isMarathi ? 'फाइल आयात करताना त्रुटी आली. कृपया फाइल स्वरूप तपासा.' : 'Error importing file. Please check file format.', 'error');
