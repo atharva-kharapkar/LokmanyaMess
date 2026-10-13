@@ -27,7 +27,8 @@ export default function PaymentModal({
   onSubmit,
   onClose,
   db = { settings: {} },
-  lang = 'en'
+  lang = 'en',
+  getCustomerDues
 }) {
   if (!isOpen || !customer) return null;
 
@@ -77,13 +78,23 @@ export default function PaymentModal({
         </div>
         <form onSubmit={handleFormSubmit}>
           <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{ background: 'rgba(216, 90, 48, 0.05)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(216, 90, 48, 0.12)' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {isMarathi ? 'ग्राहक:' : 'Customer:'}
+            <div style={{ background: 'rgba(216, 90, 48, 0.05)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(216, 90, 48, 0.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {isMarathi ? 'ग्राहक:' : 'Customer:'}
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text)' }}>
+                  {customer.name}
+                </div>
               </div>
-              <div style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text)' }}>
-                {customer.name}
-              </div>
+              {typeof getCustomerDues === 'function' && (
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{isMarathi ? 'थकबाकी' : 'Dues'}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '800', color: getCustomerDues(customer) > 0 ? '#ef4444' : '#10b981' }}>
+                    ₹{getCustomerDues(customer)}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="form-group">

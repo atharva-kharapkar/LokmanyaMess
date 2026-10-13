@@ -138,7 +138,21 @@ export function useDatabase(showToast, applyLoadedSettings) {
           items.forEach((item) => {
             if (item && item.id && !deletedIdsRef.current.has(item.id)) {
               const local = map.get(item.id);
-              map.set(item.id, { ...(local || {}), ...item });
+              if (local) {
+                const localTime = Number(local.updatedAt || 0);
+                const cloudTime = Number(item.updatedAt || 0);
+                if (localTime > cloudTime) {
+                  map.set(item.id, { ...item, ...local });
+                } else {
+                  const mergedItem = { ...local, ...item };
+                  if (localKey === 'customers' && local.deposited !== undefined && item.deposited !== undefined) {
+                    mergedItem.deposited = Math.max(Number(local.deposited || 0), Number(item.deposited || 0));
+                  }
+                  map.set(item.id, mergedItem);
+                }
+              } else {
+                map.set(item.id, item);
+              }
             }
           });
           const merged = Array.from(map.values());

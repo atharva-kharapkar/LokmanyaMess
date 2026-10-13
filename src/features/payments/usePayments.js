@@ -23,7 +23,8 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
   const openPayModal = (customer) => {
     if (!customer) return;
     setPayModalCustomer(customer);
-    setPayAmount('');
+    const dueAmt = typeof defaultGetCustomerDues === 'function' ? defaultGetCustomerDues(customer) : 0;
+    setPayAmount(dueAmt > 0 ? dueAmt : (customer.amount || ''));
     setPayDate(defaultTodayStr());
     setPayMode('Cash');
     setPayNote('');
@@ -40,26 +41,37 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
 
     setIsSavingPayment(true);
     try {
+      const now = Date.now();
       const newTxn = {
-        id: 'txn_' + Date.now(),
+        id: 'txn_' + now,
         custId: payModalCustomer.id,
         custName: payModalCustomer.name,
         amount: numAmt,
         date: dateVal || payDate || defaultTodayStr(),
         mode: modeVal || payMode || 'Cash',
+        paymentMode: modeVal || payMode || 'Cash',
         note: noteVal || payNote || '',
-        branch: payModalCustomer.branch || activeBranch || 'Branch 1'
+        branch: payModalCustomer.branch || activeBranch || 'Branch 1',
+        updatedAt: now
       };
 
-      await saveDb((currentDb) => ({
+      const saveResult = await saveDb((currentDb) => ({
         ...currentDb,
         transactions: [newTxn, ...(currentDb.transactions || [])],
         customers: (currentDb.customers || []).map(c => 
-          c.id === payModalCustomer.id ? { ...c, deposited: Number(c.deposited || 0) + numAmt } : c
+          c.id === payModalCustomer.id ? { 
+            ...c, 
+            deposited: Number(c.deposited || 0) + numAmt,
+            updatedAt: now
+          } : c
         )
       }));
 
-      showToast(isMarathi ? 'जमा रक्कम यशस्वीरित्या नोंदवली!' : 'Payment recorded successfully!', 'success');
+      if (saveResult === false) {
+        throw new Error(isMarathi ? 'स्थानिक डेटा सेव्ह अयशस्वी झाला.' : 'Local database save failed.');
+      }
+
+      showToast(isMarathi ? `₹${numAmt.toLocaleString('en-IN')} जमा रक्कम यशस्वीरित्या नोंदवली!` : `Payment of ₹${numAmt.toLocaleString('en-IN')} recorded successfully!`, 'success');
       setPayModalCustomer(null);
       setPayAmount('');
       setPayNote('');
@@ -82,9 +94,14 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
     await saveDb((currentDb) => {
       const txn = (currentDb.transactions || []).find(t => t.id === txnId);
       let updatedCustomers = currentDb.customers || [];
+      const now = Date.now();
       if (txn) {
         updatedCustomers = updatedCustomers.map(c => 
-          c.id === txn.custId ? { ...c, deposited: Math.max(0, Number(c.deposited || 0) - Number(txn.amount || 0)) } : c
+          c.id === txn.custId ? { 
+            ...c, 
+            deposited: Math.max(0, Number(c.deposited || 0) - Number(txn.amount || 0)),
+            updatedAt: now
+          } : c
         );
       }
       return {

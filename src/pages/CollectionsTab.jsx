@@ -225,11 +225,19 @@ export default function CollectionsTab({
         <div className="card" style={{ margin: 0, padding: '16px', backgroundColor: 'var(--success-light)', borderColor: '#1d9e7533', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
           <div>
             <span style={{ fontWeight: '700', fontSize: '15px', color: '#085041' }}>{isMarathi ? 'एकूण जमा:' : 'Total Collections:'}</span>
-            {(!activeBranch || activeBranch === 'All') && (
-              <div style={{ fontSize: '11px', color: '#047857', marginTop: '3px', fontWeight: '600' }}>
-                शाखा १: ₹{(filteredTxns || []).filter(t => (t.branch || 'Branch 1') === 'Branch 1').reduce((s, t) => s + Number(t.amount || 0), 0).toLocaleString('en-IN')} | शाखा २: ₹{(filteredTxns || []).filter(t => t.branch === 'Branch 2').reduce((s, t) => s + Number(t.amount || 0), 0).toLocaleString('en-IN')}
-              </div>
-            )}
+            {(!activeBranch || activeBranch === 'All') && (() => {
+              const b1Col = (filteredTxns || []).filter(t => (t.branch || 'Branch 1') === 'Branch 1').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const b2Col = (filteredTxns || []).filter(t => t.branch === 'Branch 2').reduce((s, t) => s + Number(t.amount || 0), 0);
+              return (
+                <div style={{ fontSize: '11px', color: '#047857', marginTop: '3px', fontWeight: '600' }}>
+                  {b2Col > 0 ? (
+                    <span>{isMarathi ? `शाखा १: ₹${b1Col.toLocaleString('en-IN')} | शाखा २: ₹${b2Col.toLocaleString('en-IN')}` : `Branch 1: ₹${b1Col.toLocaleString('en-IN')} | Branch 2: ₹${b2Col.toLocaleString('en-IN')}`}</span>
+                  ) : (
+                    <span>{isMarathi ? `शाखा १: ₹${b1Col.toLocaleString('en-IN')}` : `Branch 1: ₹${b1Col.toLocaleString('en-IN')}`}</span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <span style={{ fontWeight: '800', fontSize: '20px', color: 'var(--success)' }}>₹{filteredTxnsTotal || 0}</span>
         </div>

@@ -137,9 +137,15 @@ export default function DashboardTab({
             <div className="stat-value" style={{ color: '#10b981' }}>₹{metrics?.totalCollections || 0}</div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
               {activeBranch === 'All' ? (
-                <span>{isMarathi ? `शाखा १: ₹${b1Total.toLocaleString('en-IN')} | शाखा २: ₹${b2Total.toLocaleString('en-IN')}` : `Branch 1: ₹${b1Total.toLocaleString('en-IN')} | Branch 2: ₹${b2Total.toLocaleString('en-IN')}`}</span>
+                <span>
+                  {b2Total > 0 ? (
+                    isMarathi ? `शाखा १: ₹${b1Total.toLocaleString('en-IN')} | शाखा २: ₹${b2Total.toLocaleString('en-IN')}` : `Branch 1: ₹${b1Total.toLocaleString('en-IN')} | Branch 2: ₹${b2Total.toLocaleString('en-IN')}`
+                  ) : (
+                    isMarathi ? `शाखा १: ₹${b1Total.toLocaleString('en-IN')}` : `Branch 1: ₹${b1Total.toLocaleString('en-IN')}`
+                  )}
+                </span>
               ) : (
-                <span>{activeBranch}: ₹{(activeBranch === 'Branch 1' ? b1Total : b2Total).toLocaleString('en-IN')} ({isMarathi ? 'सर्व एकूण' : 'Total'}: ₹{grandTotal.toLocaleString('en-IN')})</span>
+                <span>{activeBranch}: ₹{(activeBranch === 'Branch 1' ? b1Total : b2Total).toLocaleString('en-IN')}</span>
               )}
             </div>
           </div>
