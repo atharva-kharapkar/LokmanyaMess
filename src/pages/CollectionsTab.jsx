@@ -8,6 +8,7 @@ import SectionCollectionBreakdown from '../components/collections/SectionCollect
 export default function CollectionsTab({
   db = { customers: [], transactions: [], expenses: [], settings: {} },
   role,
+  activeBranch = 'All',
   todayCollectionTotal,
   currentMonthCollectionTotal,
   filter,
@@ -182,9 +183,14 @@ export default function CollectionsTab({
                     >
                       {tx.custName}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📅 {formatDisplayDate(tx.date)}</span>
                       <span className="badge badge-active" style={{ fontSize: '9px', padding: '2px 6px' }}>{tx.paymentMode || 'Cash'}</span>
+                      {(!activeBranch || activeBranch === 'All') && (
+                        <span className="badge" style={{ fontSize: '9px', padding: '2px 6px', backgroundColor: tx.branch === 'Branch 2' ? 'rgba(234, 88, 12, 0.15)' : 'rgba(59, 130, 246, 0.15)', color: tx.branch === 'Branch 2' ? '#ea580c' : '#2563eb', fontWeight: '700' }}>
+                          {tx.branch || 'Branch 1'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -216,8 +222,15 @@ export default function CollectionsTab({
           )}
         </div>
 
-        <div className="card" style={{ margin: 0, padding: '16px', backgroundColor: 'var(--success-light)', borderColor: '#1d9e7533', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: '700', fontSize: '15px', color: '#085041' }}>{isMarathi ? 'एकूण जमा:' : 'Total Collections:'}</span>
+        <div className="card" style={{ margin: 0, padding: '16px', backgroundColor: 'var(--success-light)', borderColor: '#1d9e7533', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <span style={{ fontWeight: '700', fontSize: '15px', color: '#085041' }}>{isMarathi ? 'एकूण जमा:' : 'Total Collections:'}</span>
+            {(!activeBranch || activeBranch === 'All') && (
+              <div style={{ fontSize: '11px', color: '#047857', marginTop: '3px', fontWeight: '600' }}>
+                शाखा १: ₹{(filteredTxns || []).filter(t => (t.branch || 'Branch 1') === 'Branch 1').reduce((s, t) => s + Number(t.amount || 0), 0).toLocaleString('en-IN')} | शाखा २: ₹{(filteredTxns || []).filter(t => t.branch === 'Branch 2').reduce((s, t) => s + Number(t.amount || 0), 0).toLocaleString('en-IN')}
+              </div>
+            )}
+          </div>
           <span style={{ fontWeight: '800', fontSize: '20px', color: 'var(--success)' }}>₹{filteredTxnsTotal || 0}</span>
         </div>
       </div>

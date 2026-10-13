@@ -222,11 +222,12 @@ const ensureDailyBackup = (safeData) => {
       const backupDir = getBackupsDir();
       const todayStr = new Date().toISOString().split('T')[0];
       const todayBackupPath = path.join(backupDir, `lokmanya_backup_${todayStr}.json`);
+      const tempBackupPath = `${todayBackupPath}.tmp`;
 
-      if (!fs.existsSync(todayBackupPath)) {
-        fs.writeFileSync(todayBackupPath, JSON.stringify(safeData), 'utf8');
-        console.log(`[Backup] Created daily rolling backup for ${todayStr}`);
-      }
+      const jsonStr = JSON.stringify(safeData, null, 2);
+      fs.writeFileSync(tempBackupPath, jsonStr, 'utf8');
+      fs.renameSync(tempBackupPath, todayBackupPath);
+      console.log(`[Backup] Verified daily rolling backup for ${todayStr}`);
 
       // Prune backups older than 30 days asynchronously
       fs.readdir(backupDir, (err, files) => {
@@ -309,7 +310,10 @@ ipcMain.handle('write-database', async (event, data) => {
       archives: Array.isArray(data.archives) ? data.archives : [],
       settings: (data.settings && typeof data.settings === 'object') ? data.settings : { lang: 'en' }
     };
-    fs.writeFileSync(dbPath, JSON.stringify(safeData, null, 2), 'utf8');
+    const jsonStr = JSON.stringify(safeData, null, 2);
+    const tempPath = `${dbPath}.tmp`;
+    fs.writeFileSync(tempPath, jsonStr, 'utf8');
+    fs.renameSync(tempPath, dbPath);
     ensureDailyBackup(safeData);
     return { success: true };
   } catch (e) {
@@ -359,7 +363,9 @@ ipcMain.handle('restore-backup', async (event, filename) => {
     }
 
     const dbPath = getDbPath();
-    fs.writeFileSync(dbPath, JSON.stringify(parsed, null, 2), 'utf8');
+    const tempPath = `${dbPath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(parsed, null, 2), 'utf8');
+    fs.renameSync(tempPath, dbPath);
     return { success: true, data: parsed };
   } catch (err) {
     console.error('Error restoring backup:', err);
@@ -367,10 +373,22 @@ ipcMain.handle('restore-backup', async (event, filename) => {
   }
 });
 
-ipcMain.handle('export-backup', async () => {
+ipcMain.handle('export-backup', async (event, currentData) => {
   if (!mainWindow) return { success: false };
   const dbPath = getDbPath();
-  if (!fs.existsSync(dbPath)) return { success: false, error: 'Database file does not exist' };
+
+  let dataObj = null;
+  if (currentData && typeof currentData === 'object' && Array.isArray(currentData.customers)) {
+    dataObj = currentData;
+  } else if (fs.existsSync(dbPath)) {
+    try {
+      dataObj = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+    } catch (e) {
+      console.warn('Failed to parse database file for export:', e);
+    }
+  }
+
+  if (!dataObj) return { success: false, error: 'Database is empty or missing' };
 
   const todayStr = new Date().toISOString().split('T')[0];
   const { filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -382,9 +400,24 @@ ipcMain.handle('export-backup', async () => {
   if (!filePath) return { success: false, canceled: true };
 
   try {
-    const data = fs.readFileSync(dbPath, 'utf8');
-    fs.writeFileSync(filePath, data, 'utf8');
-    return { success: true, filePath };
+    const jsonStr = JSON.stringify(dataObj, null, 2);
+    const tempPath = `${filePath}.tmp`;
+    fs.writeFileSync(tempPath, jsonStr, 'utf8');
+    fs.renameSync(tempPath, filePath);
+
+    const custCount = (dataObj.customers || []).length;
+    const txCount = (dataObj.transactions || []).length;
+    const totalAmount = (dataObj.transactions || []).reduce((s, t) => s + Number(t.amount || 0), 0);
+
+    return {
+      success: true,
+      filePath,
+      stats: {
+        customersCount: custCount,
+        transactionsCount: txCount,
+        totalAmount
+      }
+    };
   } catch (err) {
     console.error('Error exporting backup:', err);
     return { success: false, error: err.message };

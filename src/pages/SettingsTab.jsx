@@ -261,6 +261,19 @@ export default function SettingsTab({
 
         const finalCustomerList = Array.from(custMap.values());
 
+        if (isFullBackup && parsedBackup) {
+          const txCount = parsedBackup.transactions?.length || 0;
+          const txSum = (parsedBackup.transactions || []).reduce((s, t) => s + Number(t.amount || 0), 0);
+          const custCount = parsedBackup.customers?.length || 0;
+          const confirmMsg = isMarathi
+            ? `📂 संपूर्ण बॅकअप फाइल सापडली:\n• ग्राहक: ${custCount}\n• एकूण व्यवहार: ${txCount} (रक्कम: ₹${txSum.toLocaleString('en-IN')})\n\nहा बॅकअप रिस्टोर करायचा आहे का? (सर्व ग्राहक आणि व्यवहार पूर्ववत होतील).`
+            : `📂 Full Backup File Detected:\n• Customers: ${custCount}\n• Transactions: ${txCount} (Total: ₹${txSum.toLocaleString('en-IN')})\n\nDo you want to restore this backup?`;
+          if (!window.confirm(confirmMsg)) {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+        }
+
         if (typeof saveDb === 'function') {
           await saveDb((currentDb) => {
             const nextDb = {
@@ -299,6 +312,9 @@ export default function SettingsTab({
         }
 
         if (isFullBackup) {
+          if (typeof handleForceUploadToCloud === 'function') {
+            handleForceUploadToCloud();
+          }
           showToast(
             isMarathi
               ? `संपूर्ण बॅकअप यशस्वीरीत्या आयात झाला! ग्राहक आणि व्यवहार पूर्ववत झाले.`
@@ -470,14 +486,27 @@ export default function SettingsTab({
 
   const handleExportUsbBackup = async () => {
     if (window.electronAPI && window.electronAPI.exportBackup) {
-      const res = await window.electronAPI.exportBackup();
+      const res = await window.electronAPI.exportBackup(db);
       if (res && res.success) {
-        showToast(isMarathi ? 'USB बॅकअप फाइल यशस्वीरित्या सेव्ह झाली!' : 'USB Backup file saved successfully!', 'success');
+        const stats = res.stats;
+        const msg = isMarathi
+          ? `USB बॅकअप फाइल यशस्वीरीत्या सेव्ह झाली! (${stats?.customersCount || 0} ग्राहक, ${stats?.transactionsCount || 0} व्यवहार, एकूण ₹${(stats?.totalAmount || 0).toLocaleString('en-IN')})`
+          : `USB Backup file saved successfully! (${stats?.customersCount || 0} customers, ${stats?.transactionsCount || 0} transactions, ₹${(stats?.totalAmount || 0).toLocaleString('en-IN')})`;
+        showToast(msg, 'success');
       } else if (res && res.error) {
         showToast(res.error, 'error');
       }
     } else {
-      handleExportCustomersJSON();
+      const fullDbString = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+      const downloadAnchor = document.createElement('a');
+      const today = new Date().toISOString().slice(0, 10);
+      downloadAnchor.setAttribute("href", fullDbString);
+      downloadAnchor.setAttribute("download", `lokmanya_mess_backup_${today}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      const txSum = (db.transactions || []).reduce((s, t) => s + Number(t.amount || 0), 0);
+      showToast(isMarathi ? `संपूर्ण बॅकअप फाईल डाऊनलोड झाली! (${(db.customers || []).length} ग्राहक, ${(db.transactions || []).length} व्यवहार, ₹${txSum.toLocaleString('en-IN')})` : `Full DB backup downloaded! (${(db.customers || []).length} customers, ${(db.transactions || []).length} transactions, ₹${txSum.toLocaleString('en-IN')})`, 'success');
     }
   };
 
@@ -679,7 +708,7 @@ export default function SettingsTab({
             style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '700', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <Upload size={16} />
-            <span>{isMarathi ? 'ग्राहक डेटा अपलोड/इम्पोर्ट करा' : 'Import Customers File'}</span>
+            <span>{isMarathi ? '📥 बॅकअप / ग्राहक फाईल रिस्टोर करा' : '📥 Restore Backup / Import File'}</span>
           </button>
 
           <button

@@ -100,6 +100,10 @@ export default function DashboardTab({
     return (a.name || '').localeCompare(b.name || '');
   });
 
+  const b1Total = (db.transactions || []).filter(t => (t.branch || 'Branch 1') === 'Branch 1').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const b2Total = (db.transactions || []).filter(t => t.branch === 'Branch 2').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const grandTotal = (db.transactions || []).reduce((s, t) => s + Number(t.amount || 0), 0);
+
   return (
     <div className="tab-panel animate-fade">
       {/* 1. Separated Section Dashboard Tiles (Tiffin vs Dine-In) */}
@@ -131,6 +135,13 @@ export default function DashboardTab({
           <div className="stat-info">
             <div className="stat-label">{isMarathi ? 'एकूण जमा रक्कम' : 'TOTAL COLLECTIONS'}</div>
             <div className="stat-value" style={{ color: '#10b981' }}>₹{metrics?.totalCollections || 0}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: '600' }}>
+              {activeBranch === 'All' ? (
+                <span>{isMarathi ? `शाखा १: ₹${b1Total.toLocaleString('en-IN')} | शाखा २: ₹${b2Total.toLocaleString('en-IN')}` : `Branch 1: ₹${b1Total.toLocaleString('en-IN')} | Branch 2: ₹${b2Total.toLocaleString('en-IN')}`}</span>
+              ) : (
+                <span>{activeBranch}: ₹{(activeBranch === 'Branch 1' ? b1Total : b2Total).toLocaleString('en-IN')} ({isMarathi ? 'सर्व एकूण' : 'Total'}: ₹{grandTotal.toLocaleString('en-IN')})</span>
+              )}
+            </div>
           </div>
         </div>
 

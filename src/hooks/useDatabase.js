@@ -40,6 +40,7 @@ export function useDatabase(showToast, applyLoadedSettings) {
   const savePendingCountRef = useRef(0);
   const lastSaveRequestRef = useRef(null);
   const dbRef = useRef(db);
+  const deletedIdsRef = useRef(new Set());
 
   useEffect(() => {
     dbRef.current = db;
@@ -130,10 +131,12 @@ export function useDatabase(showToast, applyLoadedSettings) {
           const localItems = prevDb[localKey] || [];
           const map = new Map();
           localItems.forEach((item) => {
-            if (item && item.id) map.set(item.id, item);
+            if (item && item.id && !deletedIdsRef.current.has(item.id)) {
+              map.set(item.id, item);
+            }
           });
           items.forEach((item) => {
-            if (item && item.id) {
+            if (item && item.id && !deletedIdsRef.current.has(item.id)) {
               const local = map.get(item.id);
               map.set(item.id, { ...(local || {}), ...item });
             }
@@ -194,6 +197,40 @@ export function useDatabase(showToast, applyLoadedSettings) {
     });
     unsubs.push(unsubSettings);
 
+    const unsubDeletions = onSnapshot(doc(firestoreDb, 'desktop_config', 'sync_deletions'), (docSnap) => {
+      if (!docSnap.exists()) return;
+      const delData = docSnap.data() || {};
+      const deletedIds = Object.keys(delData);
+      if (!deletedIds.length) return;
+
+      deletedIds.forEach((id) => deletedIdsRef.current.add(id));
+
+      setDb((prevDb) => {
+        let hasChanges = false;
+        const nextDb = { ...prevDb };
+        const keysToClean = ['customers', 'transactions', 'expenses', 'employees', 'salaries', 'archives'];
+
+        for (const k of keysToClean) {
+          const original = prevDb[k] || [];
+          const filtered = original.filter((item) => !item || !item.id || !deletedIdsRef.current.has(item.id));
+          if (filtered.length !== original.length) {
+            nextDb[k] = filtered;
+            hasChanges = true;
+          }
+        }
+
+        if (hasChanges) {
+          dbRef.current = nextDb;
+          writeLocalBackup(nextDb).catch(() => {});
+          return nextDb;
+        }
+        return prevDb;
+      });
+    }, (err) => {
+      console.warn('Sync deletions listener warning:', err);
+    });
+    unsubs.push(unsubDeletions);
+
     return () => {
       unsubs.forEach((unsub) => unsub());
     };
@@ -223,6 +260,12 @@ export function useDatabase(showToast, applyLoadedSettings) {
       for (const item of oldList) {
         if (!newMap.has(item.id)) {
           await deleteDoc(doc(firestoreDb, collectionName, item.id));
+          try {
+            await setDoc(doc(firestoreDb, 'desktop_config', 'sync_deletions'), { [item.id]: Date.now() }, { merge: true });
+            deletedIdsRef.current.add(item.id);
+          } catch (delErr) {
+            console.warn('Sync deletions record warning:', delErr);
+          }
         }
       }
     }
@@ -252,18 +295,68 @@ export function useDatabase(showToast, applyLoadedSettings) {
     return true;
   }, [syncCollectionDiff]);
 
+  const reconcileWithCloud = useCallback(async (currentDb) => {
+    if (!isCloudSyncAvailable || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+      return false;
+    }
+    const targetDb = currentDb || dbRef.current;
+    if (!targetDb) return false;
+
+    try {
+      const delSnap = await getDoc(doc(firestoreDb, 'desktop_config', 'sync_deletions'));
+      if (delSnap.exists()) {
+        const delData = delSnap.data() || {};
+        Object.keys(delData).forEach((id) => deletedIdsRef.current.add(id));
+      }
+
+      const collectionsToCheck = [
+        { cloudName: 'desktop_customers', localKey: 'customers' },
+        { cloudName: 'desktop_transactions', localKey: 'transactions' },
+        { cloudName: 'desktop_expenses', localKey: 'expenses' },
+        { cloudName: 'desktop_employees', localKey: 'employees' },
+        { cloudName: 'desktop_salaries', localKey: 'salaries' },
+        { cloudName: 'desktop_archives', localKey: 'archives' }
+      ];
+
+      for (const { cloudName, localKey } of collectionsToCheck) {
+        const localList = targetDb[localKey] || [];
+        if (!localList.length) continue;
+
+        const snapshot = await getDocs(collection(firestoreDb, cloudName));
+        const cloudIds = new Set();
+        snapshot.forEach((d) => cloudIds.add(d.id));
+
+        for (const item of localList) {
+          if (item && item.id && !cloudIds.has(item.id) && !deletedIdsRef.current.has(item.id)) {
+            const cleanDoc = JSON.parse(JSON.stringify(item));
+            await setDoc(doc(firestoreDb, cloudName, item.id), cleanDoc);
+            console.log(`[CloudSync] Auto-reconciled item ${cloudName}/${item.id}`);
+          }
+        }
+      }
+
+      setSaveHealth((prev) => ({ ...prev, lastCloudSyncAt: new Date().toISOString() }));
+      return true;
+    } catch (err) {
+      console.warn('[CloudSync] Background reconciliation notice:', err);
+      return false;
+    }
+  }, []);
+
   // Automatic Cloud Re-Sync as soon as Internet Connection is Restored
   useEffect(() => {
     const handleOnline = () => {
       if (isCloudSyncAvailable && dbRef.current) {
-        syncDbToCloud(null, dbRef.current, true).then(() => {
+        reconcileWithCloud(dbRef.current).then(() => {
+          return syncDbToCloud(null, dbRef.current, true);
+        }).then(() => {
           setSaveHealth((prev) => ({ ...prev, lastCloudSyncAt: new Date().toISOString() }));
         }).catch((err) => console.warn('Auto-sync on reconnect warning:', err));
       }
     };
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [syncDbToCloud]);
+  }, [syncDbToCloud, reconcileWithCloud]);
 
   const saveDb = useCallback(async (nextDbOrUpdater) => {
     savePendingCountRef.current += 1;
@@ -409,6 +502,7 @@ export function useDatabase(showToast, applyLoadedSettings) {
     }
     try {
       showToast(db.settings?.lang === 'mr' ? 'क्लाउडवर डेटा अपलोड होत आहे...' : 'Uploading all data to cloud...', 'info');
+      await reconcileWithCloud(dbRef.current);
       const synced = await syncDbToCloud(null, dbRef.current, true);
       if (synced) {
         setSaveHealth((prev) => ({ ...prev, lastCloudSyncAt: new Date().toISOString() }));
@@ -420,7 +514,7 @@ export function useDatabase(showToast, applyLoadedSettings) {
       console.error('Force upload error:', err);
       alert((db.settings?.lang === 'mr' ? 'क्लाउडवर अपलोड करताना त्रुटी: ' : 'Error uploading to cloud: ') + err.message);
     }
-  }, [db.settings?.lang, syncDbToCloud, showToast]);
+  }, [db.settings?.lang, reconcileWithCloud, syncDbToCloud, showToast]);
 
   return {
     db,

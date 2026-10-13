@@ -7,6 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   listBackups: () => ipcRenderer.invoke('list-backups'),
   restoreBackup: (filename) => ipcRenderer.invoke('restore-backup', filename),
-  exportBackup: () => ipcRenderer.invoke('export-backup')
+  exportBackup: (data) => ipcRenderer.invoke('export-backup', data)
 });
 
