@@ -385,12 +385,37 @@ export function useDatabase(showToast, applyLoadedSettings) {
     }
   }, [db.settings, applyLoadedSettings, writeLocalBackup, showToast]);
 
+  const handleForceUploadToCloud = useCallback(async () => {
+    if (!isCloudSyncAvailable) {
+      alert(db.settings?.lang === 'mr' ? 'क्लाउड कनेक्शन उपलब्ध नाही.' : 'Cloud connection not available.');
+      return;
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      alert(db.settings?.lang === 'mr' ? 'कृपया इंटरनेट कनेक्शन तपासा.' : 'Please check your internet connection.');
+      return;
+    }
+    try {
+      showToast(db.settings?.lang === 'mr' ? 'क्लाउडवर डेटा अपलोड होत आहे...' : 'Uploading all data to cloud...', 'info');
+      const synced = await syncDbToCloud(null, dbRef.current, true);
+      if (synced) {
+        setSaveHealth((prev) => ({ ...prev, lastCloudSyncAt: new Date().toISOString() }));
+        showToast(db.settings?.lang === 'mr' ? 'क्लाउडवर सर्व डेटा यशस्वीरित्या अपलोड झाला!' : 'All data successfully uploaded to cloud!', 'success');
+      } else {
+        showToast(db.settings?.lang === 'mr' ? 'अपलोड अयशस्वी. कृपया इंटरनेट तपासा.' : 'Upload failed. Check internet connection.', 'error');
+      }
+    } catch (err) {
+      console.error('Force upload error:', err);
+      alert((db.settings?.lang === 'mr' ? 'क्लाउडवर अपलोड करताना त्रुटी: ' : 'Error uploading to cloud: ') + err.message);
+    }
+  }, [db.settings?.lang, syncDbToCloud, showToast]);
+
   return {
     db,
     setDb,
     saveDb,
     saveHealth,
     retryLastSave,
-    handleForceRestoreFromCloud
+    handleForceRestoreFromCloud,
+    handleForceUploadToCloud
   };
 }

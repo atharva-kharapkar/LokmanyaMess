@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Save, Lock, Key, Building, Download, Upload, Database, FileText, Trash2, CloudDownload } from 'lucide-react';
+import { Save, Lock, Key, Building, Download, Upload, Database, FileText, Trash2, CloudDownload, CloudUpload } from 'lucide-react';
 import { PIN_LENGTH, isArchivePinValid, hashSecret, matchesSecret } from '../utils/helpers';
 
 export default function SettingsTab({
@@ -10,6 +10,8 @@ export default function SettingsTab({
   saveSettings,
   activeBranch,
   handleForceRestoreFromCloud,
+  handleForceUploadToCloud,
+  saveHealth,
   isSettingsUnlocked = true,
   setIsSettingsUnlocked = () => {},
   settingsPinInput = '',
@@ -626,7 +628,17 @@ export default function SettingsTab({
             style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '700', borderRadius: '8px', backgroundColor: '#2563EB', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
           >
             <CloudDownload size={16} />
-            <span>{isMarathi ? '☁️ क्लाउडवरून डेटा सिंक करा' : '☁️ Restore / Sync from Cloud'}</span>
+            <span>{isMarathi ? '☁️ क्लाउडवरून डेटा घ्या (Restore)' : '☁️ Restore from Cloud'}</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn"
+            onClick={handleForceUploadToCloud}
+            style={{ padding: '10px 16px', fontSize: '13px', fontWeight: '700', borderRadius: '8px', backgroundColor: '#059669', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+          >
+            <CloudUpload size={16} />
+            <span>{isMarathi ? '☁️ क्लाउडवर डेटा पाठवा (Upload)' : '☁️ Force Upload to Cloud'}</span>
           </button>
 
           {role === 'owner' && (

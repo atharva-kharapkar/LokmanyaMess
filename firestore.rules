@@ -74,45 +74,31 @@ service cloud.firestore {
     }
 
     match /desktop_customers/{docId} {
-      allow read, write: if false;
-      // Zero-cost safety default:
-      // keep cloud access blocked until you intentionally enable a real auth model.
-      // Example future rule:
-      // allow read, write: if isSignedIn() && isCustomer();
+      allow read, write: if true;
     }
 
     match /desktop_transactions/{docId} {
-      allow read, write: if false;
-      // Example future rule:
-      // allow read, write: if isSignedIn() && isTransaction();
+      allow read, write: if true;
     }
 
     match /desktop_employees/{docId} {
-      allow read, write: if false;
-      // Example future rule:
-      // allow read, write: if isSignedIn() && isEmployee();
+      allow read, write: if true;
     }
 
     match /desktop_salaries/{docId} {
-      allow read, write: if false;
-      // Example future rule:
-      // allow read, write: if isSignedIn() && isSalary();
+      allow read, write: if true;
     }
 
     match /desktop_expenses/{docId} {
-      allow read, write: if false;
-      // Example future rule:
-      // allow read, write: if isSignedIn() && isExpense();
+      allow read, write: if true;
     }
 
     match /desktop_config/{docId} {
-      allow read, write: if false;
-      // Example future rule:
-      // allow read, write: if isSignedIn() && isSettings();
+      allow read, write: if true;
     }
 
     match /desktop_archives/{docId} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }

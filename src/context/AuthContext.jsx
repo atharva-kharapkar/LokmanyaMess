@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
 
   // 2. Base Database Hook
   const database = useDatabase(showToast, applyLoadedSettings);
-  const { db, setDb, saveDb, saveHealth, retryLastSave, handleForceRestoreFromCloud } = database;
+  const { db, setDb, saveDb, saveHealth, retryLastSave, handleForceRestoreFromCloud, handleForceUploadToCloud } = database;
 
   // 3. Session & Authentication State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -362,7 +362,7 @@ export function AuthProvider({ children }) {
 
   // 12. Context Value Export
   const value = {
-    db, setDb, saveDb, saveHealth, retryLastSave, handleForceRestoreFromCloud,
+    db, setDb, saveDb, saveHealth, retryLastSave, handleForceRestoreFromCloud, handleForceUploadToCloud,
     isLoggedIn, setIsLoggedIn, role, setRole, pinInput, setPinInput, pinError, setPinError, showPinPad, setShowPinPad, handleLogout, handlePinSubmit,
     activeBranch, setActiveBranch, boundBranch, setBoundBranch,
     isArchiveUnlocked, setIsArchiveUnlocked, archiveInputRef, archivePinInput, setArchivePinInput, matchesArchiveSecret, updateArchivePasscodeWithOwnerPin,
