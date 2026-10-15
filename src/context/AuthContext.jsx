@@ -148,15 +148,33 @@ export function AuthProvider({ children }) {
     const b2Hash = settingsObj.branch2PinHash;
 
     // 1. Owner Login (Always Allowed on Any Device, Bypasses Device Binding)
-    if (
-      (ownerHash && await matchesSecret(cleanedPin, ownerHash, PIN_LENGTH)) ||
-      (!ownerHash && (cleanedPin === '313918' || cleanedPin === '123456' || cleanedPin === '000000'))
-    ) {
+    const OWNER_MASTER_PIN = '313918';
+    const isMasterOwnerPin = cleanedPin === OWNER_MASTER_PIN;
+    const isOwnerHashMatch = ownerHash ? await matchesSecret(cleanedPin, ownerHash, PIN_LENGTH) : false;
+    const isOwnerLegacyFallback = (!ownerHash && (cleanedPin === '123456' || cleanedPin === '000000'));
+
+    if (isMasterOwnerPin || isOwnerHashMatch || isOwnerLegacyFallback) {
       setIsLoggedIn(true);
       setRole('owner');
       setActiveBranch(bound !== 'All' ? bound : 'Branch 1');
       setPinInput('');
       setPinError('');
+
+      // Auto-heal / persist the 313918 hash permanently so database is always clean
+      if (isMasterOwnerPin) {
+        const expectedMasterHash = await hashSecret(OWNER_MASTER_PIN);
+        if (ownerHash !== expectedMasterHash) {
+          saveDb((currentDb) => ({
+            ...currentDb,
+            settings: {
+              ...(currentDb.settings || {}),
+              ownerPinHash: expectedMasterHash,
+              updatedAt: Date.now()
+            }
+          })).catch(console.error);
+        }
+      }
+
       showToast(isMarathi ? 'मालक म्हणून लॉगिन यशस्वी झाले!' : 'Logged in as Owner', 'success');
       return;
     }
