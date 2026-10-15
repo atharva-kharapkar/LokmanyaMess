@@ -539,11 +539,11 @@ export default function CustomersTabWeb({
                           
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', maxWidth: '240px' }}>
                             <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
-                              {c.status === 'old' && role === 'owner' ? (
+                              {(c.status === 'old' || c.status === 'archived') && role === 'owner' ? (
                                 <button
                                   className="btn btn-sm btn-success"
                                   title={db.settings.lang === 'mr' ? 'पुनर्संचयित करा' : 'Restore Customer'}
-                                  onClick={() => restoreCustomer(c.id)}
+                                  onClick={() => restoreCustomer(c)}
                                   style={{ flex: 1, height: '32px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                                 >
                                   <RotateCcw size={12} />

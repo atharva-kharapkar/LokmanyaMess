@@ -479,7 +479,9 @@ export function getElapsedCycles(c, startDate, todayMidnight) {
     const startMonth = startDate.getMonth();
     const startDay = startDate.getDate();
     let months = (todayMidnight.getFullYear() - startYear) * 12 + (todayMidnight.getMonth() - startMonth);
-    if (todayMidnight.getDate() < startDay) {
+    const maxDayInTodayMonth = new Date(todayMidnight.getFullYear(), todayMidnight.getMonth() + 1, 0).getDate();
+    const targetCycleDay = Math.min(startDay, maxDayInTodayMonth);
+    if (todayMidnight.getDate() < targetCycleDay) {
       months -= 1;
     }
     return Math.max(0, months);
