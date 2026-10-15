@@ -3,6 +3,7 @@ import { Search, Plus, Bell, Download } from 'lucide-react';
 import CustomerCard from '../components/ui/CustomerCard';
 import TiffinAreaFilter from '../components/TiffinAreaFilter';
 import { getCurrentCycleDeposited } from '../utils/helpers';
+import RestoreCustomerModal from '../components/modals/RestoreCustomerModal';
 
 export default function CustomersTab({
   db = { customers: [], settings: {} },
@@ -53,6 +54,24 @@ export default function CustomersTab({
 }) {
   const isMarathi = db?.settings?.lang === 'mr';
   const [localArchivePin, setLocalArchivePin] = useState('');
+  const [restoreModalCust, setRestoreModalCust] = useState(null);
+
+  const handleInitiateRestore = (customerOrId) => {
+    const custObj = typeof customerOrId === 'object' && customerOrId?.id
+      ? customerOrId
+      : (db?.customers || []).find((c) => c.id === customerOrId);
+    if (custObj) {
+      setRestoreModalCust(custObj);
+    }
+  };
+
+  const handleConfirmRestore = (cust, newStartDate) => {
+    const restoreFn = restoreCustomer || onRestoreCustomer;
+    if (typeof restoreFn === 'function') {
+      restoreFn(cust, newStartDate);
+    }
+    setRestoreModalCust(null);
+  };
 
   // Passcode Lock for Old Customers Archive
   if (currentTab === 'oldcustomers' && !isArchiveUnlocked) {
@@ -107,6 +126,63 @@ export default function CustomersTab({
   return (
     <div className="tab-panel animate-fade">
       <div className="card-section">
+        {/* Prominent Old Customers Count Card */}
+        {currentTab === 'oldcustomers' && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 24px',
+            marginBottom: '20px',
+            borderRadius: '14px',
+            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+            color: '#ffffff',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+            border: '1px solid rgba(255,255,255,0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '12px',
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#F87171',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '26px'
+              }}>
+                🗂️
+              </div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                  {isMarathi ? 'एकूण जुने / संग्रहित ग्राहक' : 'Total Archived / Old Customers'}
+                </div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#F8FAFC', lineHeight: 1.2 }}>
+                  {filteredCustomers ? filteredCustomers.length : 0} <span style={{ fontSize: '16px', fontWeight: '600', color: '#94A3B8' }}>{isMarathi ? 'ग्राहक' : 'Customers'}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                color: '#4ADE80',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: '700'
+              }}>
+                🔄 {isMarathi ? 'पुनर्संचयित (Restore) करण्यासाठी खालील बटण वापरा' : 'Use Restore button on card to reactivate'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Toolbar */}
         <div className="toolbar" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '20px' }}>
           <div className="search-container">
@@ -193,7 +269,7 @@ export default function CustomersTab({
                 onSendWhatsAppReminder={onSendWhatsAppReminder}
                 onOpenEditCust={openEditCust || onOpenEditCust}
                 onDeleteCustomer={deleteCustomer || onDeleteCustomer}
-                onRestoreCustomer={restoreCustomer || onRestoreCustomer}
+                onRestoreCustomer={handleInitiateRestore}
                 onOpenPauseModal={onOpenPauseModal}
               />
             );
@@ -206,6 +282,14 @@ export default function CustomersTab({
           )}
         </div>
       </div>
+
+      <RestoreCustomerModal
+        isOpen={Boolean(restoreModalCust)}
+        onClose={() => setRestoreModalCust(null)}
+        customer={restoreModalCust}
+        onConfirmRestore={handleConfirmRestore}
+        isMarathi={isMarathi}
+      />
     </div>
   );
 }

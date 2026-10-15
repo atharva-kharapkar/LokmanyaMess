@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { isBlank, normalizeText, toAmountNumber, isValidDate, getCustomerDues, parseLocalDate } from '../../utils/helpers';
+import { isBlank, normalizeText, toAmountNumber, isValidDate, getCustomerDues, parseLocalDate, todayStr } from '../../utils/helpers';
 import { addCustomArea, deleteCustomArea, deleteAllCustomAreas } from '../../utils/areaHelpers';
 import { DEFAULT_MEAL_TYPE, DEFAULT_MEAL_SLOT } from '../../utils/mealConfig';
 
@@ -252,18 +252,52 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
     }
   };
 
-  const restoreCustomer = async (id) => {
+  const restoreCustomer = async (target, newStartDate) => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
     if (typeof isOwnerRole === 'function' && !isOwnerRole(role)) {
       showToast(isMarathi ? 'ग्राहक पुनर्संचयित करण्यासाठी मालक प्रवेश आवश्यक आहे.' : 'Owner access is required to restore customers.', 'error');
       return;
     }
+    const id = typeof target === 'object' && target?.id ? target.id : target;
+    const targetCust = (db.customers || []).find((c) => c.id === id);
+    if (!targetCust) return;
+
+    const startDate = newStartDate || todayStr();
+
     await saveDb((currentDb) => ({
       ...currentDb,
-      customers: (currentDb.customers || []).map((c) => c.id === id ? { ...c, status: 'active', archivedDate: undefined } : c)
+      customers: (currentDb.customers || []).map((c) => {
+        if (c.id === id) {
+          return {
+            ...c,
+            status: 'active',
+            joinDate: startDate,
+            billingStartDate: startDate,
+            deposited: 0,
+            totalPausedDays: 0,
+            isPaused: false,
+            pauseStartDate: undefined,
+            pauseReason: undefined,
+            archivedDate: undefined,
+            updatedAt: Date.now()
+          };
+        }
+        return c;
+      })
     }));
 
-    showToast(isMarathi ? 'ग्राहक यशस्वीरित्या पुनर्संचयित केला गेला!' : 'Customer restored successfully!', 'success');
+    const catName = targetCust.category === 'tiffin'
+      ? (isMarathi ? 'टिफिन डिलिव्हरी' : 'Tiffin Delivery')
+      : targetCust.category === 'shortterm'
+        ? (isMarathi ? 'अल्पमुदत' : 'Short-Term')
+        : (isMarathi ? 'डाईन-इन' : 'Dine-In');
+
+    showToast(
+      isMarathi
+        ? `${targetCust.name} यशस्वीरित्या ${catName} विभागात पुनर्संचयित केला गेला!`
+        : `${targetCust.name} successfully restored to ${catName}!`,
+      'success'
+    );
   };
 
   const filteredCustomers = useMemo(() => {

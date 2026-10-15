@@ -226,11 +226,11 @@ const CustomerCard = memo(function CustomerCard({
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', maxWidth: '240px' }}>
           <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
-            {c.status === 'old' && role === 'owner' ? (
+            {(c.status === 'old' || c.status === 'archived' || currentTab === 'oldcustomers') ? (
               <button
                 className="btn btn-sm btn-success"
                 title={isMarathi ? 'पुनर्संचयित करा' : 'Restore Customer'}
-                onClick={() => onRestoreCustomer(c.id)}
+                onClick={() => onRestoreCustomer(c)}
                 style={{ flex: 1, height: '32px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
               >
                 <RotateCcw size={14} />

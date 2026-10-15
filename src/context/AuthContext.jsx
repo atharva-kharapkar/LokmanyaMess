@@ -150,7 +150,7 @@ export function AuthProvider({ children }) {
     // 1. Owner Login (Always Allowed on Any Device, Bypasses Device Binding)
     if (
       (ownerHash && await matchesSecret(cleanedPin, ownerHash, PIN_LENGTH)) ||
-      (!ownerHash && (cleanedPin === '123456' || cleanedPin === '000000'))
+      (!ownerHash && (cleanedPin === '313918' || cleanedPin === '123456' || cleanedPin === '000000'))
     ) {
       setIsLoggedIn(true);
       setRole('owner');

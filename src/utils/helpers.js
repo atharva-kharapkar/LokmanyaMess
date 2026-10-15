@@ -267,35 +267,35 @@ export function getExpiryDate(c, optionalPlan) {
   }
 
   const planName = typeof c === 'object' ? c.plan : optionalPlan;
+  const planAmount = typeof c === 'object' ? Number(c.amount || 0) : 0;
+  const depositedAmount = typeof c === 'object' ? Number(c.deposited || 0) : 0;
+
+  let paidCycles = 0;
+  if (planAmount > 0) {
+    paidCycles = Math.floor(depositedAmount / planAmount);
+  }
+  // Minimum 1 cycle for initial registration period
+  const validCycles = Math.max(1, paidCycles);
 
   if (!planName || planName === 'Monthly') {
     const startYear = startDate.getFullYear();
     const startMonth = startDate.getMonth();
     const startDay = startDate.getDate();
 
-    let elapsedMonths = (todayMidnight.getFullYear() - startYear) * 12 + (todayMidnight.getMonth() - startMonth);
-    if (todayMidnight.getDate() < startDay) {
-      elapsedMonths -= 1;
-    }
-    if (elapsedMonths < 0) elapsedMonths = 0;
-
-    const totalMonths = startMonth + elapsedMonths + 1;
+    const totalMonths = startMonth + validCycles;
     const targetYear = startYear + Math.floor(totalMonths / 12);
     const targetMonth = totalMonths % 12;
 
-    return new Date(targetYear, targetMonth, startDay);
+    const maxDayInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const safeDay = Math.min(startDay, maxDayInTargetMonth);
+
+    return new Date(targetYear, targetMonth, safeDay);
   }
 
   const daysPerCycle = PLAN_DAYS[planName] || 30;
-  const elapsedTime = todayMidnight - startDate;
-  const elapsedDays = Math.round(elapsedTime / 86400000);
-  let elapsedCycles = 0;
-  if (elapsedDays > 0) {
-    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
-  }
-  const currentCycleExpiry = new Date(startDate);
-  currentCycleExpiry.setDate(startDate.getDate() + (elapsedCycles + 1) * daysPerCycle);
-  return currentCycleExpiry;
+  const expiryDate = new Date(startDate);
+  expiryDate.setDate(startDate.getDate() + (validCycles * daysPerCycle));
+  return expiryDate;
 }
 
 export function getExpiryDays(c) {
@@ -468,6 +468,28 @@ export const TRANSLATIONS = {
   }
 };
 
+export function getElapsedCycles(c, startDate, todayMidnight) {
+  if (!startDate) return 0;
+  if (!todayMidnight) {
+    const today = new Date();
+    todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }
+  if (!c?.plan || c.plan === 'Monthly') {
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const startDay = startDate.getDate();
+    let months = (todayMidnight.getFullYear() - startYear) * 12 + (todayMidnight.getMonth() - startMonth);
+    if (todayMidnight.getDate() < startDay) {
+      months -= 1;
+    }
+    return Math.max(0, months);
+  }
+  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+  const elapsedTime = todayMidnight - startDate;
+  const elapsedDays = Math.round(elapsedTime / 86400000);
+  return elapsedDays > 0 ? Math.floor(elapsedDays / daysPerCycle) : 0;
+}
+
 export function getCustomerDues(c) {
   if (!c) return 0;
   const planAmount = Number(c.amount || 0);
@@ -477,18 +499,11 @@ export function getCustomerDues(c) {
   }
   const refDate = getEffectiveJoinDate(c);
   if (!refDate) return 0;
-  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startDate = getAdjustedStartDate(c, todayMidnight);
-  
-  const elapsedTime = todayMidnight - startDate;
-  const elapsedDays = Math.round(elapsedTime / 86400000);
-  
-  let elapsedCycles = 0;
-  if (elapsedDays > 0) {
-    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
-  }
+  const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
   const totalCyclesEntered = elapsedCycles + 1;
   const totalOwed = totalCyclesEntered * planAmount;
@@ -504,18 +519,11 @@ export function getCurrentCycleDeposited(c) {
   }
   const refDate = getEffectiveJoinDate(c);
   if (!refDate) return depositedAmount;
-  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startDate = getAdjustedStartDate(c, todayMidnight);
-  
-  const elapsedTime = todayMidnight - startDate;
-  const elapsedDays = Math.round(elapsedTime / 86400000);
-  
-  let elapsedCycles = 0;
-  if (elapsedDays > 0) {
-    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
-  }
+  const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
   const pastCyclesCost = elapsedCycles * planAmount;
   const currentMonthPaid = Math.max(0, depositedAmount - pastCyclesCost);
@@ -532,18 +540,11 @@ export function getCustomerDuesBreakdown(c) {
   }
   const refDate = getEffectiveJoinDate(c);
   if (!refDate) return { prevDues: 0, currentDues: 0, totalDues: 0 };
-  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startDate = getAdjustedStartDate(c, todayMidnight);
-  
-  const elapsedTime = todayMidnight - startDate;
-  const elapsedDays = Math.round(elapsedTime / 86400000);
-  
-  let elapsedCycles = 0;
-  if (elapsedDays > 0) {
-    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
-  }
+  const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
   const completedCyclesAmount = elapsedCycles * planAmount;
   const currentCycleFee = planAmount;
@@ -569,18 +570,10 @@ export function computeStatus(c) {
 
   const planAmount = Number(c.amount || 0);
   const depositedAmount = Number(c.deposited || 0);
-  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startDate = getAdjustedStartDate(c, todayMidnight);
-  
-  const elapsedTime = todayMidnight - startDate;
-  const elapsedDays = Math.round(elapsedTime / 86400000);
-  
-  let elapsedCycles = 0;
-  if (elapsedDays > 0) {
-    elapsedCycles = Math.floor(elapsedDays / daysPerCycle);
-  }
+  const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
   const completedCyclesAmount = elapsedCycles * planAmount;
   const hasPaidPastCycles = depositedAmount >= completedCyclesAmount;
@@ -607,7 +600,7 @@ export function computeStatus(c) {
 }
 
 export function getDueWarningDays(c) {
-  if (!c || c.status === 'old') return 0;
+  if (!c || c.status === 'old' || c.status === 'archived') return 0;
   const refDate = getEffectiveJoinDate(c);
   if (!refDate) return 0;
 
@@ -630,7 +623,7 @@ export function getDueWarningDays(c) {
 }
 
 export function getDaysPendingDues(c) {
-  if (!c || c.status === 'old') return 0;
+  if (!c || c.status === 'old' || c.status === 'archived') return 0;
   const refDate = getEffectiveJoinDate(c);
   if (!refDate) return 0;
   const dues = getCustomerDues(c);
@@ -645,13 +638,25 @@ export function getDaysPendingDues(c) {
     return Math.max(0, Math.round(diffTime / 86400000));
   }
 
-  const daysPerCycle = PLAN_DAYS[c.plan] || 30;
   const amount = Number(c.amount || 0);
   if (amount <= 0) return 0;
 
   const paidCycles = Math.max(0, Math.floor((c.deposited || 0) / amount));
-  const unpaidCycleStartDate = new Date(startDate);
-  unpaidCycleStartDate.setDate(startDate.getDate() + paidCycles * daysPerCycle);
+  let unpaidCycleStartDate;
+  if (!c.plan || c.plan === 'Monthly') {
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const startDay = startDate.getDate();
+    const totalMonths = startMonth + paidCycles;
+    const targetYear = startYear + Math.floor(totalMonths / 12);
+    const targetMonth = totalMonths % 12;
+    const maxDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    unpaidCycleStartDate = new Date(targetYear, targetMonth, Math.min(startDay, maxDay));
+  } else {
+    const daysPerCycle = PLAN_DAYS[c.plan] || 30;
+    unpaidCycleStartDate = new Date(startDate);
+    unpaidCycleStartDate.setDate(startDate.getDate() + paidCycles * daysPerCycle);
+  }
 
   const diffTime = todayMidnight - unpaidCycleStartDate;
   return Math.max(0, Math.round(diffTime / 86400000));
