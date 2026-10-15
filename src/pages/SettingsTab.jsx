@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Save, Lock, Key, Building, Download, Upload, Database, FileText, Trash2, CloudDownload, CloudUpload } from 'lucide-react';
+import { Save, Lock, Key, Building, Download, Upload, Database, FileText, Trash2, CloudDownload, CloudUpload, Eye, EyeOff } from 'lucide-react';
 import { PIN_LENGTH, isArchivePinValid, hashSecret, matchesSecret, matchesArchiveSecret, sanitizeImportedDbHelper } from '../utils/helpers';
 
 function sanitizeImportedDb(rawDb) {
@@ -63,10 +63,16 @@ export default function SettingsTab({
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [showCurrentPin, setShowCurrentPin] = useState(false);
+  const [showNewPin, setShowNewPin] = useState(false);
+  const [showConfirmPin, setShowConfirmPin] = useState(false);
 
   const [currentArchivePin, setCurrentArchivePin] = useState('');
   const [newArchivePin, setNewArchivePin] = useState('');
   const [confirmArchivePin, setConfirmArchivePin] = useState('');
+  const [showCurrentArchivePin, setShowCurrentArchivePin] = useState(false);
+  const [showNewArchivePin, setShowNewArchivePin] = useState(false);
+  const [showConfirmArchivePin, setShowConfirmArchivePin] = useState(false);
 
   // Export All Customers JSON
   const handleExportCustomersJSON = () => {
@@ -411,6 +417,7 @@ export default function SettingsTab({
     if (e) e.preventDefault();
     if (typeof saveSettings === 'function') {
       await saveSettings(settingsForm);
+      showToast(isMarathi ? 'सेटिंग्ज यशस्वीरित्या अद्यतनित केल्या!' : 'Settings updated successfully!', 'success');
     }
   };
 
@@ -428,23 +435,26 @@ export default function SettingsTab({
       showToast(isMarathi ? 'नवीन पिन जुळत नाही.' : 'New PIN and confirm PIN do not match.', 'error');
       return;
     }
+
+    const updateKey = targetPinType === 'owner' ? 'ownerPinHash' : (targetPinType === 'branch1' ? 'branch1PinHash' : 'branch2PinHash');
+    const storedTargetHash = db.settings?.[updateKey];
     const storedOwnerPinHash = db.settings?.ownerPinHash;
-    const isOwnerAuth = (storedOwnerPinHash ? await matchesSecret(cleanCurrent, storedOwnerPinHash, PIN_LENGTH) : false) || cleanCurrent === '313918' || cleanCurrent === '123456' || cleanCurrent === '000000';
-    if (!isOwnerAuth) {
+    const isTargetAuth = (storedTargetHash && typeof storedTargetHash === 'string') ? await matchesSecret(cleanCurrent, storedTargetHash, PIN_LENGTH) : false;
+    const isOwnerAuth = (storedOwnerPinHash && typeof storedOwnerPinHash === 'string') ? await matchesSecret(cleanCurrent, storedOwnerPinHash, PIN_LENGTH) : false;
+    const isAuthorized = isOwnerAuth || isTargetAuth || cleanCurrent === '313918' || cleanCurrent === '123456' || cleanCurrent === '000000';
+    if (!isAuthorized) {
       showToast(isMarathi ? 'सध्याचा पिन चुकीचा आहे.' : 'Current PIN is incorrect.', 'error');
       return;
     }
 
     const newHash = await hashSecret(cleanNew);
-    const updateKey = targetPinType === 'owner' ? 'ownerPinHash' : (targetPinType === 'branch1' ? 'branch1PinHash' : 'branch2PinHash');
-
     if (typeof saveSettings === 'function') {
       await saveSettings({ [updateKey]: newHash, updatedAt: Date.now() });
     }
     setCurrentPin('');
     setNewPin('');
     setConfirmPin('');
-    showToast(isMarathi ? 'पिन यशस्वीरित्या बदलला!' : `Login PIN updated successfully!`, 'success');
+    showToast(isMarathi ? 'पिन यशस्वीरित्या बदलला!' : 'Login PIN updated successfully!', 'success');
   };
 
   const handleArchivePinChange = async (e) => {
@@ -462,8 +472,11 @@ export default function SettingsTab({
       return;
     }
 
-    const storedSecretHash = db.settings?.archivePinHash || db.settings?.archivePasswordHash || db.settings?.archivePasscodeHash || db.settings?.ownerPinHash;
-    const isCurrentValid = (await matchesArchiveSecret(cleanCurrent, storedSecretHash)) || cleanCurrent === '313918' || cleanCurrent === '1234' || cleanCurrent === '123456' || cleanCurrent === '000000';
+    const archiveHash = db.settings?.archivePinHash || db.settings?.archivePasswordHash || db.settings?.archivePasscodeHash;
+    const ownerHash = db.settings?.ownerPinHash;
+    const isArchiveMatch = (archiveHash && typeof archiveHash === 'string') ? await matchesArchiveSecret(cleanCurrent, archiveHash) : false;
+    const isOwnerMatch = (ownerHash && typeof ownerHash === 'string') ? await matchesSecret(cleanCurrent, ownerHash, PIN_LENGTH) : false;
+    const isCurrentValid = isArchiveMatch || isOwnerMatch || cleanCurrent === '313918' || cleanCurrent === '1234' || cleanCurrent === '123456' || cleanCurrent === '000000';
     if (!isCurrentValid) {
       showToast(isMarathi ? 'सध्याचा पासकोड चुकीचा आहे.' : 'Current archive passcode is incorrect.', 'error');
       return;
@@ -471,7 +484,7 @@ export default function SettingsTab({
 
     const newHash = await hashSecret(cleanNew);
     if (typeof saveSettings === 'function') {
-      await saveSettings({ archivePinHash: newHash, archivePasswordHash: newHash, archivePasscodeHash: newHash });
+      await saveSettings({ archivePinHash: newHash, archivePasswordHash: newHash, archivePasscodeHash: newHash, updatedAt: Date.now() });
     }
     setCurrentArchivePin('');
     setNewArchivePin('');
@@ -869,35 +882,71 @@ export default function SettingsTab({
 
             <div className="form-group">
               <label className="form-label">{isMarathi ? 'सध्याचा ६ अंकी पिन' : 'Current 6-Digit PIN'}</label>
-              <input
-                type="password"
-                className="form-input"
-                maxLength="6"
-                value={currentPin}
-                onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type={showCurrentPin ? "text" : "password"}
+                  className="form-input"
+                  maxLength="6"
+                  placeholder="••••••"
+                  value={currentPin}
+                  onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPin(!showCurrentPin)}
+                  style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                  title={showCurrentPin ? "Hide PIN" : "Show PIN"}
+                >
+                  {showCurrentPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div className="form-group">
               <label className="form-label">{isMarathi ? 'नवीन ६ अंकी पिन' : 'New 6-Digit PIN'}</label>
-              <input
-                type="password"
-                className="form-input"
-                maxLength="6"
-                value={newPin}
-                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type={showNewPin ? "text" : "password"}
+                  className="form-input"
+                  maxLength="6"
+                  placeholder="••••••"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPin(!showNewPin)}
+                  style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                  title={showNewPin ? "Hide PIN" : "Show PIN"}
+                >
+                  {showNewPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <div className="form-group">
               <label className="form-label">{isMarathi ? 'नवीन पिन पुन्हा टाका' : 'Confirm New PIN'}</label>
-              <input
-                type="password"
-                className="form-input"
-                maxLength="6"
-                value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type={showConfirmPin ? "text" : "password"}
+                  className="form-input"
+                  maxLength="6"
+                  placeholder="••••••"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPin(!showConfirmPin)}
+                  style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                  title={showConfirmPin ? "Hide PIN" : "Show PIN"}
+                >
+                  {showConfirmPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '10px' }}>
@@ -917,35 +966,71 @@ export default function SettingsTab({
             <form onSubmit={handleArchivePinChange} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div className="form-group">
                 <label className="form-label">{isMarathi ? 'सध्याचा ४-६ अंकी आर्काइव्ह पासकोड' : 'Current Archive Passcode (4-6 Digits)'}</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  maxLength="6"
-                  value={currentArchivePin}
-                  onChange={(e) => setCurrentArchivePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showCurrentArchivePin ? "text" : "password"}
+                    className="form-input"
+                    maxLength="6"
+                    placeholder="••••"
+                    value={currentArchivePin}
+                    onChange={(e) => setCurrentArchivePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    style={{ width: '100%', paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentArchivePin(!showCurrentArchivePin)}
+                    style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                    title={showCurrentArchivePin ? "Hide Passcode" : "Show Passcode"}
+                  >
+                    {showCurrentArchivePin ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">
                 <label className="form-label">{isMarathi ? 'नवीन ४-६ अंकी आर्काइव्ह पासकोड' : 'New Archive Passcode (4-6 Digits)'}</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  maxLength="6"
-                  value={newArchivePin}
-                  onChange={(e) => setNewArchivePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showNewArchivePin ? "text" : "password"}
+                    className="form-input"
+                    maxLength="6"
+                    placeholder="••••"
+                    value={newArchivePin}
+                    onChange={(e) => setNewArchivePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    style={{ width: '100%', paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewArchivePin(!showNewArchivePin)}
+                    style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                    title={showNewArchivePin ? "Hide Passcode" : "Show Passcode"}
+                  >
+                    {showNewArchivePin ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">
                 <label className="form-label">{isMarathi ? 'नवीन पासकोड पुन्हा टाका' : 'Confirm New Archive Passcode'}</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  maxLength="6"
-                  value={confirmArchivePin}
-                  onChange={(e) => setConfirmArchivePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showConfirmArchivePin ? "text" : "password"}
+                    className="form-input"
+                    maxLength="6"
+                    placeholder="••••"
+                    value={confirmArchivePin}
+                    onChange={(e) => setConfirmArchivePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    style={{ width: '100%', paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmArchivePin(!showConfirmArchivePin)}
+                    style={{ position: 'absolute', right: '10px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
+                    title={showConfirmArchivePin ? "Hide Passcode" : "Show Passcode"}
+                  >
+                    {showConfirmArchivePin ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '10px' }}>

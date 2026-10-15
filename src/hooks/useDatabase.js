@@ -191,12 +191,31 @@ export function useDatabase(showToast, applyLoadedSettings) {
       if (docSnap.exists()) {
         const cloudSettings = docSnap.data();
         setDb((prevDb) => {
-          if (JSON.stringify(prevDb.settings) === JSON.stringify(cloudSettings)) {
+          const localSettings = prevDb.settings || {};
+          const localTime = Number(localSettings.updatedAt || 0);
+          const cloudTime = Number(cloudSettings.updatedAt || 0);
+
+          // If local settings are newer than incoming cloud settings, protect local settings!
+          if (localTime > cloudTime) {
             return prevDb;
           }
+
+          // Clean cloud settings to prevent corrupt objects (like archivePinHash: {})
+          const safeCloudSettings = { ...cloudSettings };
+          ['ownerPinHash', 'branch1PinHash', 'branch2PinHash', 'archivePinHash', 'archivePasswordHash'].forEach((key) => {
+            if (safeCloudSettings[key] && (typeof safeCloudSettings[key] !== 'string' || safeCloudSettings[key].length !== 64)) {
+              delete safeCloudSettings[key];
+            }
+          });
+
+          const mergedSettings = { ...localSettings, ...safeCloudSettings };
+          if (JSON.stringify(localSettings) === JSON.stringify(mergedSettings)) {
+            return prevDb;
+          }
+
           const nextDb = {
             ...prevDb,
-            settings: { ...prevDb.settings, ...cloudSettings }
+            settings: mergedSettings
           };
           dbRef.current = nextDb;
           writeLocalBackup(nextDb).catch(() => {});

@@ -82,16 +82,18 @@ export function AuthProvider({ children }) {
   }, [db.settings, saveDb, showToast]);
 
   const saveSettings = useCallback(async (newSettings) => {
-    const isMarathi = db.settings?.lang === 'mr';
-    await saveDb((currentDb) => ({
+    const timestampedSettings = {
+      updatedAt: Date.now(),
+      ...newSettings
+    };
+    return await saveDb((currentDb) => ({
       ...currentDb,
       settings: {
         ...(currentDb.settings || {}),
-        ...newSettings
+        ...timestampedSettings
       }
     }));
-    showToast(isMarathi ? 'सेटिंग्ज यशस्वीरित्या अद्यतनित केल्या!' : 'Settings updated successfully!', 'success');
-  }, [db.settings, saveDb, showToast]);
+  }, [saveDb]);
 
   // 7. Security Handlers (Depends on saveSettings)
   const updateArchivePasscodeWithOwnerPin = useCallback(async () => {
@@ -160,10 +162,11 @@ export function AuthProvider({ children }) {
       setPinInput('');
       setPinError('');
 
-      // Auto-heal / persist the 313918 hash permanently so database is always clean
+      // Auto-heal / persist the 313918 hash permanently so database is always clean if empty or default
       if (isMasterOwnerPin) {
-        const expectedMasterHash = await hashSecret(OWNER_MASTER_PIN);
-        if (ownerHash !== expectedMasterHash) {
+        const legacyDefaultHash = await hashSecret('123456');
+        if (!ownerHash || ownerHash === legacyDefaultHash) {
+          const expectedMasterHash = await hashSecret(OWNER_MASTER_PIN);
           saveDb((currentDb) => ({
             ...currentDb,
             settings: {
