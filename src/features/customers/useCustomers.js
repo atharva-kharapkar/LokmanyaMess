@@ -240,19 +240,23 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
       }));
 
       showToast(isMarathi ? 'ग्राहक डेटाबेसमधून कायमचा हटवला गेला!' : 'Customer permanently deleted!', 'success');
-    } else {
-      if (!confirm(isMarathi ? 'आपण हा ग्राहक जुन्या ग्राहकांच्या अर्काइव्हमध्ये हलवू इच्छिता?' : 'Are you sure you want to move this customer to Old Customers Archive?')) return;
+      const currentDues = typeof getCustomerDues === 'function' ? getCustomerDues(targetCust) : 0;
 
       await saveDb((currentDb) => ({
         ...currentDb,
-        customers: (currentDb.customers || []).map((c) => c.id === id ? { ...c, status: 'archived', archivedDate: new Date().toISOString().slice(0, 10) } : c)
+        customers: (currentDb.customers || []).map((c) => c.id === id ? { 
+          ...c, 
+          status: 'archived', 
+          archivedDate: new Date().toISOString().slice(0, 10),
+          archivedDues: currentDues
+        } : c)
       }));
 
       showToast(isMarathi ? 'ग्राहक जुन्या ग्राहकांच्या अर्काइव्हमध्ये पाठवला गेला!' : 'Customer moved to Old Customers Archive!', 'success');
     }
   };
 
-  const restoreCustomer = async (target, newStartDate) => {
+  const restoreCustomer = async (target, newStartDate, restoredDues = 0, newPlanAmount) => {
     const isMarathi = db.settings && db.settings.lang === 'mr';
     if (typeof isOwnerRole === 'function' && !isOwnerRole(role)) {
       showToast(isMarathi ? 'ग्राहक पुनर्संचयित करण्यासाठी मालक प्रवेश आवश्यक आहे.' : 'Owner access is required to restore customers.', 'error');
@@ -263,6 +267,10 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
     if (!targetCust) return;
 
     const startDate = newStartDate || todayStr();
+    const finalPreviousDues = Math.max(0, Number(restoredDues || 0));
+    const finalAmount = newPlanAmount !== undefined && Number(newPlanAmount) >= 0 
+      ? Number(newPlanAmount) 
+      : Number(targetCust.amount || 0);
 
     await saveDb((currentDb) => ({
       ...currentDb,
@@ -274,11 +282,14 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
             joinDate: startDate,
             billingStartDate: startDate,
             deposited: 0,
+            previousDues: finalPreviousDues,
+            amount: finalAmount,
             totalPausedDays: 0,
             isPaused: false,
             pauseStartDate: undefined,
             pauseReason: undefined,
             archivedDate: undefined,
+            archivedDues: undefined,
             updatedAt: Date.now()
           };
         }
@@ -292,10 +303,14 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
         ? (isMarathi ? 'अल्पमुदत' : 'Short-Term')
         : (isMarathi ? 'डाईन-इन' : 'Dine-In');
 
+    const duesMsg = finalPreviousDues > 0 
+      ? (isMarathi ? ` (मागील बाकी: ₹${finalPreviousDues})` : ` (Carried Dues: ₹${finalPreviousDues})`)
+      : (isMarathi ? ' (मागील बाकी ० करून नव्याने सुरू)' : ' (Started fresh with 0 dues)');
+
     showToast(
       isMarathi
-        ? `${targetCust.name} यशस्वीरित्या ${catName} विभागात पुनर्संचयित केला गेला!`
-        : `${targetCust.name} successfully restored to ${catName}!`,
+        ? `${targetCust.name} यशस्वीरित्या ${catName} विभागात पुनर्संचयित केला गेला!${duesMsg}`
+        : `${targetCust.name} successfully restored to ${catName}!${duesMsg}`,
       'success'
     );
   };

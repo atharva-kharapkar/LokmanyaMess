@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, X, Calendar, User, Phone, MapPin } from 'lucide-react';
-import { todayStr, formatDisplayDate } from '../../utils/helpers';
+import { RotateCcw, X, Calendar, Phone, MapPin, IndianRupee, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { todayStr, formatDisplayDate, getCustomerDues } from '../../utils/helpers';
 
 export default function RestoreCustomerModal({
   isOpen,
@@ -10,10 +10,17 @@ export default function RestoreCustomerModal({
   isMarathi = false
 }) {
   const [startDate, setStartDate] = useState(todayStr());
+  const [pendingDues, setPendingDues] = useState('0');
+  const [planAmount, setPlanAmount] = useState('0');
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && customer) {
       setStartDate(todayStr());
+      const initialDues = customer.archivedDues !== undefined
+        ? Number(customer.archivedDues)
+        : (typeof getCustomerDues === 'function' ? getCustomerDues(customer) : 0);
+      setPendingDues(String(Math.max(0, initialDues)));
+      setPlanAmount(String(customer.amount || 0));
     }
   }, [isOpen, customer]);
 
@@ -25,10 +32,14 @@ export default function RestoreCustomerModal({
       ? (isMarathi ? '⚡ अल्पमुदत' : '⚡ Short-Term')
       : (isMarathi ? '🍽️ डाईन इन' : '🍽️ Dine In');
 
+  const numPendingDues = Math.max(0, Number(pendingDues) || 0);
+  const numPlanAmount = Math.max(0, Number(planAmount) || 0);
+  const totalInitialDues = numPendingDues + numPlanAmount;
+
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
     if (!startDate) return;
-    onConfirmRestore(customer, startDate);
+    onConfirmRestore(customer, startDate, numPendingDues, numPlanAmount);
     onClose();
   };
 
@@ -52,7 +63,9 @@ export default function RestoreCustomerModal({
         className="modal-card animate-fade-in"
         style={{
           width: '100%',
-          maxWidth: '460px',
+          maxWidth: '500px',
+          maxHeight: '92vh',
+          overflowY: 'auto',
           backgroundColor: 'var(--card)',
           borderRadius: '16px',
           padding: '24px',
@@ -66,9 +79,9 @@ export default function RestoreCustomerModal({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
               backgroundColor: '#DCFCE7',
               color: '#15803D',
               display: 'flex',
@@ -82,7 +95,7 @@ export default function RestoreCustomerModal({
                 {isMarathi ? 'ग्राहक पुन्हा सुरू करा' : 'Restore Customer'}
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                {isMarathi ? 'जुना ग्राहक मूळ विभागात सक्रिय करा' : 'Reactivate customer in original section'}
+                {isMarathi ? 'जुना ग्राहक मूळ विभागात नव्याने सक्रिय करा' : 'Reactivate customer account with new cycle'}
               </p>
             </div>
           </div>
@@ -104,7 +117,7 @@ export default function RestoreCustomerModal({
           border: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px'
+          gap: '6px'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text)' }}>
@@ -133,31 +146,16 @@ export default function RestoreCustomerModal({
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', borderTop: '1px dashed var(--border)', paddingTop: '6px', marginTop: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', borderTop: '1px dashed var(--border)', paddingTop: '6px', marginTop: '2px' }}>
             <span>{isMarathi ? 'प्लॅन' : 'Plan'}: <strong>{customer.plan || 'Monthly'}</strong></span>
-            <span>{isMarathi ? 'शुल्क' : 'Fee'}: <strong>₹{customer.amount || 0}</strong></span>
+            <span>{isMarathi ? 'नोंदणीकृत मासिक शुल्क' : 'Registered Fee'}: <strong>₹{customer.amount || 0}</strong></span>
           </div>
         </div>
 
-        {/* Notice */}
-        <div style={{
-          fontSize: '12px',
-          lineHeight: '1.4',
-          color: '#0369A1',
-          backgroundColor: '#F0F9FF',
-          border: '1px solid #BAE6FD',
-          borderRadius: '8px',
-          padding: '10px 12px',
-          marginBottom: '16px'
-        }}>
-          ℹ️ {isMarathi
-            ? 'ग्राहकाची सर्व माहिती (नाव, पत्ता, फोटो, प्लॅन) सुरक्षित राहील आणि हा ग्राहक थेट त्याच्या मूळ विभागात सक्रिय होईल.'
-            : 'All profile details (name, photo, address, plan) remain intact. The customer will be restored to their original section.'}
-        </div>
-
-        {/* Form: New Start Date */}
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '20px' }}>
+        {/* Form: Start Date & Editable Amount */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Field 1: New Start Date */}
+          <div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '700', marginBottom: '6px' }}>
               <Calendar size={14} style={{ color: 'var(--primary)' }} />
               {isMarathi ? 'नवीन सुरू झालेली तारीख (New Start Date) *' : 'New Start Date *'}
@@ -181,18 +179,175 @@ export default function RestoreCustomerModal({
             />
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
               {isMarathi
-                ? 'आजच्या तारखेपासून किंवा इच्छित तारखेपासून नवीन सायकल सुरू करा.'
-                : 'Defaults to today. Subscription cycle will start from this date with ₹0 deposited.'}
+                ? 'आजच्या तारखेपासून किंवा निवडलेल्या तारखेपासून ग्राहकाचा नवीन महिना सुरू होईल.'
+                : 'Customer subscription cycle starts fresh from this date.'}
+            </div>
+          </div>
+
+          {/* Field 2: Previous Pending Dues (Pre-filled & Editable) */}
+          <div style={{
+            backgroundColor: numPendingDues > 0 ? '#FFFBEB' : '#F0FDF4',
+            border: numPendingDues > 0 ? '1.5px solid #FCD34D' : '1.5px solid #BBF7D0',
+            borderRadius: '12px',
+            padding: '14px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: '800',
+                color: numPendingDues > 0 ? '#92400E' : '#166534',
+                margin: 0
+              }}>
+                <IndianRupee size={15} />
+                {isMarathi ? 'मागील बाकी / पूर्वनोंद थकीत रक्कम (₹)' : 'Previous Pending Dues (₹) *'}
+              </label>
+              {numPendingDues > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPendingDues('0')}
+                  style={{
+                    backgroundColor: '#FEF3C7',
+                    border: '1px solid #D97706',
+                    color: '#B45309',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title={isMarathi ? 'मागील बाकी माफ करून ० करा' : 'Clear debt to ₹0'}
+                >
+                  <RefreshCw size={11} />
+                  {isMarathi ? 'बाकी ० करा (Clear)' : 'Set to ₹0'}
+                </button>
+              )}
+            </div>
+
+            <input
+              type="number"
+              min="0"
+              step="any"
+              className="form-input"
+              value={pendingDues}
+              onChange={(e) => setPendingDues(e.target.value)}
+              placeholder="0"
+              required
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: numPendingDues > 0 ? '1.5px solid #F59E0B' : '1.5px solid #16A34A',
+                backgroundColor: 'var(--card)',
+                color: 'var(--text)',
+                fontSize: '18px',
+                fontWeight: '800'
+              }}
+            />
+
+            <div style={{
+              fontSize: '12px',
+              marginTop: '6px',
+              lineHeight: '1.4',
+              color: numPendingDues > 0 ? '#B45309' : '#15803D'
+            }}>
+              {numPendingDues > 0 ? (
+                <>
+                  ⚠️ {isMarathi
+                    ? 'या ग्राहकाची आधीची थकीत बाकी प्री-फिल झाली आहे. जर ही रक्कम माफ करून नव्याने खाते सुरू करायचे असेल, तर वरील रक्कम ० (शून्य) करा.'
+                    : 'Customer has past dues pre-filled. If you wish to waive this old debt and start fresh, change this amount to 0.'}
+                </>
+              ) : (
+                <>
+                  ✨ {isMarathi
+                    ? 'मागील बाकी ० (शून्य) आहे. ग्राहकाचा नवीन महिना कोणत्याही जुन्या कर्जाशिवाय सुरू होईल!'
+                    : 'No past debt. The customer will start fresh with ₹0 old balance!'}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Field 3: Monthly Fee (Editable) */}
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '700', marginBottom: '6px' }}>
+              <IndianRupee size={14} style={{ color: 'var(--primary)' }} />
+              {isMarathi ? 'चालू महिन्याचे प्लॅन शुल्क (Monthly Plan Fee ₹) *' : 'Monthly Plan Fee (₹) *'}
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              className="form-input"
+              value={planAmount}
+              onChange={(e) => setPlanAmount(e.target.value)}
+              required
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1.5px solid var(--border)',
+                backgroundColor: 'var(--card)',
+                color: 'var(--text)',
+                fontSize: '15px',
+                fontWeight: '700'
+              }}
+            />
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {isMarathi
+                ? 'या ग्राहकाचे नवीन महिन्याचे नियमित शुल्क (आवश्यक असल्यास बदलू शकता).'
+                : 'Regular subscription fee for the restored customer.'}
+            </div>
+          </div>
+
+          {/* Dues Breakdown Summary Card */}
+          <div style={{
+            backgroundColor: 'var(--bg)',
+            borderRadius: '10px',
+            padding: '12px 14px',
+            border: '1px solid var(--border)',
+            fontSize: '13px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{isMarathi ? 'मागील बाकी (Past Dues):' : 'Past Dues:'}</span>
+              <strong style={{ color: numPendingDues > 0 ? '#DC2626' : '#16A34A' }}>
+                ₹{numPendingDues.toLocaleString('en-IN')}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{isMarathi ? 'नवीन महिना शुल्क (New Month Fee):' : 'New Month Fee:'}</span>
+              <strong>₹{numPlanAmount.toLocaleString('en-IN')}</strong>
+            </div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              borderTop: '1px dashed var(--border)',
+              paddingTop: '6px',
+              marginTop: '2px',
+              fontSize: '14px',
+              fontWeight: '800'
+            }}>
+              <span>{isMarathi ? 'सुरुवातीची एकूण बाकी (Total Initial Dues):' : 'Total Initial Dues:'}</span>
+              <span style={{ color: totalInitialDues > 0 ? '#DC2626' : '#16A34A' }}>
+                ₹{totalInitialDues.toLocaleString('en-IN')}
+              </span>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
             <button
               type="button"
               className="btn"
               onClick={onClose}
-              style={{ padding: '8px 16px', borderRadius: '8px', fontWeight: '600' }}
+              style={{ padding: '9px 18px', borderRadius: '8px', fontWeight: '600' }}
             >
               {isMarathi ? 'रद्द करा' : 'Cancel'}
             </button>
@@ -200,7 +355,7 @@ export default function RestoreCustomerModal({
               type="submit"
               className="btn btn-success"
               style={{
-                padding: '8px 20px',
+                padding: '9px 22px',
                 borderRadius: '8px',
                 fontWeight: '700',
                 display: 'inline-flex',

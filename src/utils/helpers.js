@@ -274,7 +274,8 @@ export function getExpiryDate(c, optionalPlan) {
 
   let paidCycles = 0;
   if (planAmount > 0) {
-    paidCycles = Math.floor(depositedAmount / planAmount);
+    const netDeposited = Math.max(0, depositedAmount - Number(c?.previousDues || 0));
+    paidCycles = Math.floor(netDeposited / planAmount);
   }
   // Minimum 1 cycle for initial registration period
   const validCycles = Math.max(1, paidCycles);
@@ -496,21 +497,28 @@ export function getElapsedCycles(c, startDate, todayMidnight) {
 
 export function getCustomerDues(c) {
   if (!c) return 0;
+  if ((c.status === 'archived' || c.status === 'old') && c.archivedDues !== undefined) {
+    return Number(c.archivedDues || 0);
+  }
   const planAmount = Number(c.amount || 0);
   const depositedAmount = Number(c.deposited || 0);
+  const prevDuesCarried = Number(c.previousDues || 0);
   if (c.category === 'shortterm') {
-    return Math.max(0, planAmount - depositedAmount);
+    return Math.max(0, planAmount + prevDuesCarried - depositedAmount);
   }
   const refDate = getEffectiveJoinDate(c);
-  if (!refDate) return 0;
+  if (!refDate) return Math.max(0, prevDuesCarried);
 
   const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if ((c.status === 'archived' || c.status === 'old') && c.archivedDate) {
+    todayMidnight = parseLocalDate(c.archivedDate);
+  }
   const startDate = getAdjustedStartDate(c, todayMidnight);
   const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
   const totalCyclesEntered = elapsedCycles + 1;
-  const totalOwed = totalCyclesEntered * planAmount;
+  const totalOwed = (totalCyclesEntered * planAmount) + prevDuesCarried;
   return Math.max(0, totalOwed - depositedAmount);
 }
 
@@ -518,18 +526,22 @@ export function getCurrentCycleDeposited(c) {
   if (!c) return 0;
   const planAmount = Number(c.amount || 0);
   const depositedAmount = Number(c.deposited || 0);
+  const prevDuesCarried = Number(c.previousDues || 0);
   if (c.category === 'shortterm') {
-    return Math.min(planAmount, depositedAmount);
+    return Math.min(planAmount, Math.max(0, depositedAmount - prevDuesCarried));
   }
   const refDate = getEffectiveJoinDate(c);
-  if (!refDate) return depositedAmount;
+  if (!refDate) return Math.max(0, depositedAmount - prevDuesCarried);
 
   const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if ((c.status === 'archived' || c.status === 'old') && c.archivedDate) {
+    todayMidnight = parseLocalDate(c.archivedDate);
+  }
   const startDate = getAdjustedStartDate(c, todayMidnight);
   const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
-  const pastCyclesCost = elapsedCycles * planAmount;
+  const pastCyclesCost = (elapsedCycles * planAmount) + prevDuesCarried;
   const currentMonthPaid = Math.max(0, depositedAmount - pastCyclesCost);
   return Math.min(planAmount, currentMonthPaid);
 }
@@ -538,19 +550,23 @@ export function getCustomerDuesBreakdown(c) {
   if (!c) return { prevDues: 0, currentDues: 0, totalDues: 0 };
   const planAmount = Number(c.amount || 0);
   const depositedAmount = Number(c.deposited || 0);
+  const prevDuesCarried = Number(c.previousDues || 0);
   if (c.category === 'shortterm') {
-    const totalDues = Math.max(0, planAmount - depositedAmount);
-    return { prevDues: 0, currentDues: totalDues, totalDues };
+    const totalDues = Math.max(0, planAmount + prevDuesCarried - depositedAmount);
+    return { prevDues: prevDuesCarried, currentDues: Math.max(0, totalDues - prevDuesCarried), totalDues };
   }
   const refDate = getEffectiveJoinDate(c);
-  if (!refDate) return { prevDues: 0, currentDues: 0, totalDues: 0 };
+  if (!refDate) return { prevDues: prevDuesCarried, currentDues: 0, totalDues: prevDuesCarried };
 
   const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if ((c.status === 'archived' || c.status === 'old') && c.archivedDate) {
+    todayMidnight = parseLocalDate(c.archivedDate);
+  }
   const startDate = getAdjustedStartDate(c, todayMidnight);
   const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
-  const completedCyclesAmount = elapsedCycles * planAmount;
+  const completedCyclesAmount = (elapsedCycles * planAmount) + prevDuesCarried;
   const currentCycleFee = planAmount;
 
   const prevDues = Math.max(0, completedCyclesAmount - depositedAmount);
@@ -574,12 +590,16 @@ export function computeStatus(c) {
 
   const planAmount = Number(c.amount || 0);
   const depositedAmount = Number(c.deposited || 0);
+  const prevDuesCarried = Number(c.previousDues || 0);
   const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if ((c.status === 'archived' || c.status === 'old') && c.archivedDate) {
+    todayMidnight = parseLocalDate(c.archivedDate);
+  }
   const startDate = getAdjustedStartDate(c, todayMidnight);
   const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
   
-  const completedCyclesAmount = elapsedCycles * planAmount;
+  const completedCyclesAmount = (elapsedCycles * planAmount) + prevDuesCarried;
   const hasPaidPastCycles = depositedAmount >= completedCyclesAmount;
   
   if (!hasPaidPastCycles) {

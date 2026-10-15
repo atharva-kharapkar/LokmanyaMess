@@ -65,10 +65,10 @@ export default function CustomersTab({
     }
   };
 
-  const handleConfirmRestore = (cust, newStartDate) => {
+  const handleConfirmRestore = (cust, newStartDate, restoredDues, newPlanAmount) => {
     const restoreFn = restoreCustomer || onRestoreCustomer;
     if (typeof restoreFn === 'function') {
-      restoreFn(cust, newStartDate);
+      restoreFn(cust, newStartDate, restoredDues, newPlanAmount);
     }
     setRestoreModalCust(null);
   };
