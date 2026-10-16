@@ -211,8 +211,14 @@ const getBackupsDir = () => {
   return backupDir;
 };
 
-// Non-blocking background daily backup
+// Non-blocking background daily backup with throttling
+let lastDailyBackupTime = 0;
 const ensureDailyBackup = (safeData) => {
+  const now = Date.now();
+  if (now - lastDailyBackupTime < 5 * 60 * 1000) {
+    return; // Don't re-write backup if done within last 5 minutes
+  }
+  lastDailyBackupTime = now;
   setImmediate(() => {
     try {
       if (!safeData || typeof safeData !== 'object') return;
@@ -224,15 +230,19 @@ const ensureDailyBackup = (safeData) => {
       const todayBackupPath = path.join(backupDir, `lokmanya_backup_${todayStr}.json`);
       const tempBackupPath = `${todayBackupPath}.tmp`;
 
-      const jsonStr = JSON.stringify(safeData, null, 2);
+      const jsonStr = JSON.stringify(safeData);
       fs.writeFileSync(tempBackupPath, jsonStr, 'utf8');
-      fs.renameSync(tempBackupPath, todayBackupPath);
+      try {
+        fs.renameSync(tempBackupPath, todayBackupPath);
+      } catch (_) {
+        fs.copyFileSync(tempBackupPath, todayBackupPath);
+        try { fs.unlinkSync(tempBackupPath); } catch (e) {}
+      }
       console.log(`[Backup] Verified daily rolling backup for ${todayStr}`);
 
       // Prune backups older than 30 days asynchronously
       fs.readdir(backupDir, (err, files) => {
         if (err || !Array.isArray(files)) return;
-        const now = Date.now();
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
 
         files.forEach((file) => {
@@ -283,7 +293,6 @@ ipcMain.handle('read-database', async () => {
     if (!parsed.expenses) parsed.expenses = [];
     if (!parsed.archives) parsed.archives = [];
     
-    ensureDailyBackup(parsed);
     return parsed;
   } catch (e) {
     console.error("Error reading database:", e);
@@ -310,10 +319,28 @@ ipcMain.handle('write-database', async (event, data) => {
       archives: Array.isArray(data.archives) ? data.archives : [],
       settings: (data.settings && typeof data.settings === 'object') ? data.settings : { lang: 'en' }
     };
-    const jsonStr = JSON.stringify(safeData, null, 2);
+    const jsonStr = JSON.stringify(safeData);
     const tempPath = `${dbPath}.tmp`;
     fs.writeFileSync(tempPath, jsonStr, 'utf8');
-    fs.renameSync(tempPath, dbPath);
+
+    // Windows atomic file write with retry and fallback to prevent EBUSY locks
+    let renamed = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        fs.renameSync(tempPath, dbPath);
+        renamed = true;
+        break;
+      } catch (err) {
+        // Short busy-wait of 25ms before retry
+        const t0 = Date.now();
+        while (Date.now() - t0 < 25) {}
+      }
+    }
+    if (!renamed) {
+      fs.copyFileSync(tempPath, dbPath);
+      try { fs.unlinkSync(tempPath); } catch (_) {}
+    }
+
     ensureDailyBackup(safeData);
     return { success: true };
   } catch (e) {

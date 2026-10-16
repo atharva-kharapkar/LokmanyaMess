@@ -173,8 +173,17 @@ const CustomerCard = memo(function CustomerCard({
             <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#111827' }}>₹{c.amount}</span>
           </div>
           <div className="financial-col">
-            <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>DEPOSITED</span>
-            <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#008000' }}>₹{displayedDeposited}</span>
+            <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>
+              {isMarathi ? 'जमा रक्कम' : 'DEPOSITED'}
+            </span>
+            <span className="customer-bar-val" style={{ fontSize: '20px', fontWeight: '800', color: '#008000' }}>
+              ₹{displayedDeposited}
+            </span>
+            {Number(c.deposited || 0) > displayedDeposited && (
+              <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700' }} title={isMarathi ? 'एकूण जमा' : 'Total Deposited'}>
+                ({isMarathi ? 'एकूण' : 'Total'}: ₹{Number(c.deposited || 0)})
+              </span>
+            )}
           </div>
           <div className="financial-col">
             <span className="customer-bar-label" style={{ fontSize: '10px', fontWeight: '700', color: '#4B5563', textTransform: 'uppercase' }}>REMAINING AMOUNT</span>

@@ -39,19 +39,32 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
       return;
     }
 
+    const targetCustomer = payModalCustomer;
+    const customerId = targetCustomer.id;
+    const customerName = targetCustomer.name;
+    const branchName = targetCustomer.branch || activeBranch || 'Branch 1';
+    const txnDate = dateVal || payDate || defaultTodayStr();
+    const txnMode = modeVal || payMode || 'Cash';
+    const txnNote = noteVal || payNote || '';
+
+    // Instant UI feedback: Close modal immediately (0ms) so user is never blocked
+    setPayModalCustomer(null);
+    setPayAmount('');
+    setPayNote('');
+
     setIsSavingPayment(true);
     try {
       const now = Date.now();
       const newTxn = {
         id: 'txn_' + now,
-        custId: payModalCustomer.id,
-        custName: payModalCustomer.name,
+        custId: customerId,
+        custName: customerName,
         amount: numAmt,
-        date: dateVal || payDate || defaultTodayStr(),
-        mode: modeVal || payMode || 'Cash',
-        paymentMode: modeVal || payMode || 'Cash',
-        note: noteVal || payNote || '',
-        branch: payModalCustomer.branch || activeBranch || 'Branch 1',
+        date: txnDate,
+        mode: txnMode,
+        paymentMode: txnMode,
+        note: txnNote,
+        branch: branchName,
         updatedAt: now
       };
 
@@ -59,7 +72,7 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
         ...currentDb,
         transactions: [newTxn, ...(currentDb.transactions || [])],
         customers: (currentDb.customers || []).map(c => 
-          c.id === payModalCustomer.id ? { 
+          String(c.id).trim() === String(customerId).trim() ? { 
             ...c, 
             deposited: Number(c.deposited || 0) + numAmt,
             updatedAt: now
@@ -71,13 +84,18 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
         throw new Error(isMarathi ? 'स्थानिक डेटा सेव्ह अयशस्वी झाला.' : 'Local database save failed.');
       }
 
-      showToast(isMarathi ? `₹${numAmt.toLocaleString('en-IN')} जमा रक्कम यशस्वीरित्या नोंदवली!` : `Payment of ₹${numAmt.toLocaleString('en-IN')} recorded successfully!`, 'success');
-      setPayModalCustomer(null);
-      setPayAmount('');
-      setPayNote('');
+      showToast(
+        isMarathi 
+          ? `₹${numAmt.toLocaleString('en-IN')} जमा रक्कम यशस्वीरित्या नोंदवली!` 
+          : `Payment of ₹${numAmt.toLocaleString('en-IN')} recorded successfully!`, 
+        'success'
+      );
     } catch (err) {
       console.error('handlePaySubmit error:', err);
-      showToast(isMarathi ? 'जमा नोंदवताना त्रुटी आली: ' + err.message : 'Error recording payment: ' + err.message, 'error');
+      showToast(
+        isMarathi ? 'जमा नोंदवताना त्रुटी आली: ' + err.message : 'Error recording payment: ' + err.message, 
+        'error'
+      );
     } finally {
       setIsSavingPayment(false);
     }
@@ -97,7 +115,7 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
       const now = Date.now();
       if (txn) {
         updatedCustomers = updatedCustomers.map(c => 
-          c.id === txn.custId ? { 
+          String(c.id).trim() === String(txn.custId).trim() ? { 
             ...c, 
             deposited: Math.max(0, Number(c.deposited || 0) - Number(txn.amount || 0)),
             updatedAt: now
