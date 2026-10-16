@@ -258,7 +258,11 @@ export function getExpiryDate(c, optionalPlan) {
   if (!refDate) return new Date();
   
   const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const isArchived = typeof c === 'object' && (c?.status === 'archived' || c?.status === 'old');
+  if (isArchived && c?.archivedDate) {
+    todayMidnight = parseLocalDate(c.archivedDate);
+  }
   const startDate = getAdjustedStartDate(c, todayMidnight);
 
   if (typeof c === 'object' && c.category === 'shortterm') {
@@ -277,8 +281,20 @@ export function getExpiryDate(c, optionalPlan) {
     const netDeposited = Math.max(0, depositedAmount - Number(c?.previousDues || 0));
     paidCycles = Math.floor(netDeposited / planAmount);
   }
-  // Minimum 1 cycle for initial registration period
-  const validCycles = Math.max(1, paidCycles);
+
+  let validCycles = 1;
+  if (isArchived) {
+    if (c?.archivedDate) {
+      const archiveElapsed = getElapsedCycles(c, startDate, todayMidnight);
+      validCycles = Math.max(1, archiveElapsed, paidCycles);
+    } else {
+      validCycles = Math.max(1, paidCycles);
+    }
+  } else {
+    // Rolling billing cycle: active customer's expiry rolls forward to ongoing cycle or advance-paid cycle
+    const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
+    validCycles = Math.max(1, elapsedCycles + 1, paidCycles);
+  }
 
   if (!planName || planName === 'Monthly') {
     const startYear = startDate.getFullYear();
@@ -588,22 +604,10 @@ export function computeStatus(c) {
     return 'expired';
   }
 
-  const planAmount = Number(c.amount || 0);
-  const depositedAmount = Number(c.deposited || 0);
-  const prevDuesCarried = Number(c.previousDues || 0);
   const today = new Date();
   let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   if ((c.status === 'archived' || c.status === 'old') && c.archivedDate) {
     todayMidnight = parseLocalDate(c.archivedDate);
-  }
-  const startDate = getAdjustedStartDate(c, todayMidnight);
-  const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
-  
-  const completedCyclesAmount = (elapsedCycles * planAmount) + prevDuesCarried;
-  const hasPaidPastCycles = depositedAmount >= completedCyclesAmount;
-  
-  if (!hasPaidPastCycles) {
-    return 'expired';
   }
   
   const currentCycleExpiry = getExpiryDate(c);

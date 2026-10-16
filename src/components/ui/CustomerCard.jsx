@@ -209,27 +209,31 @@ const CustomerCard = memo(function CustomerCard({
             </span>
           ) : (
             <span style={{ 
-              backgroundColor: status === 'active' ? '#D1FAE5' : '#FEE2E2', 
-              color: status === 'active' ? '#065F46' : '#B91C1C', 
+              backgroundColor: status === 'active' ? '#D1FAE5' : status === 'expiring' ? '#FEF3C7' : '#FEE2E2', 
+              color: status === 'active' ? '#065F46' : status === 'expiring' ? '#92400E' : '#B91C1C', 
               padding: '4px 10px', 
               borderRadius: '9999px', 
               fontSize: '11px', 
               fontWeight: '700', 
               textTransform: 'uppercase' 
             }}>
-              {status === 'active' ? (isMarathi ? 'सक्रिय' : 'Active') : (isMarathi ? 'मुदत संपली' : 'Expired')}
+              {status === 'active' 
+                ? (isMarathi ? 'सक्रिय' : 'Active') 
+                : status === 'expiring'
+                  ? (isMarathi ? 'लवकरच संपणारे' : 'Expiring')
+                  : (isMarathi ? 'मुदत संपली' : 'Expired')}
             </span>
           )}
           <span style={{ 
-            backgroundColor: hasDues ? '#DBEAFE' : '#D1FAE5', 
-            color: hasDues ? '#1E3A8A' : '#065F46', 
+            backgroundColor: hasDues ? '#FEF3C7' : '#D1FAE5', 
+            color: hasDues ? '#92400E' : '#065F46', 
             padding: '4px 10px', 
             borderRadius: '9999px', 
             fontSize: '11px', 
             fontWeight: '700', 
             textTransform: 'uppercase' 
           }}>
-            {hasDues ? (isMarathi ? 'थकबाकी' : 'Dues Pending') : (isMarathi ? 'पूर्ण भरले' : 'Fully Paid')}
+            {hasDues ? (isMarathi ? '⚠️ थकबाकी' : '⚠️ Dues Pending') : (isMarathi ? 'पूर्ण भरले' : 'Fully Paid')}
           </span>
         </div>
         

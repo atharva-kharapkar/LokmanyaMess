@@ -1,4 +1,4 @@
-import { getCustomerDuesBreakdown } from './helpers';
+import { getCustomerDuesBreakdown } from './helpers.js';
 
 export function normalizeWhatsAppPhone(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
@@ -46,7 +46,7 @@ export function buildCustomerReminderMessage(customer, duesAmount, settings = {}
     : '';
 
   const marathiBreakdownStr = prevDues > 0 
-    ? `\n(मागील बाकी: ₹${prevDues}, या महिन्याचे: ₹${currentDues})` 
+    ? `\n(मागील बाकी: ₹${prevDues}, या महिन्याचे शुल्क: ₹${currentDues})` 
     : '';
 
   // Construct online payment link
