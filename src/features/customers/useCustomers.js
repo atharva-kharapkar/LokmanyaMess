@@ -235,8 +235,8 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
   };
 
   const deleteCustomer = async (id) => {
-    const isMarathi = db.settings && db.settings.lang === 'mr';
-    const targetCust = (db.customers || []).find((c) => c.id === id);
+    const isMarathi = db?.settings?.lang === 'mr';
+    const targetCust = (db?.customers || []).find((c) => c.id === id);
     if (!targetCust) return;
 
     const isAlreadyArchived = targetCust.status === 'archived' || targetCust.status === 'old' || currentTab === 'oldcustomers';
@@ -250,15 +250,21 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
       }));
 
       showToast(isMarathi ? 'ग्राहक डेटाबेसमधून कायमचा हटवला गेला!' : 'Customer permanently deleted!', 'success');
+    } else {
+      if (!confirm(isMarathi ? 'आपण हा ग्राहक जुन्या ग्राहकांमध्ये हलवू (Archive) इच्छिता?' : 'Are you sure you want to move this customer to Old Customers (Archive)?')) return;
+
       const currentDues = typeof getCustomerDues === 'function' ? getCustomerDues(targetCust) : 0;
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const now = Date.now();
 
       await saveDb((currentDb) => ({
         ...currentDb,
         customers: (currentDb.customers || []).map((c) => c.id === id ? { 
           ...c, 
           status: 'archived', 
-          archivedDate: new Date().toISOString().slice(0, 10),
-          archivedDues: currentDues
+          archivedDate: todayIso,
+          archivedDues: currentDues,
+          updatedAt: now
         } : c)
       }));
 
