@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { isBlank, normalizeText, toAmountNumber, isValidDate, getCustomerDues, parseLocalDate, todayStr } from '../../utils/helpers';
+import { isBlank, normalizeText, toAmountNumber, isValidDate, getCustomerDues, parseLocalDate, todayStr, getExpiryDate } from '../../utils/helpers';
+import { formatDisplayDate } from '../../utils/formatters';
 import { addCustomArea, deleteCustomArea, deleteAllCustomAreas } from '../../utils/areaHelpers';
 import { DEFAULT_MEAL_TYPE, DEFAULT_MEAL_SLOT } from '../../utils/mealConfig';
 
@@ -391,6 +392,7 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
     const isMarathi = db?.settings?.lang === 'mr';
     if (!customer) return;
     try {
+      const now = Date.now();
       await saveDb(currentDb => ({
         ...currentDb,
         customers: (currentDb.customers || []).map(c => {
@@ -399,7 +401,9 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
               ...c,
               isPaused: true,
               pauseStartDate: pauseStartDate || new Date().toISOString().slice(0, 10),
-              pauseReason: pauseReason || ''
+              pauseReason: pauseReason || '',
+              customExpiryDate: null,
+              updatedAt: now
             };
           }
           return c;
@@ -411,15 +415,25 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
     }
   };
 
-  const handleResumeCustomer = async (customer) => {
+  const handleResumeCustomer = async (customer, selectedExpiryDate, addedDays) => {
     const isMarathi = db?.settings?.lang === 'mr';
     if (!customer || !customer.isPaused) return;
     try {
       const today = new Date();
       const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       const pauseStart = customer.pauseStartDate ? parseLocalDate(customer.pauseStartDate) : todayMidnight;
-      const pausedDays = Math.max(0, Math.round((todayMidnight - pauseStart) / 86400000));
-      const newTotalPausedDays = Number(customer.totalPausedDays || 0) + pausedDays;
+      const elapsedPauseDays = Math.max(0, Math.round((todayMidnight - pauseStart) / 86400000));
+
+      let finalAddedDays = typeof addedDays === 'number' ? addedDays : elapsedPauseDays;
+      if (selectedExpiryDate && typeof selectedExpiryDate === 'string') {
+        const baseExp = getExpiryDate({ ...customer, isPaused: false, customExpiryDate: null });
+        const targetExp = parseLocalDate(selectedExpiryDate);
+        const diffDays = Math.round((targetExp - baseExp) / 86400000);
+        finalAddedDays = Math.max(0, diffDays);
+      }
+
+      const newTotalPausedDays = Number(customer.totalPausedDays || 0) + Math.max(0, finalAddedDays);
+      const now = Date.now();
 
       await saveDb(currentDb => ({
         ...currentDb,
@@ -430,14 +444,24 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
               isPaused: false,
               pauseStartDate: null,
               pauseReason: '',
-              totalPausedDays: newTotalPausedDays
+              totalPausedDays: newTotalPausedDays,
+              customExpiryDate: selectedExpiryDate || null,
+              updatedAt: now
             };
           }
           return c;
         })
       }));
-      showToast(isMarathi ? `${customer.name} चा प्लॅन पुन्हा सुरू झाला! (प्लॅन ${pausedDays} दिवसांनी वाढवला)` : `Resumed plan for ${customer.name}! (Extended by ${pausedDays} days)`, 'success');
+
+      const expDisplay = selectedExpiryDate ? formatDisplayDate(selectedExpiryDate) : '';
+      showToast(
+        isMarathi 
+          ? `${customer.name} चा प्लॅन पुन्हा सुरू झाला! ${expDisplay ? `(मुदत: ${expDisplay})` : ''}` 
+          : `Resumed plan for ${customer.name}! ${expDisplay ? `(Expiry: ${expDisplay})` : ''}`, 
+        'success'
+      );
     } catch (err) {
+      console.error('handleResumeCustomer error:', err);
       showToast(isMarathi ? 'रिझ्युम करताना त्रुटी आली.' : 'Error resuming plan.', 'error');
     }
   };

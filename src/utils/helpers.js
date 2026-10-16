@@ -263,6 +263,15 @@ export function getExpiryDate(c, optionalPlan) {
   if (isArchived && c?.archivedDate) {
     todayMidnight = parseLocalDate(c.archivedDate);
   }
+
+  // If customer has a direct customExpiryDate set and is not currently paused:
+  if (typeof c === 'object' && !c.isPaused && c.customExpiryDate && isValidDate(c.customExpiryDate)) {
+    const customExp = parseLocalDate(c.customExpiryDate);
+    if (isArchived || todayMidnight <= customExp) {
+      return customExp;
+    }
+  }
+
   const startDate = getAdjustedStartDate(c, todayMidnight);
 
   if (typeof c === 'object' && c.category === 'shortterm') {
