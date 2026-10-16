@@ -16,13 +16,51 @@ export default function CustomerModal({
   showToast,
   onSave,
   onClose,
-  isSaving
+  isSaving,
+  role,
+  saveDb
 }) {
   if (!isOpen) return null;
 
   const isMarathi = db?.settings?.lang === 'mr';
   const dataObj = initialData || customer || {};
   const activeEditId = editCustId || (isEditing ? dataObj.id : null);
+  const isEditingMode = Boolean(activeEditId);
+  const isOwner = role === 'owner';
+  const lockForOperators = db?.settings?.lockJoiningDateForOperators !== false;
+  const [isOwnerDateUnlocked, setIsOwnerDateUnlocked] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsOwnerDateUnlocked(false);
+    }
+  }, [isOpen, editCustId]);
+
+  const handleToggleLockForOperators = async (e) => {
+    const nextVal = e.target.checked;
+    if (typeof saveDb === 'function') {
+      await saveDb(currentDb => ({
+        ...currentDb,
+        settings: {
+          ...(currentDb.settings || {}),
+          lockJoiningDateForOperators: nextVal
+        }
+      }));
+      if (typeof showToast === 'function') {
+        showToast(
+          isMarathi 
+            ? (nextVal ? '🔒 ऑपरेटरसाठी जॉइनिंग तारीख संपादन लॉक केले.' : '🔓 ऑपरेटरसाठी जॉइनिंग तारीख संपादन अनलॉक केले.')
+            : (nextVal ? '🔒 Joining date locked for operators.' : '🔓 Joining date unlocked for operators.'),
+          'info'
+        );
+      }
+    }
+  };
+
+  const isDateDisabled = isEditingMode && (
+    (!isOwner && lockForOperators) ||
+    (isOwner && !isOwnerDateUnlocked)
+  );
 
   // Encapsulated Local State for form inputs (prevents full app re-renders on keystroke)
   const [form, setForm] = useState(() => {
@@ -332,21 +370,133 @@ export default function CustomerModal({
               />
             </div>
 
-            {/* Joining Date */}
-            <div className="form-group">
-              <label className="form-label">
-                {isMarathi ? 'सुरू झालेली तारीख *' : 'Joining Date *'}
-                {form.joinDate && (
-                  <span style={{ marginLeft: '8px', fontSize: '13px', color: 'var(--primary)', fontWeight: '700' }}>
-                    (📅 {formatDisplayDate(form.joinDate)})
+            {/* Joining Date & Owner Security Controls */}
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              {/* Owner-Only Security Policy Toggle */}
+              {isOwner && isEditingMode && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  backgroundColor: lockForOperators ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                  border: `1.5px solid ${lockForOperators ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+                  borderRadius: '10px',
+                  marginBottom: '10px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '18px' }}>{lockForOperators ? '🔒' : '🔓'}</span>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: lockForOperators ? '#DC2626' : '#059669' }}>
+                        {isMarathi ? 'ऑपरेटरसाठी तारीख संपादन लॉक' : 'Lock Joining Date for Operators'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary, #6B7280)', fontWeight: '600' }}>
+                        {isMarathi 
+                          ? (lockForOperators ? 'चालू: ऑपरेटर ही तारीख बदलू शकत नाही' : 'बंद: ऑपरेटर ही तारीख बदलू शकतो')
+                          : (lockForOperators ? 'ON: Operators cannot edit this date' : 'OFF: Operators can edit this date')}
+                      </div>
+                    </div>
+                  </div>
+                  <label style={{ position: 'relative', display: 'inline-block', width: '46px', height: '24px', cursor: 'pointer', margin: 0, flexShrink: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={lockForOperators}
+                      onChange={handleToggleLockForOperators}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span style={{
+                      position: 'absolute',
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      backgroundColor: lockForOperators ? '#EF4444' : '#9CA3AF',
+                      borderRadius: '24px',
+                      transition: '0.2s',
+                    }}>
+                      <span style={{
+                        position: 'absolute',
+                        content: '""',
+                        height: '18px',
+                        width: '18px',
+                        left: lockForOperators ? '24px' : '3px',
+                        bottom: '3px',
+                        backgroundColor: '#ffffff',
+                        borderRadius: '50%',
+                        transition: '0.2s',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.25)'
+                      }} />
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* Operator Locked Notice (Hidden from Owner) */}
+              {!isOwner && isEditingMode && lockForOperators && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  backgroundColor: '#FEF2F2',
+                  border: '1.5px solid #FCA5A5',
+                  borderRadius: '8px',
+                  marginBottom: '10px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  color: '#B91C1C'
+                }}>
+                  <span style={{ fontSize: '15px' }}>🔒</span>
+                  <span>
+                    {isMarathi 
+                      ? 'जॉइनिंग तारीख बदलण्याचा अधिकार केवळ मालकाला (Owner) आहे.' 
+                      : 'Joining date edit is restricted to Owner login only.'}
                   </span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <label className="form-label" style={{ margin: 0 }}>
+                  {isMarathi ? 'सुरू झालेली तारीख *' : 'Joining Date *'}
+                  {form.joinDate && (
+                    <span style={{ marginLeft: '8px', fontSize: '13px', color: 'var(--primary)', fontWeight: '700' }}>
+                      (📅 {formatDisplayDate(form.joinDate)})
+                    </span>
+                  )}
+                </label>
+
+                {/* Owner quick-unlock button for own editing */}
+                {isOwner && isEditingMode && (
+                  <button
+                    type="button"
+                    onClick={() => setIsOwnerDateUnlocked(prev => !prev)}
+                    className="btn btn-sm"
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      borderRadius: '6px',
+                      backgroundColor: isOwnerDateUnlocked ? '#FEF3C7' : '#EFF6FF',
+                      color: isOwnerDateUnlocked ? '#92400E' : '#1D4ED8',
+                      border: `1px solid ${isOwnerDateUnlocked ? '#FDE68A' : '#BFDBFE'}`
+                    }}
+                  >
+                    {isOwnerDateUnlocked 
+                      ? (isMarathi ? '🔒 पुन्हा लॉक करा' : '🔒 Re-lock Date') 
+                      : (isMarathi ? '🔓 तारीख बदला' : '🔓 Unlock Date')}
+                  </button>
                 )}
-              </label>
+              </div>
+
               <input
                 type="date"
                 className="form-input"
                 value={form.joinDate}
                 onChange={(e) => setForm(prev => ({ ...prev, joinDate: e.target.value }))}
+                disabled={isDateDisabled}
+                style={isDateDisabled ? {
+                  backgroundColor: '#F3F4F6',
+                  color: '#6B7280',
+                  cursor: 'not-allowed',
+                  border: '1.5px dashed #D1D5DB'
+                } : {}}
                 required
               />
             </div>

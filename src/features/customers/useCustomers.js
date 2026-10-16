@@ -160,9 +160,13 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
             ...currentDb,
             customers: existingCusts.map(c => {
               if (c.id === editCustId) {
+                const lockForOps = currentDb.settings?.lockJoiningDateForOperators !== false;
+                const isOp = role !== 'owner';
+                const safeJoinDate = (isOp && lockForOps) ? (c.joinDate || finalForm.joinDate) : finalForm.joinDate;
                 const updatedCust = {
                   ...c,
                   ...finalForm,
+                  joinDate: safeJoinDate,
                   category: targetCat,
                   branch: c.branch || activeBranch || 'Branch 1'
                 };
