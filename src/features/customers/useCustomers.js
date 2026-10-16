@@ -198,14 +198,19 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
 
         const nextTxns = [...(currentDb.transactions || [])];
         if (newCust.deposited > 0) {
+          const nowTs = Date.now();
           nextTxns.push({
-            id: 'txn_' + Date.now() + '_init',
+            id: 'txn_' + nowTs + '_init',
             custId: newCust.id,
             custName: newCust.name,
             amount: newCust.deposited,
             date: newCust.joinDate,
+            time: new Date(nowTs).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            createdAt: nowTs,
             mode: 'Cash',
-            branch: newCust.branch
+            paymentMode: 'Cash',
+            branch: newCust.branch,
+            category: newCust.category || 'dinein'
           });
         }
 

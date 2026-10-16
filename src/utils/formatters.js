@@ -32,3 +32,18 @@ export const toAmountNumber = (value) => {
   const num = parseFloat(str);
   return Number.isFinite(num) ? num : 0;
 };
+
+export const formatTxnTime = (tx) => {
+  if (!tx) return '';
+  if (tx.time && typeof tx.time === 'string' && tx.time.trim()) return tx.time.trim();
+  const match = tx.id && typeof tx.id === 'string' ? tx.id.match(/^txn_(\d+)/) : null;
+  const ts = tx.createdAt || tx.updatedAt || (match ? Number(match[1]) : null);
+  if (ts && !isNaN(ts) && ts > 1500000000000) {
+    try {
+      return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch (e) {
+      return '';
+    }
+  }
+  return '';
+};

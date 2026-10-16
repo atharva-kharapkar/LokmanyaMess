@@ -1,6 +1,6 @@
-import React from 'react';
-import { Coins, Trash2, Lock } from 'lucide-react';
-import { formatDisplayDate } from '../utils/formatters';
+import React, { useState, useMemo } from 'react';
+import { Coins, Trash2, Lock, Search, X, Clock } from 'lucide-react';
+import { formatDisplayDate, formatTxnTime } from '../utils/formatters';
 import FinancialArchiveLockModal from '../components/modals/FinancialArchiveLockModal';
 import { useFinancialArchive } from '../features/financialArchive/useFinancialArchive';
 import SectionCollectionBreakdown from '../components/collections/SectionCollectionBreakdown';
@@ -33,6 +33,60 @@ export default function CollectionsTab({
 }) {
   const isMarathi = db.settings?.lang === 'mr';
   const archive = useFinancialArchive({ db, role, showToast });
+  const [collectionSearch, setCollectionSearch] = useState('');
+
+  // Fast O(1) customer lookup map for instant customer name/phone/category/photo lookup
+  const customerMap = useMemo(() => {
+    const map = new Map();
+    (db.customers || []).forEach(c => {
+      if (!c) return;
+      if (c.id) map.set(String(c.id).trim(), c);
+      if (c.name) map.set(c.name.trim().toLowerCase(), c);
+      if (c.phone) map.set(String(c.phone).trim(), c);
+    });
+    return map;
+  }, [db.customers]);
+
+  // Fast display transactions filtering with live search query
+  const displayTxns = useMemo(() => {
+    const txns = Array.isArray(filteredTxns) ? filteredTxns : [];
+    const query = collectionSearch.trim().toLowerCase();
+    if (!query) return txns;
+
+    return txns.filter(tx => {
+      if (!tx) return false;
+      const cust = tx.customer 
+        || (tx.custId ? customerMap.get(String(tx.custId).trim()) : null)
+        || (tx.customerId ? customerMap.get(String(tx.customerId).trim()) : null)
+        || (tx.custName ? customerMap.get(tx.custName.trim().toLowerCase()) : null);
+
+      const custName = (tx.custName || cust?.name || '').toLowerCase();
+      const custPhone = (cust?.phone || tx.custPhone || '').toString();
+      const amountStr = String(tx.amount || '');
+      const modeStr = (tx.paymentMode || tx.mode || '').toLowerCase();
+      const noteStr = (tx.note || '').toLowerCase();
+      const branchStr = (tx.branch || '').toLowerCase();
+      const categoryStr = (tx.category || cust?.category || 'dinein').toLowerCase();
+      
+      const categoryLabel = categoryStr === 'tiffin' 
+        ? (isMarathi ? 'टिफिन tiffin' : 'tiffin')
+        : categoryStr === 'shortterm'
+        ? (isMarathi ? 'अल्पमुदत shortterm short-term' : 'shortterm short-term')
+        : (isMarathi ? 'डाईन इन dinein dine-in' : 'dinein dine-in');
+
+      return custName.includes(query) ||
+        custPhone.includes(query) ||
+        amountStr.includes(query) ||
+        modeStr.includes(query) ||
+        noteStr.includes(query) ||
+        branchStr.includes(query) ||
+        categoryLabel.includes(query);
+    });
+  }, [filteredTxns, collectionSearch, customerMap, isMarathi]);
+
+  const displayTxnsTotal = useMemo(() => {
+    return displayTxns.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  }, [displayTxns]);
 
   const activeFilter = collectionFilter || filter || 'month';
   const activeSetFilter = setCollectionFilter || setFilter || (() => {});
@@ -155,47 +209,202 @@ export default function CollectionsTab({
           </div>
         )}
 
+        {/* Search Bar for instant collection search */}
+        <div style={{ position: 'relative', width: '100%' }}>
+          <Search 
+            size={18} 
+            style={{ 
+              position: 'absolute', 
+              left: '12px', 
+              top: '50%', 
+              transform: 'translateY(-50%)', 
+              color: '#64748b', 
+              pointerEvents: 'none' 
+            }} 
+          />
+          <input 
+            type="text" 
+            className="form-input" 
+            placeholder={isMarathi ? '🔍 ग्राहक नाव, फोन नंबर, रक्कम किंवा विभाग (डाईन इन/टिफिन) शोधा...' : '🔍 Search by customer name, phone, amount or section (Dine In/Tiffin)...'}
+            value={collectionSearch}
+            onChange={(e) => setCollectionSearch(e.target.value)}
+            style={{ 
+              paddingLeft: '38px', 
+              paddingRight: collectionSearch ? '38px' : '14px',
+              fontSize: '14px',
+              borderRadius: '10px',
+              width: '100%',
+              backgroundColor: '#ffffff',
+              border: '1.5px solid #cbd5e1',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              height: '42px'
+            }}
+          />
+          {collectionSearch && (
+            <button
+              type="button"
+              onClick={() => setCollectionSearch('')}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: '#f1f5f9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '24px',
+                height: '24px',
+                cursor: 'pointer',
+                color: '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0
+              }}
+              title={isMarathi ? 'शोध साफ करा' : 'Clear search'}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {collectionSearch.trim() && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '6px 12px', backgroundColor: '#eef2ff', borderRadius: '8px', color: '#4338ca', fontWeight: '600' }}>
+            <span>
+              {isMarathi 
+                ? `🔍 "${collectionSearch}" साठी ${displayTxns.length} व्यवहार सापडले (एकूण: ₹${displayTxnsTotal.toLocaleString('en-IN')})` 
+                : `🔍 Found ${displayTxns.length} transactions for "${collectionSearch}" (Total: ₹${displayTxnsTotal.toLocaleString('en-IN')})`}
+            </span>
+            <button 
+              onClick={() => setCollectionSearch('')}
+              style={{ background: 'none', border: 'none', color: '#4338ca', cursor: 'pointer', fontWeight: '700', textDecoration: 'underline', fontSize: '12px' }}
+            >
+              {isMarathi ? 'सर्व दाखवा (Reset)' : 'Show All (Reset)'}
+            </button>
+          </div>
+        )}
+
         {/* Transactions List */}
-        <div style={{ maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', backgroundColor: '#f8f9fc' }}>
-          {(filteredTxns || []).map(tx => {
+        <div style={{ maxHeight: '440px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', backgroundColor: '#f8f9fc' }}>
+          {(displayTxns || []).map(tx => {
             if (!tx) return null;
-            const cust = tx.customer;
+            const cust = tx.customer 
+              || (tx.custId ? customerMap.get(String(tx.custId).trim()) : null)
+              || (tx.customerId ? customerMap.get(String(tx.customerId).trim()) : null)
+              || (tx.custName ? customerMap.get(tx.custName.trim().toLowerCase()) : null);
+
+            const category = tx.category || cust?.category || 'dinein';
+            const txnTime = formatTxnTime(tx);
+
             return (
-              <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', marginBottom: '6px' }}>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <div 
+                key={tx.id} 
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  padding: '12px 14px', 
+                  backgroundColor: '#ffffff', 
+                  borderRadius: '10px', 
+                  border: '1px solid #e2e8f0', 
+                  marginBottom: '8px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                }}
+              >
+                {/* Left side: Avatar + Customer Details + Badges */}
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: 0, flex: 1 }}>
                   <div 
-                    style={{ width: '36px', height: '36px', borderRadius: '50%', overflow: 'hidden', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                    style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', backgroundColor: 'rgba(79, 70, 229, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                     onClick={() => typeof onEnlargePhoto === 'function' && onEnlargePhoto({ url: cust?.photo || '', name: tx.custName || 'Customer' })}
                     title={isMarathi ? 'फोटो मोठा करा' : 'Click to enlarge photo'}
                   >
                     {cust && cust.photo ? (
                       <img src={cust.photo} alt={tx.custName || 'Customer'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--primary)' }}>
+                      <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--primary)' }}>
                         {(tx.custName || 'C').charAt(0).toUpperCase()}
                       </span>
                     )}
                   </div>
-                  <div>
-                    <div 
-                      style={{ fontWeight: '700', fontSize: '14px', color: 'var(--primary)', cursor: 'pointer' }}
-                      onClick={() => typeof onEnlargePhoto === 'function' && onEnlargePhoto({ url: cust?.photo || '', name: tx.custName || 'Customer' })}
-                    >
-                      {tx.custName}
+
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span 
+                        style={{ fontWeight: '700', fontSize: '15px', color: 'var(--primary)', cursor: 'pointer' }}
+                        onClick={() => typeof onEnlargePhoto === 'function' && onEnlargePhoto({ url: cust?.photo || '', name: tx.custName || 'Customer' })}
+                      >
+                        {tx.custName}
+                      </span>
+
+                      {/* Section Badge */}
+                      <span 
+                        style={{ 
+                          fontSize: '11px', 
+                          padding: '2px 8px', 
+                          fontWeight: '700',
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          backgroundColor: category === 'tiffin' ? '#eff6ff' : category === 'shortterm' ? '#fef3c7' : '#f3e8ff',
+                          color: category === 'tiffin' ? '#1d4ed8' : category === 'shortterm' ? '#b45309' : '#6b21a8',
+                          border: `1px solid ${category === 'tiffin' ? '#bfdbfe' : category === 'shortterm' ? '#fde68a' : '#ddd6fe'}`
+                        }}
+                      >
+                        {category === 'tiffin' 
+                          ? (isMarathi ? '📦 टिफिन' : '📦 Tiffin') 
+                          : category === 'shortterm' 
+                          ? (isMarathi ? '⚡ अल्पमुदत' : '⚡ Short-Term') 
+                          : (isMarathi ? '🍽️ डाईन इन' : '🍽️ Dine In')}
+                      </span>
                     </div>
+
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📅 {formatDisplayDate(tx.date)}</span>
-                      <span className="badge badge-active" style={{ fontSize: '9px', padding: '2px 6px' }}>{tx.paymentMode || 'Cash'}</span>
+                      <span className="badge badge-active" style={{ fontSize: '10px', padding: '2px 6px' }}>{tx.paymentMode || tx.mode || 'Cash'}</span>
+                      {cust?.phone && (
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>📞 {cust.phone}</span>
+                      )}
                       {(!activeBranch || activeBranch === 'All') && (
                         <span className="badge" style={{ fontSize: '9px', padding: '2px 6px', backgroundColor: tx.branch === 'Branch 2' ? 'rgba(234, 88, 12, 0.15)' : 'rgba(59, 130, 246, 0.15)', color: tx.branch === 'Branch 2' ? '#ea580c' : '#2563eb', fontWeight: '700' }}>
                           {tx.branch || 'Branch 1'}
                         </span>
                       )}
                     </div>
+                    {tx.note && (
+                      <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', marginTop: '3px' }}>
+                        💬 {tx.note}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontWeight: '800', color: 'var(--success)', fontSize: '15px' }}>₹{tx.amount}</span>
+
+                {/* Right side: EXACT TIME (in BOLD to the left of amount) + Amount + Action Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                  {txnTime && (
+                    <span 
+                      style={{ 
+                        fontWeight: '800', 
+                        fontSize: '13px', 
+                        color: '#0f172a', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '4px', 
+                        backgroundColor: '#f8fafc', 
+                        padding: '4px 8px', 
+                        borderRadius: '6px', 
+                        border: '1.5px solid #cbd5e1', 
+                        whiteSpace: 'nowrap' 
+                      }}
+                      title={isMarathi ? 'जमा नोंदवण्याची अचूक वेळ' : 'Payment recording exact time'}
+                    >
+                      <Clock size={13} style={{ color: '#4f46e5' }} />
+                      <span>{txnTime}</span>
+                    </span>
+                  )}
+                  <span style={{ fontWeight: '800', color: 'var(--success)', fontSize: '16px', minWidth: '70px', textAlign: 'right' }}>
+                    ₹{Number(tx.amount || 0).toLocaleString('en-IN')}
+                  </span>
                   {(role === 'owner' || !role) && (
                     <button 
                       className="btn btn-sm btn-icon btn-danger" 
@@ -215,19 +424,25 @@ export default function CollectionsTab({
             );
           })}
 
-          {(!filteredTxns || filteredTxns.length === 0) && (
+          {(!displayTxns || displayTxns.length === 0) && (
             <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-              {isMarathi ? 'कोणतेही रेकॉर्ड सापडले नाही.' : 'No collections recorded.'}
+              {collectionSearch.trim()
+                ? (isMarathi ? `"${collectionSearch}" साठी कोणतेही व्यवहार सापडले नाहीत.` : `No transactions matching "${collectionSearch}".`)
+                : (isMarathi ? 'कोणतेही रेकॉर्ड सापडले नाही.' : 'No collections recorded.')}
             </div>
           )}
         </div>
 
         <div className="card" style={{ margin: 0, padding: '16px', backgroundColor: 'var(--success-light)', borderColor: '#1d9e7533', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
           <div>
-            <span style={{ fontWeight: '700', fontSize: '15px', color: '#085041' }}>{isMarathi ? 'एकूण जमा:' : 'Total Collections:'}</span>
+            <span style={{ fontWeight: '700', fontSize: '15px', color: '#085041' }}>
+              {collectionSearch.trim() 
+                ? (isMarathi ? 'शोधलेली एकूण जमा:' : 'Filtered Collections:')
+                : (isMarathi ? 'एकूण जमा:' : 'Total Collections:')}
+            </span>
             {(!activeBranch || activeBranch === 'All') && (() => {
-              const b1Col = (filteredTxns || []).filter(t => (t.branch || 'Branch 1') === 'Branch 1').reduce((s, t) => s + Number(t.amount || 0), 0);
-              const b2Col = (filteredTxns || []).filter(t => t.branch === 'Branch 2').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const b1Col = (displayTxns || []).filter(t => (t.branch || 'Branch 1') === 'Branch 1').reduce((s, t) => s + Number(t.amount || 0), 0);
+              const b2Col = (displayTxns || []).filter(t => t.branch === 'Branch 2').reduce((s, t) => s + Number(t.amount || 0), 0);
               return (
                 <div style={{ fontSize: '11px', color: '#047857', marginTop: '3px', fontWeight: '600' }}>
                   {b2Col > 0 ? (
@@ -239,7 +454,7 @@ export default function CollectionsTab({
               );
             })()}
           </div>
-          <span style={{ fontWeight: '800', fontSize: '20px', color: 'var(--success)' }}>₹{filteredTxnsTotal || 0}</span>
+          <span style={{ fontWeight: '800', fontSize: '20px', color: 'var(--success)' }}>₹{displayTxnsTotal.toLocaleString('en-IN')}</span>
         </div>
       </div>
 

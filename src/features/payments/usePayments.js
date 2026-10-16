@@ -55,16 +55,20 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
     setIsSavingPayment(true);
     try {
       const now = Date.now();
+      const exactTimeStr = new Date(now).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
       const newTxn = {
         id: 'txn_' + now,
         custId: customerId,
         custName: customerName,
         amount: numAmt,
         date: txnDate,
+        time: exactTimeStr,
+        createdAt: now,
         mode: txnMode,
         paymentMode: txnMode,
         note: txnNote,
         branch: branchName,
+        category: targetCustomer?.category || 'dinein',
         updatedAt: now
       };
 
