@@ -3,6 +3,7 @@ import { Phone, MapPin, Edit, Trash2, History, RotateCcw, PauseCircle, PlayCircl
 import { getMealTypeLabel, getMealSlotLabel } from '../../utils/mealConfig';
 import CustomerAreaBadge from '../CustomerAreaBadge';
 import { formatDisplayDate } from '../../utils/formatters';
+import { getCycleStartDate } from '../../utils/helpers';
 
 const CustomerCard = memo(function CustomerCard({
   customer,
@@ -14,6 +15,7 @@ const CustomerCard = memo(function CustomerCard({
   daysPendingDues,
   shouldShowDuesWarning,
   expiryStrVal,
+  cycleStartStrVal,
   lang,
   role,
   currentTab,
@@ -113,6 +115,30 @@ const CustomerCard = memo(function CustomerCard({
 
       {/* Column 3: Plan Details */}
       <div className="customer-bar-plan" style={{ display: 'flex', flexDirection: 'column', alignSelf: 'center' }}>
+        {/* Permanent Joining Date Tab (Font 14, Bold, Light Green Background) */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '4px 10px',
+          marginBottom: '8px',
+          borderRadius: '7px',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          backgroundColor: '#DCFCE7',
+          color: '#166534',
+          border: '1.5px solid #86EFAC',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+          width: 'fit-content',
+          whiteSpace: 'nowrap'
+        }}>
+          <span>📅</span>
+          <span>
+            {isMarathi ? 'जॉइनिंग तारीख: ' : 'Joining Date: '}
+            <strong style={{ color: '#14532D' }}>{formatDisplayDate(c.joinDate)}</strong>
+          </span>
+        </div>
+
         <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
           PLAN & CYCLE
         </div>
@@ -131,10 +157,10 @@ const CustomerCard = memo(function CustomerCard({
           }
         </div>
         <div style={{ fontSize: '13px', color: '#111827', fontWeight: '600', marginBottom: '4px' }}>
-          Started: {formatDisplayDate(c.joinDate)}
+          {isMarathi ? 'सायकल सुरू:' : 'Started:'} <span style={{ fontWeight: '700' }}>{cycleStartStrVal || (typeof getCycleStartDate === 'function' ? formatDisplayDate(getCycleStartDate(c)) : formatDisplayDate(c.joinDate))}</span>
         </div>
         <div style={{ fontSize: '13px', color: '#111827', fontWeight: '600' }}>
-          Expires: {formatDisplayDate(expiryStrVal)}
+          {isMarathi ? 'मुदत संपणार:' : 'Expires:'} <span style={{ fontWeight: '700' }}>{formatDisplayDate(expiryStrVal)}</span>
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import {
   getDaysPendingDues as defaultGetDaysPendingDues, 
   computeStatus as defaultComputeStatus, 
   expiryStr as defaultExpiryStr, 
+  cycleStartStr as defaultCycleStartStr,
   todayStr as defaultTodayStr 
 } from '../../utils/helpers';
 
@@ -193,6 +194,7 @@ export function usePayments({ db, saveDb, showToast, activeBranch, role, isOwner
     getDueWarningDays: defaultGetDueWarningDays,
     getDaysPendingDues: defaultGetDaysPendingDues,
     computeStatus: defaultComputeStatus,
-    expiryStr: defaultExpiryStr
+    expiryStr: defaultExpiryStr,
+    cycleStartStr: defaultCycleStartStr
   };
 }

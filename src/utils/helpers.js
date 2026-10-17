@@ -345,6 +345,99 @@ export function expiryStr(c) {
   return formatDisplayDate(d);
 }
 
+export function getCycleStartDate(c, optionalPlan) {
+  const refDate = getEffectiveJoinDate(c);
+  if (!refDate) return new Date();
+
+  const today = new Date();
+  let todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const isArchived = typeof c === 'object' && (c?.status === 'archived' || c?.status === 'old');
+  if (isArchived && c?.archivedDate) {
+    todayMidnight = parseLocalDate(c.archivedDate);
+  }
+
+  const startDate = getAdjustedStartDate(c, todayMidnight);
+
+  if (typeof c === 'object' && c.category === 'shortterm') {
+    return startDate;
+  }
+
+  const planName = typeof c === 'object' ? c.plan : optionalPlan;
+
+  // If customer has a direct customExpiryDate set and is not currently paused:
+  if (typeof c === 'object' && !c.isPaused && c.customExpiryDate && isValidDate(c.customExpiryDate)) {
+    const customExp = parseLocalDate(c.customExpiryDate);
+    if (isArchived || todayMidnight <= customExp) {
+      if (!planName || planName === 'Monthly') {
+        const expYear = customExp.getFullYear();
+        const expMonth = customExp.getMonth();
+        const expDay = customExp.getDate();
+        const prevMonth = expMonth - 1;
+        const targetYear = expYear + Math.floor(prevMonth / 12);
+        const targetMonth = ((prevMonth % 12) + 12) % 12;
+        const maxDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+        const safeDay = Math.min(expDay, maxDay);
+        return new Date(targetYear, targetMonth, safeDay);
+      } else {
+        const days = PLAN_DAYS[planName] || 30;
+        const prevDate = new Date(customExp);
+        prevDate.setDate(customExp.getDate() - days);
+        return prevDate;
+      }
+    }
+  }
+
+  const planAmount = typeof c === 'object' ? Number(c.amount || 0) : 0;
+  const depositedAmount = typeof c === 'object' ? Number(c.deposited || 0) : 0;
+
+  let paidCycles = 0;
+  if (planAmount > 0) {
+    const netDeposited = Math.max(0, depositedAmount - Number(c?.previousDues || 0));
+    paidCycles = Math.floor(netDeposited / planAmount);
+  }
+
+  let validCycles = 1;
+  if (isArchived) {
+    if (c?.archivedDate) {
+      const archiveElapsed = getElapsedCycles(c, startDate, todayMidnight);
+      validCycles = Math.max(1, archiveElapsed, paidCycles);
+    } else {
+      validCycles = Math.max(1, paidCycles);
+    }
+  } else {
+    const elapsedCycles = getElapsedCycles(c, startDate, todayMidnight);
+    validCycles = Math.max(1, elapsedCycles + 1, paidCycles);
+  }
+
+  const cycleIndex = Math.max(0, validCycles - 1);
+
+  if (!planName || planName === 'Monthly') {
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const startDay = startDate.getDate();
+
+    const totalMonths = startMonth + cycleIndex;
+    const targetYear = startYear + Math.floor(totalMonths / 12);
+    const targetMonth = totalMonths % 12;
+
+    const maxDayInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const safeDay = Math.min(startDay, maxDayInTargetMonth);
+
+    return new Date(targetYear, targetMonth, safeDay);
+  }
+
+  const daysPerCycle = PLAN_DAYS[planName] || 30;
+  const cycleStart = new Date(startDate);
+  cycleStart.setDate(startDate.getDate() + (cycleIndex * daysPerCycle));
+  return cycleStart;
+}
+
+export function cycleStartStr(c) {
+  if (!c) return '';
+  const d = getCycleStartDate(c, typeof c === 'string' ? arguments[1] : undefined);
+  return formatDisplayDate(d);
+}
+
 export const TRANSLATIONS = {
   en: {
     pinTitle: "Lokmanya Mess",
