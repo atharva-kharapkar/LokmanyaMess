@@ -56,7 +56,6 @@ export default function SettingsTab({
     paymentPhone: db.settings?.paymentPhone || '',
     whatsappDuesTemplate: db.settings?.whatsappDuesTemplate || '',
     whatsappMode: db.settings?.whatsappMode || 'desktop',
-    lockJoiningDateForOperators: db.settings?.lockJoiningDateForOperators !== false,
     lang: db.settings?.lang || 'mr'
   }));
 
@@ -663,62 +662,6 @@ export default function SettingsTab({
               <option value="desktop">WhatsApp Desktop App (Requires Windows app installed)</option>
               <option value="web">WhatsApp Web (Browser)</option>
             </select>
-          </div>
-
-          <div className="form-group" style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            backgroundColor: settingsForm.lockJoiningDateForOperators ? 'rgba(239, 68, 68, 0.06)' : 'rgba(16, 185, 129, 0.06)',
-            border: `1.5px solid ${settingsForm.lockJoiningDateForOperators ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`,
-            borderRadius: '10px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '20px' }}>{settingsForm.lockJoiningDateForOperators ? '🔒' : '🔓'}</span>
-              <div>
-                <div style={{ fontSize: '14px', fontWeight: '800', color: settingsForm.lockJoiningDateForOperators ? '#DC2626' : '#059669' }}>
-                  {isMarathi ? 'ऑपरेटरसाठी जॉइनिंग तारीख संपादन लॉक ठेवा' : 'Lock Joining Date Edit for Operators'}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                  {isMarathi 
-                    ? (settingsForm.lockJoiningDateForOperators 
-                        ? 'सक्रिय: ऑपरेटर ग्राहक प्रोफाइलमधील सुरू झालेली तारीख बदलू शकत नाही' 
-                        : 'बंद: ऑपरेटर सुरू झालेली तारीख बदलू शकतो')
-                    : (settingsForm.lockJoiningDateForOperators 
-                        ? 'ACTIVE: Operators cannot modify customer joining/start dates' 
-                        : 'DISABLED: Operators can modify joining dates')}
-                </div>
-              </div>
-            </div>
-            <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '26px', cursor: 'pointer', margin: 0, flexShrink: 0 }}>
-              <input
-                type="checkbox"
-                checked={Boolean(settingsForm.lockJoiningDateForOperators)}
-                onChange={(e) => setSettingsForm({ ...settingsForm, lockJoiningDateForOperators: e.target.checked })}
-                style={{ opacity: 0, width: 0, height: 0 }}
-              />
-              <span style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: settingsForm.lockJoiningDateForOperators ? '#EF4444' : '#9CA3AF',
-                borderRadius: '26px',
-                transition: '0.2s',
-              }}>
-                <span style={{
-                  position: 'absolute',
-                  content: '""',
-                  height: '20px',
-                  width: '20px',
-                  left: settingsForm.lockJoiningDateForOperators ? '25px' : '3px',
-                  bottom: '3px',
-                  backgroundColor: '#ffffff',
-                  borderRadius: '50%',
-                  transition: '0.2s',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.25)'
-                }} />
-              </span>
-            </label>
           </div>
 
           <button type="submit" className="btn btn-primary" style={{ padding: '12px', borderRadius: '8px', fontWeight: '700', width: 'fit-content' }}>
