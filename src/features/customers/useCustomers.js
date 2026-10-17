@@ -230,42 +230,70 @@ export function useCustomers({ db, saveDb, showToast, activeBranch, currentTab, 
     }
   };
 
-  const deleteCustomer = async (id) => {
+  const deleteCustomer = async (targetIdOrCust) => {
     const isMarathi = db?.settings?.lang === 'mr';
-    const targetCust = (db?.customers || []).find((c) => c.id === id);
-    if (!targetCust) return;
-
-    const isAlreadyArchived = targetCust.status === 'archived' || targetCust.status === 'old' || currentTab === 'oldcustomers';
-
-    if (isAlreadyArchived) {
-      if (!confirm(isMarathi ? 'आपण हा ग्राहक डेटाबेसमधून कायमचा हटवू इच्छिता?' : 'Are you sure you want to PERMANENTLY delete this customer record?')) return;
-
-      await saveDb((currentDb) => ({
-        ...currentDb,
-        customers: (currentDb.customers || []).filter((c) => c.id !== id)
-      }));
-
-      showToast(isMarathi ? 'ग्राहक डेटाबेसमधून कायमचा हटवला गेला!' : 'Customer permanently deleted!', 'success');
-    } else {
-      if (!confirm(isMarathi ? 'आपण हा ग्राहक जुन्या ग्राहकांमध्ये हलवू (Archive) इच्छिता?' : 'Are you sure you want to move this customer to Old Customers (Archive)?')) return;
-
-      const currentDues = typeof getCustomerDues === 'function' ? getCustomerDues(targetCust) : 0;
-      const todayIso = new Date().toISOString().slice(0, 10);
-      const now = Date.now();
-
-      await saveDb((currentDb) => ({
-        ...currentDb,
-        customers: (currentDb.customers || []).map((c) => c.id === id ? { 
-          ...c, 
-          status: 'archived', 
-          archivedDate: todayIso,
-          archivedDues: currentDues,
-          updatedAt: now
-        } : c)
-      }));
-
-      showToast(isMarathi ? 'ग्राहक जुन्या ग्राहकांच्या अर्काइव्हमध्ये पाठवला गेला!' : 'Customer moved to Old Customers Archive!', 'success');
+    const custId = (typeof targetIdOrCust === 'object' && targetIdOrCust !== null && targetIdOrCust.id) 
+      ? targetIdOrCust.id 
+      : targetIdOrCust;
+    
+    if (!custId) {
+      console.warn('deleteCustomer: missing id', targetIdOrCust);
+      return;
     }
+
+    const targetCust = (db?.customers || []).find((c) => String(c?.id).trim() === String(custId).trim());
+    const isAlreadyArchived = targetCust 
+      ? (targetCust.status === 'archived' || targetCust.status === 'old' || currentTab === 'oldcustomers')
+      : (currentTab === 'oldcustomers');
+
+    const customerDisplayName = targetCust?.name || (isMarathi ? 'ग्राहक' : 'Customer');
+
+    const confirmMsg = isAlreadyArchived 
+      ? (isMarathi ? `आपण ${customerDisplayName} या ग्राहकाला डेटाबेसमधून कायमचे हटवू इच्छिता?` : `Are you sure you want to PERMANENTLY delete ${customerDisplayName}?`)
+      : (isMarathi ? `आपण ${customerDisplayName} या ग्राहकाला जुन्या ग्राहकांमध्ये हलवू (Archive) इच्छिता?` : `Are you sure you want to move ${customerDisplayName} to Old Customers (Archive)?`);
+
+    let userConfirmed = true;
+    try {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        userConfirmed = window.confirm(confirmMsg);
+      }
+    } catch (e) {
+      console.warn('Confirmation dialog warning:', e);
+    }
+
+    if (!userConfirmed) return;
+
+    const currentDues = targetCust && typeof getCustomerDues === 'function' ? getCustomerDues(targetCust) : 0;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const now = Date.now();
+
+    await saveDb((currentDb) => {
+      const custs = currentDb.customers || [];
+      if (isAlreadyArchived) {
+        return {
+          ...currentDb,
+          customers: custs.filter((c) => String(c?.id).trim() !== String(custId).trim())
+        };
+      } else {
+        return {
+          ...currentDb,
+          customers: custs.map((c) => String(c?.id).trim() === String(custId).trim() ? { 
+            ...c, 
+            status: 'archived', 
+            archivedDate: todayIso,
+            archivedDues: currentDues,
+            updatedAt: now
+          } : c)
+        };
+      }
+    });
+
+    showToast(
+      isAlreadyArchived 
+        ? (isMarathi ? 'ग्राहक डेटाबेसमधून कायमचा हटवला गेला!' : 'Customer permanently deleted!')
+        : (isMarathi ? 'ग्राहक जुन्या ग्राहकांच्या अर्काइव्हमध्ये पाठवला गेला!' : 'Customer moved to Old Customers Archive!'),
+      'success'
+    );
   };
 
   const restoreCustomer = async (target, newStartDate, restoredDues = 0, newPlanAmount) => {

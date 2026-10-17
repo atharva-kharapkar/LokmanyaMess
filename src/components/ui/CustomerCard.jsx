@@ -330,11 +330,18 @@ const CustomerCard = memo(function CustomerCard({
             >
               {c.isPaused ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
             </button>
-            {(!role || role === 'owner' || role === 'branch1' || role === 'branch2') && (
+            {(!role || role === 'owner' || role === 'branch1' || role === 'branch2' || role === 'staff') && (
               <button 
+                type="button"
                 className="btn btn-sm btn-icon btn-danger"
                 title={isMarathi ? 'ग्राहक हटवा' : 'Delete Customer'}
-                onClick={() => typeof onDeleteCustomer === 'function' && onDeleteCustomer(c.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (typeof onDeleteCustomer === 'function') {
+                    onDeleteCustomer(c.id);
+                  }
+                }}
                 style={{ width: '32px', height: '32px' }}
               >
                 <Trash2 size={14} />

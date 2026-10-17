@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { todayStr, formatDisplayDate } from '../../utils/helpers';
 
@@ -33,28 +33,52 @@ export default function PaymentModal({
   if (!isOpen || !customer) return null;
 
   const isMarathi = (db.settings && db.settings.lang === 'mr') || lang === 'mr';
-  const currentAmount = amount !== undefined ? amount : (payAmount !== undefined ? payAmount : '');
-  const currentDate = date !== undefined ? date : (payDate !== undefined ? payDate : todayStr());
-  const currentMode = mode !== undefined ? mode : (payMode !== undefined ? payMode : 'Cash');
-  const currentNote = note !== undefined ? note : (payNote !== undefined ? payNote : '');
   const savingState = isSaving || isSavingPayment;
 
+  // Encapsulated Local State prevents full app re-renders on every keystroke
+  const [localAmount, setLocalAmount] = useState(() => {
+    return amount !== undefined && amount !== '' 
+      ? String(amount) 
+      : (payAmount !== undefined && payAmount !== '' ? String(payAmount) : '');
+  });
+  const [localDate, setLocalDate] = useState(() => date || payDate || todayStr());
+  const [localMode, setLocalMode] = useState(() => mode || payMode || 'Cash');
+  const [localNote, setLocalNote] = useState(() => note || payNote || '');
+
+  // Sync initial state when modal opens or customer changes
+  useEffect(() => {
+    if (isOpen && customer) {
+      const initAmt = amount !== undefined && amount !== '' 
+        ? String(amount) 
+        : (payAmount !== undefined && payAmount !== '' ? String(payAmount) : '');
+      setLocalAmount(initAmt);
+      setLocalDate(date || payDate || todayStr());
+      setLocalMode(mode || payMode || 'Cash');
+      setLocalNote(note || payNote || '');
+    }
+  }, [isOpen, customer?.id]);
+
   const handleAmountChange = (val) => {
-    if (typeof setAmount === 'function') setAmount(val);
-    if (typeof setPayAmount === 'function') setPayAmount(val);
+    const clean = val.replace(/[^\d.]/g, '');
+    setLocalAmount(clean);
+    if (typeof setAmount === 'function') setAmount(clean);
+    if (typeof setPayAmount === 'function') setPayAmount(clean);
   };
 
   const handleDateChange = (val) => {
+    setLocalDate(val);
     if (typeof setDate === 'function') setDate(val);
     if (typeof setPayDate === 'function') setPayDate(val);
   };
 
   const handleModeChange = (val) => {
+    setLocalMode(val);
     if (typeof setMode === 'function') setMode(val);
     if (typeof setPayMode === 'function') setPayMode(val);
   };
 
   const handleNoteChange = (val) => {
+    setLocalNote(val);
     if (typeof setNote === 'function') setNote(val);
     if (typeof setPayNote === 'function') setPayNote(val);
   };
@@ -63,7 +87,7 @@ export default function PaymentModal({
     e.preventDefault();
     const saveFn = onSave || onSubmit;
     if (typeof saveFn === 'function') {
-      saveFn(currentAmount, currentDate, currentMode, currentNote);
+      saveFn(localAmount, localDate, localMode, localNote);
     }
   };
 
@@ -100,13 +124,15 @@ export default function PaymentModal({
             <div className="form-group">
               <label className="form-label" style={{ fontSize: '13px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>{isMarathi ? 'रक्कम (Amount) ₹' : 'Amount ₹'}</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="form-input"
-                value={currentAmount}
+                value={localAmount}
                 onChange={(e) => handleAmountChange(e.target.value)}
+                placeholder="0"
                 required
                 autoFocus
-                style={{ width: '100%', padding: '10px', fontSize: '16px', fontWeight: '700', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--text)' }}
+                style={{ width: '100%', padding: '10px', fontSize: '18px', fontWeight: '800', borderRadius: '8px', border: '1.5px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--text)' }}
               />
             </div>
             
@@ -115,13 +141,13 @@ export default function PaymentModal({
               <input
                 type="date"
                 className="form-input"
-                value={currentDate || todayStr()}
+                value={localDate || todayStr()}
                 onChange={(e) => handleDateChange(e.target.value)}
                 required
                 style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--text)' }}
               />
               <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', display: 'block' }}>
-                {isMarathi ? `स्वरूप: DD/MM/YYYY (${formatDisplayDate(currentDate || todayStr())})` : `Format: DD/MM/YYYY (${formatDisplayDate(currentDate || todayStr())})`}
+                {isMarathi ? `स्वरूप: DD/MM/YYYY (${formatDisplayDate(localDate || todayStr())})` : `Format: DD/MM/YYYY (${formatDisplayDate(localDate || todayStr())})`}
               </span>
             </div>
             
@@ -129,7 +155,7 @@ export default function PaymentModal({
               <label className="form-label" style={{ fontSize: '13px', fontWeight: '700', marginBottom: '4px', display: 'block' }}>{isMarathi ? 'पेमेंट पद्धत (Mode)' : 'Payment Mode'}</label>
               <select
                 className="form-select"
-                value={currentMode}
+                value={localMode}
                 onChange={(e) => handleModeChange(e.target.value)}
                 style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--text)' }}
               >
@@ -143,7 +169,7 @@ export default function PaymentModal({
               <input
                 type="text"
                 className="form-input"
-                value={currentNote}
+                value={localNote}
                 onChange={(e) => handleNoteChange(e.target.value)}
                 placeholder={isMarathi ? 'उदा. रोख मिळाला, सवलत दिली' : 'e.g. Paid by friend, discount'}
                 style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--card)', color: 'var(--text)' }}
